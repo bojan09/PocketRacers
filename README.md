@@ -4,12 +4,15 @@ A free, colourful, kid-friendly racing game for phones and tablets, built with
 **only HTML, CSS and vanilla JavaScript** — no frameworks, libraries, CDNs or
 external services. Everything (cars, scenery, sound) is generated in code.
 
-> **Status: Phase 2A — 3D engine.** Real-time 3D (hand-written WebGL) with a
-> chase camera, one car, the "Sunny Valley" loop (hills, banked corners, a rock
-> tunnel, a bridge over a lake), practice traffic, three touch control
-> schemes, infinite nitro, collisions and a HUD.
-> Next: 2B garage & cars · 2C races, AI & interactions · 2D more maps ·
-> then offline service worker and IndexedDB saves.
+> **Status: Phase 2B — realism pass.** Real-time 3D (hand-written WebGL):
+> sun shadow mapping, glossy clear-coat paint and glass with sky
+> reflections, smooth-shaded terrain and trees, procedural asphalt/grass
+> detail texture, animated reflective water, shader sky with sun glow, soft
+> clouds, smooth lofted car bodies with detailed wheels. One car, the
+> "Sunny Valley" loop (hills, banked corners, tunnel hill, bridge over a
+> lake), practice traffic, three touch control schemes, infinite nitro.
+> Next: 2C garage, 6 cars & per-car sounds · 2D races, AI & interactions ·
+> 2E more maps · then offline service worker and IndexedDB saves.
 
 ## Run locally
 
@@ -51,9 +54,10 @@ tools/                 dev server, icon rasteriser (not shipped)
 
 ## Rendering approach
 
-Real 3D with hand-written WebGL (no libraries): flat-shaded, vertex-coloured
-low-poly geometry generated in code — terrain, road, tunnels, bridges, trees,
-buildings and cars. Static geometry is merged into chunks and culled by
+Real 3D with hand-written WebGL (no libraries): vertex-coloured geometry
+generated in code — terrain, road, tunnels, bridges, trees, buildings and
+cars — lit by a sun with a shadow map (High/Medium), sky-reflection
+specular for paint/glass/water, and a tileable procedural detail texture. Static geometry is merged into chunks and culled by
 distance/direction. The simulation is track-relative (distance along the
 track + lateral offset), so physics stays simple and deterministic; it runs
 at a fixed 120 Hz so handling is identical at any frame rate.

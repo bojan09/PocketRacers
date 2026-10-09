@@ -2,10 +2,10 @@
 // markings, verges, guard rails, bridge deck + pillars, rock tunnels, the
 // start gantry, and all placed scenery (merged for few draw calls).
 
-import { MeshBuilder } from '../gl/meshBuilder.js';
+import { MeshBuilder, faceNormal } from '../gl/meshBuilder.js';
 import { hexToRgb, mat4 } from '../gl/math.js';
 import { mulberry32 } from '../core/util.js';
-import { MODEL_BUILDERS } from './models.js';
+import { MODEL_BUILDERS, grassTuft } from './models.js';
 
 export const CHUNK = 60; // segments per chunk
 const STEP = 2; // segments per road strip
@@ -51,6 +51,7 @@ export function buildTrackChunks(track, terrain) {
   };
   const animated = [];
   const m = mat4.create();
+  const tufts = [0, 1, 2, 3].map(() => grassTuft(rand));
 
   const chunks = [];
   for (let c0 = 0; c0 < count; c0 += CHUNK) {
@@ -62,15 +63,18 @@ export function buildTrackChunks(track, terrain) {
       const b = at(i + STEP);
       const band = Math.floor(i / 6) % 2;
 
-      // Road surface.
+      // Road surface: asphalt with a faint sheen and the detail texture.
+      mb.material(0.12, 1);
       mb.quad(P(a, -1), P(a, 1), P(b, 1), P(b, -1), band ? road : roadAlt);
 
       // Kerbs (rumble strips).
       const kc = Math.floor(i / 4) % 2 ? rumbleA : rumbleB;
+      mb.material(0.2, 0.45);
       mb.quad(P(a, -1.12, 0.02), P(a, -1, 0.02), P(b, -1, 0.02), P(b, -1.12, 0.02), kc);
       mb.quad(P(a, 1, 0.02), P(a, 1.12, 0.02), P(b, 1.12, 0.02), P(b, 1, 0.02), kc);
 
       // Lane markings: solid edge lines, dashed lane dividers.
+      mb.material(0.15, 0.6);
       for (const x of [-0.95, 0.93]) mb.quad(P(a, x, 0.03), P(a, x + 0.02, 0.03), P(b, x + 0.02, 0.03), P(b, x, 0.03), lane);
       if (Math.floor(i / 4) % 3 === 0) {
         for (let l = 1; l < track.lanes; l++) {
@@ -90,6 +94,7 @@ export function buildTrackChunks(track, terrain) {
 
       if (a.bridge) {
         // Deck sides and underside.
+        mb.material(0.05, 0.9);
         mb.quad(P(a, -1.12, 0.02), P(b, -1.12, 0.02), P(b, -1.12, -1.3), P(a, -1.12, -1.3), deck);
         mb.quad(P(a, 1.12, 0.02), P(a, 1.12, -1.3), P(b, 1.12, -1.3), P(b, 1.12, 0.02), deck);
         mb.quad(P(a, -1.12, -1.3), P(b, -1.12, -1.3), P(b, 1.12, -1.3), P(a, 1.12, -1.3), [0.45, 0.45, 0.5]);
@@ -103,6 +108,7 @@ export function buildTrackChunks(track, terrain) {
         }
       } else if (a.tunnel) {
         // Tunnel walls, arched ceiling and lights.
+        mb.material(0.08, 0.9);
         const H = 5.6;
         const Ht = 7.2;
         mb.quad(P(a, -1.22, -0.3), P(b, -1.22, -0.3), P(b, -1.22, H), P(a, -1.22, H), tunnel);
@@ -119,14 +125,28 @@ export function buildTrackChunks(track, terrain) {
         mb.quad(P(a, 1.12, -0.3), P(a, 1.12, 0.25), P(b, 1.12, 0.25), P(b, 1.12, -0.3), walk);
       } else {
         // Verges sloping down to the terrain so no gaps show.
+        mb.material(0, 1);
         mb.quad(P(a, -1.35, -0.12), P(a, -1.12, 0.02), P(b, -1.12, 0.02), P(b, -1.35, -0.12), shoulder);
         mb.quad(P(a, 1.12, 0.02), P(a, 1.35, -0.12), P(b, 1.35, -0.12), P(b, 1.12, 0.02), shoulder);
         mb.quad(P(a, -1.35, -2.5), P(a, -1.35, -0.12), P(b, -1.35, -0.12), P(b, -1.35, -2.5), grass);
         mb.quad(P(a, 1.35, -0.12), P(a, 1.35, -2.5), P(b, 1.35, -2.5), P(b, 1.35, -0.12), grass);
+        // Grass tufts scattered along the verges.
+        for (const side of [-1, 1]) {
+          if (rand() < 0.35) continue;
+          const off = side * (1.4 + rand() * 1.4);
+          const xm = off * RW;
+          const wx = a.pos[0] + a.flatR[0] * xm;
+          const wz = a.pos[2] + a.flatR[2] * xm;
+          mat4.identity(m);
+          mat4.translate(m, m, wx, terrain.sampler.height(wx, wz) - 0.02, wz);
+          mat4.rotateY(m, m, rand() * Math.PI * 2);
+          mb.append(tufts[Math.floor(rand() * tufts.length)], m);
+        }
       }
 
       // Guard rails (bridges get railings in the same place).
       if (a.rail && !a.tunnel) {
+        mb.material(0.7, 0);
         for (const side of [-1, 1]) {
           const x = side * 1.14;
           const beam = a.bridge ? [0.3, 0.55, 0.95] : Math.floor(i / 6) % 2 ? rumbleB : rail;
@@ -145,28 +165,17 @@ export function buildTrackChunks(track, terrain) {
       const a = at(i);
       const b = at(i + 6);
       if (!a.tunnel && !b.tunnel) continue;
-      const hull = (s) => {
-        const r = mulberry32(s.index * 7 + 3);
-        const j = () => r() * 3;
-        return [
-          F(s, -(RW + 1.5), -3),
-          F(s, -(RW + 13), 2 + j()),
-          F(s, -(RW + 9), 11 + j()),
-          F(s, -5, 15 + j()),
-          F(s, 5, 14 + j()),
-          F(s, RW + 9, 11 + j()),
-          F(s, RW + 13, 2 + j()),
-          F(s, RW + 1.5, -3),
-        ];
-      };
-      const A = hull(a);
-      const B = hull(b);
+      const A = tunnelHull(a, F, RW);
+      const B = tunnelHull(b, F, RW);
+      // Faceted hill: grassy where the surface faces up, rock on steep sides.
+      mb.material(0.03, 1);
       for (let k = 0; k < A.length - 1; k++) {
-        const shadeK = 0.9 + ((k * 13 + i) % 5) * 0.04;
-        mb.quad(A[k], B[k], B[k + 1], A[k + 1], [rockC[0] * shadeK, rockC[1] * shadeK, rockC[2] * shadeK]);
+        const n = faceNormal(A[k], B[k], B[k + 1]);
+        const up = n ? Math.abs(n[1]) : 0;
+        const vary = 0.9 + ((k * 13 + i) % 5) * 0.035;
+        const c = up > 0.72 ? grass : up > 0.5 ? mixRgb(grass, rockC, 0.5) : rockC;
+        mb.quad(A[k], B[k], B[k + 1], A[k + 1], [c[0] * vary, c[1] * vary, c[2] * vary]);
       }
-      // Grass caps on top.
-      mb.quad(A[3], B[3], B[4], A[4], grass);
       const prev = at(i - 6);
       if (a.tunnel && !prev.tunnel) addPortal(mb, a, F, RW, rockC, -1);
       if (a.tunnel && !b.tunnel) addPortal(mb, b, F, RW, rockC, 1);
@@ -177,6 +186,7 @@ export function buildTrackChunks(track, terrain) {
       const s = segs[i];
       if (!s.gantry) continue;
       const postH = 6.6;
+      mb.material(0.35, 0);
       for (const side of [-1, 1]) {
         const p = F(s, side * 1.28 * RW, 0);
         for (let k = 0; k < 11; k++) {
@@ -239,40 +249,75 @@ export function buildTrackChunks(track, terrain) {
   return { chunks, animated };
 }
 
-function addPortal(mb, s, F, RW, rockC, dir) {
-  // Stone face joining the rock hull outline to the tunnel opening.
-  const stone = [rockC[0] * 0.8, rockC[1] * 0.8, rockC[2] * 0.85];
+const HULL_N = 13;
+
+/** Outline of the hill a tunnel runs through, in the segment's flat frame. */
+function tunnelHull(s, F, RW) {
   const r = mulberry32(s.index * 7 + 3);
-  const j = () => r() * 3;
+  const pts = [F(s, -(RW + 1.5), -3)];
+  const half = RW + 18;
+  for (let k = 1; k < HULL_N - 1; k++) {
+    const t = (k - 1) / (HULL_N - 3); // 0..1 across the hill
+    const x = -half + 2 * half * t;
+    const dome = Math.sin(t * Math.PI);
+    const y = -1 + Math.pow(dome, 0.7) * 17 + r() * 3.5 * dome;
+    pts.push(F(s, x + (r() - 0.5) * 2, y));
+  }
+  pts.push(F(s, RW + 1.5, -3));
+  return pts;
+}
+
+function addPortal(mb, s, F, RW, rockC, dir) {
+  // Stone face joining the hill outline to the tunnel opening.
+  const stone = [rockC[0] * 1.02, rockC[1] * 1.0, rockC[2] * 0.98];
   const o = (p) => [p[0] + s.T[0] * dir * 0.05, p[1], p[2] + s.T[2] * dir * 0.05];
-  const outer = [
-    F(s, -(RW + 1.5), -3),
-    F(s, -(RW + 13), 2 + j()),
-    F(s, -(RW + 9), 11 + j()),
-    F(s, -5, 15 + j()),
-    F(s, 5, 14 + j()),
-    F(s, RW + 9, 11 + j()),
-    F(s, RW + 13, 2 + j()),
-    F(s, RW + 1.5, -3),
-  ].map(o);
+  const outer = tunnelHull(s, F, RW).map(o);
+  // Matching opening outline: up the left wall, over the arch, down the right.
   const w = 1.22 * RW;
-  const inner = [
-    F(s, -w, -0.3),
-    F(s, -w, 2),
-    F(s, -w, 5.6),
-    F(s, -0.55 * RW, 7.2),
-    F(s, 0.55 * RW, 7.2),
-    F(s, w, 5.6),
-    F(s, w, 2),
-    F(s, w, -0.3),
-  ].map(o);
+  const path = [
+    [-w, -0.3],
+    [-w, 5.6],
+    [-0.55 * RW, 7.2],
+    [0.55 * RW, 7.2],
+    [w, 5.6],
+    [w, -0.3],
+  ];
+  const lens = [];
+  let total = 0;
+  for (let k = 0; k < path.length - 1; k++) {
+    const d = Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]);
+    lens.push(d);
+    total += d;
+  }
+  const along = (t) => {
+    let d = t * total;
+    for (let k = 0; k < lens.length; k++) {
+      if (d <= lens[k] || k === lens.length - 1) {
+        const u = Math.min(1, d / lens[k]);
+        return [path[k][0] + (path[k + 1][0] - path[k][0]) * u, path[k][1] + (path[k + 1][1] - path[k][1]) * u];
+      }
+      d -= lens[k];
+    }
+    return path[path.length - 1];
+  };
+  const inner = outer.map((_, k) => {
+    const [x, y] = along(k / (outer.length - 1));
+    return o(F(s, x, y));
+  });
+  mb.material(0.05, 1);
   for (let k = 0; k < outer.length - 1; k++) mb.quad(outer[k], outer[k + 1], inner[k + 1], inner[k], stone);
   // Yellow/black hazard band over the arch.
-  const band = (t) => [inner[3][0] + (inner[4][0] - inner[3][0]) * t, inner[3][1] + 0.1, inner[3][2] + (inner[4][2] - inner[3][2]) * t];
+  const a0 = o(F(s, -0.55 * RW, 7.25));
+  const a1 = o(F(s, 0.55 * RW, 7.25));
+  mb.material(0.2, 0);
   for (let k = 0; k < 8; k++) {
-    const a = band(k / 8);
-    const b = band((k + 1) / 8);
+    const p0 = [a0[0] + (a1[0] - a0[0]) * (k / 8), a0[1], a0[2] + (a1[2] - a0[2]) * (k / 8)];
+    const p1 = [a0[0] + (a1[0] - a0[0]) * ((k + 1) / 8), a0[1], a0[2] + (a1[2] - a0[2]) * ((k + 1) / 8)];
     const lift = (p, h) => [p[0] + s.T[0] * dir * 0.03, p[1] + h, p[2] + s.T[2] * dir * 0.03];
-    mb.quad(lift(a, 0), lift(b, 0), lift(b, 0.7), lift(a, 0.7), k % 2 ? [0.1, 0.1, 0.12] : [1, 0.82, 0.2]);
+    mb.quad(lift(p0, 0), lift(p1, 0), lift(p1, 0.7), lift(p0, 0.7), k % 2 ? [0.1, 0.1, 0.12] : [1, 0.82, 0.2]);
   }
+}
+
+function mixRgb(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }

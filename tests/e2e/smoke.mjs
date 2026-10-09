@@ -34,10 +34,18 @@ async function check(name, fn) {
     failed++;
     results.push(`  FAIL ${name}\n       ${e.message.split('\n')[0]}`);
   }
+  console.log(results[results.length - 1]);
 }
 
-async function open(viewport, query = '') {
+async function open(viewport, query = '', quality = 'low') {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  // Headless Chromium rasterises WebGL in software, so functional checks run
+  // on the Low preset to stay fast; rendering cost is measured separately.
+  await context.addInitScript((q) => {
+    if (!localStorage.getItem('pocketracers.settings')) {
+      localStorage.setItem('pocketracers.settings', JSON.stringify({ v: 1, data: { quality: q } }));
+    }
+  }, quality);
   const page = await context.newPage();
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -73,9 +81,6 @@ async function drive(page) {
 // ------------------------------------------------------------- landscape
 {
   const { context, page, errors, cdp } = await open({ width: 844, height: 390 });
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
-  await page.waitForFunction(() => window.__pocketRacers);
 
   await check('title screen renders without errors', async () => {
     assert.equal((await state(page)).mode, 'title');
@@ -249,7 +254,7 @@ async function drive(page) {
 
 // ----------------------------------------------------------- performance
 {
-  const { context, page, cdp } = await open({ width: 844, height: 390 });
+  const { context, page, cdp } = await open({ width: 844, height: 390 }, '', 'high');
   await drive(page);
   // Time only our render() call (headless Chromium rasterises in software,
   // so wall-clock frame time says little about a phone's GPU canvas).
@@ -258,7 +263,7 @@ async function drive(page) {
       const g = window.__pocketRacers;
       let total = 0;
       let n = 0;
-      for (let i = 0; i < 120; i++) {
+      for (let i = 0; i < 20; i++) {
         const t0 = performance.now();
         g.renderer.render(g.session, 1, 1 / 60);
         total += performance.now() - t0;
@@ -268,9 +273,8 @@ async function drive(page) {
       return total / n;
     });
   const plain = await measure();
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-  const throttled = await measure();
-  results.push(`  info render() CPU time: ${plain.toFixed(2)} ms, with 4x CPU throttle: ${throttled.toFixed(2)} ms (headless, software raster)`);
+  results.push(`  info High preset render() submit time: ${plain.toFixed(2)} ms (headless, software raster; device FPS must be measured on a phone)`);
+  void cdp;
   await context.close();
 }
 

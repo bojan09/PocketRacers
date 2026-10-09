@@ -22,7 +22,7 @@ export class Particles {
   constructor() {
     this.pool = [];
     for (let i = 0; i < MAX; i++) this.pool.push({ life: 0 });
-    this.alphaData = new Float32Array(MAX * 6 * FLOATS + 64 * 6 * FLOATS);
+    this.alphaData = new Float32Array((MAX + 64 + 320) * 6 * FLOATS);
     this.addData = new Float32Array(MAX * 6 * FLOATS);
     this.alphaCount = 0;
     this.addCount = 0;
@@ -68,7 +68,7 @@ export class Particles {
   }
 
   /** Build vertex data. camRight / camUp are unit vectors. */
-  build(camRight, camUp, shadows) {
+  build(camRight, camUp, shadows, billboards = null) {
     let ai = 0;
     let di = 0;
     const A = this.alphaData;
@@ -92,6 +92,13 @@ export class Particles {
     // Blob shadows lie flat on the road (given as centre + half axes).
     for (const s of shadows) {
       ai = quad(A, ai, s.x, s.y, s.z, s.rx[0], s.rx[1], s.rx[2], s.rz[0], s.rz[1], s.rz[2], 0, 0, 0, s.alpha);
+    }
+    // Static soft billboards (clouds), drawn behind the particles.
+    if (billboards) {
+      for (const b of billboards) {
+        const s = b.size;
+        ai = quad(A, ai, b.x, b.y, b.z, camRight[0] * s, camRight[1] * s, camRight[2] * s, camUp[0] * s * 0.62, camUp[1] * s * 0.62, camUp[2] * s * 0.62, b.r, b.g, b.b, b.a);
+      }
     }
     for (const p of this.pool) {
       if (p.life <= 0) continue;

@@ -4,21 +4,38 @@
 // culled; per-frame work is uniform updates, a handful of car draws and one
 // dynamic particle buffer.
 
-import { createContext, createProgram, uploadMesh, bindLitMesh, createSoftTexture, LIT_VS, LIT_FS, SKY_VS, SKY_FS, FX_VS, FX_FS } from '../gl/gl.js';
+import {
+  createContext,
+  createProgram,
+  uploadMesh,
+  bindLitMesh,
+  bindPositions,
+  createSoftTexture,
+  createDetailTexture,
+  createShadowMap,
+  LIT_VS,
+  LIT_FS,
+  DEPTH_VS,
+  DEPTH_FS,
+  SKY_VS,
+  SKY_FS,
+  FX_VS,
+  FX_FS,
+} from '../gl/gl.js';
 import { mat4, hexToRgb, transformPoint } from '../gl/math.js';
 import { clamp, lerp, mulberry32, wrap } from '../core/util.js';
 import { makeFrame } from '../world/track3d.js';
 import { buildTerrain } from './terrain.js';
 import { buildTrackChunks } from './trackMesh.js';
-import { buildSky, buildMountains, buildClouds } from './environment.js';
+import { buildMountains, buildCloudPuffs } from './environment.js';
 import { buildCarBody, buildWheel } from './carModel.js';
 import { windmillSails } from './models.js';
 import { Particles, FX_FLOATS } from './particles.js';
 
 const QUALITY = {
-  high: { dprCap: 2, fogScale: 1, particles: 1, clouds: true },
-  medium: { dprCap: 1.5, fogScale: 0.85, particles: 0.6, clouds: true },
-  low: { dprCap: 1, fogScale: 0.65, particles: 0.3, clouds: false },
+  high: { dprCap: 2, fogScale: 1, particles: 1, clouds: true, shadow: 2048, shadowRange: 36, shadowSoft: 1 },
+  medium: { dprCap: 1.5, fogScale: 0.85, particles: 0.6, clouds: true, shadow: 1024, shadowRange: 30, shadowSoft: 0 },
+  low: { dprCap: 1, fogScale: 0.65, particles: 0.3, clouds: false, shadow: 0, shadowRange: 0 },
 };
 const DEG = Math.PI / 180;
 
@@ -38,18 +55,27 @@ export class Renderer3D {
     this.rand = mulberry32(5);
     this.time = 0;
 
-    this.lit = createProgram(gl, LIT_VS, LIT_FS, ['aPos', 'aNormal', 'aColor']);
-    this.sky = createProgram(gl, SKY_VS, SKY_FS, ['aPos', 'aNormal', 'aColor']);
+    this.lit = createProgram(gl, LIT_VS, LIT_FS, ['aPos', 'aNormal', 'aColor', 'aMat']);
+    this.depth = createProgram(gl, DEPTH_VS, DEPTH_FS, ['aPos']);
+    this.sky = createProgram(gl, SKY_VS, SKY_FS, ['aPos']);
     this.fx = createProgram(gl, FX_VS, FX_FS, ['aPos', 'aColor', 'aUv']);
     this.softTex = createSoftTexture(gl);
-    for (let i = 0; i < 3; i++) gl.enableVertexAttribArray(i);
+    this.detailTex = createDetailTexture(gl);
+    this.shadowMaps = {};
+    this.enabledAttribs = 0;
+    this.skyTri = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.skyTri);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), gl.STATIC_DRAW);
 
     const pal = track.palette;
     this.pal = {
       fog: hexToRgb(pal.fog),
-      sun: hexToRgb(pal.sunColor).map((c) => c * 0.78),
-      skyAmb: hexToRgb(pal.skyAmbient).map((c) => c * 0.52),
+      sun: hexToRgb(pal.sunColor).map((c) => c * 0.98),
+      skyAmb: hexToRgb(pal.skyAmbient).map((c) => c * 0.6),
       groundAmb: hexToRgb(pal.groundAmbient).map((c) => c * 0.5),
+      skyTop: hexToRgb(pal.skyTop),
+      skyHorizon: hexToRgb(pal.skyHorizon),
+      groundRefl: hexToRgb(pal.grass).map((c) => c * 0.45),
       sunDir: normalize(pal.sunDir),
       fogNear: pal.fogNear,
       fogFar: pal.fogFar,
@@ -66,9 +92,8 @@ export class Renderer3D {
     this.sails = uploadMesh(gl, windmillSails());
     const b = this.terrain.bounds;
     const center = [(b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2];
-    this.skyMesh = uploadMesh(gl, buildSky(pal));
     this.mountains = uploadMesh(gl, buildMountains(pal, center, Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.5 + 520));
-    this.clouds = uploadMesh(gl, buildClouds(center));
+    this.cloudPuffs = buildCloudPuffs(center);
     this.buildMs = performance.now() - t0;
 
     // --- Cars ---------------------------------------------------------------
@@ -92,6 +117,13 @@ export class Renderer3D {
     this.viewProj = mat4.create();
     this.model = mat4.create();
     this.tmp = mat4.create();
+    this.invViewProj = mat4.create();
+    this.lightView = mat4.create();
+    this.lightProj = mat4.create();
+    this.lightVP = mat4.create();
+    this.shadowCenter = [0, 0, 0];
+    this.carDraws = Array.from({ length: 16 }, () => ({ meshes: null, m: mat4.create(), spin: 0, steer: 0, brake: false }));
+    this.carDrawCount = 0;
     this.wheelM = mat4.create();
     this.frame = makeFrame();
     this.frame2 = makeFrame();
@@ -268,7 +300,42 @@ export class Renderer3D {
     this.camFwd[1] = -v[6];
     this.camFwd[2] = -v[10];
 
-    // --- Draw ------------------------------------------------------------
+    // --- Gather cars ------------------------------------------------------
+    const fogFar = this.pal.fogFar * this.quality.fogScale;
+    const inTunnel = seg.tunnel;
+    this.shadows.length = 0;
+    this.carDrawCount = 0;
+    for (const c of session.traffic) {
+      const cz = this.lerpZ(c.prevZ, c.z, alpha);
+      const tf = T.frame(cz, c.x, this.frame2);
+      if (!this.near(tf.pos, fogFar)) continue;
+      const d = this.carDraws[this.carDrawCount++];
+      d.meshes = this.trafficMeshes[c.paint % this.trafficMeshes.length];
+      mat4.fromBasis(d.m, tf.R, tf.U, [-tf.T[0], -tf.T[1], -tf.T[2]], tf.pos);
+      d.spin = (this.time * c.speed * mpu) / -0.32;
+      d.steer = 0;
+      d.brake = false;
+      if (!this.shadowsOn) this.addShadow(tf, 1.3, 2.8);
+    }
+    const pd = this.carDraws[this.carDrawCount++];
+    pd.meshes = this.player;
+    pd.m.set(carM);
+    pd.spin = this.wheelSpin;
+    pd.steer = p.steer * 0.42;
+    pd.brake = p.braking || p.speed < -10;
+    // A soft contact shadow under every car, darker when real shadows are off.
+    this.addShadow(f, 1.25, 2.6, this.shadowsOn ? 0.3 : 0.55);
+
+    // --- Shadow pass -------------------------------------------------------
+    this.shadowsOn = false;
+    const sm = this.quality.shadow && !this.reduceShadows ? this.getShadowMap(this.quality.shadow) : null;
+    if (sm) {
+      this.renderShadowMap(sm, f.pos, cd);
+      this.shadowsOn = true;
+    }
+
+    // --- Main pass ---------------------------------------------------------
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.W, this.H);
     const fog = this.pal.fog;
     gl.clearColor(fog[0], fog[1], fog[2], 1);
@@ -278,76 +345,162 @@ export class Renderer3D {
     gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.BLEND);
 
-    // Sky.
+    // Sky (full-screen ray gradient with sun).
+    mat4.invert(this.invViewProj, this.viewProj);
     gl.useProgram(this.sky.program);
+    this.useAttribs(1);
+    const SU = this.sky.uniforms;
+    gl.uniformMatrix4fv(SU.uInvViewProj, false, this.invViewProj);
+    gl.uniform3fv(SU.uSkyTop, this.pal.skyTop);
+    gl.uniform3fv(SU.uSkyHorizon, this.pal.skyHorizon);
+    gl.uniform3fv(SU.uFogColor, fog);
+    gl.uniform3fv(SU.uSunDir, this.pal.sunDir);
+    gl.uniform3fv(SU.uSunColor, this.pal.sun);
     gl.depthMask(false);
-    mat4.identity(this.tmp);
-    mat4.translate(this.tmp, this.tmp, eye[0], eye[1], eye[2]);
-    gl.uniformMatrix4fv(this.sky.uniforms.uModel, false, this.tmp);
-    gl.uniformMatrix4fv(this.sky.uniforms.uViewProj, false, this.viewProj);
-    bindLitMesh(gl, this.skyMesh);
-    gl.drawArrays(gl.TRIANGLES, 0, this.skyMesh.count);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.skyTri);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 12, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.depthMask(true);
 
     // Lit world.
     const U = this.lit.uniforms;
     gl.useProgram(this.lit.program);
+    this.useAttribs(4);
     gl.uniformMatrix4fv(U.uViewProj, false, this.viewProj);
+    gl.uniformMatrix4fv(U.uLightVP, false, this.lightVP);
     gl.uniform3fv(U.uCamPos, eye);
     gl.uniform3fv(U.uSunDir, this.pal.sunDir);
+    gl.uniform3fv(U.uSunDirV, this.pal.sunDir);
     gl.uniform3fv(U.uSunColor, this.pal.sun);
     gl.uniform3fv(U.uSkyAmb, this.pal.skyAmb);
     gl.uniform3fv(U.uGroundAmb, this.pal.groundAmb);
     gl.uniform3fv(U.uFogColor, fog);
+    gl.uniform3fv(U.uSkyTop, this.pal.skyTop);
+    gl.uniform3fv(U.uSkyHorizon, this.pal.skyHorizon);
+    gl.uniform3fv(U.uGroundRefl, this.pal.groundRefl);
     gl.uniform3f(U.uTint, 1, 1, 1);
-    const fogFar = this.pal.fogFar * this.quality.fogScale;
-    const inTunnel = seg.tunnel;
+    gl.uniform1f(U.uTime, this.time);
+    gl.uniform1f(U.uWater, 0);
+    gl.uniform1f(U.uShadowOn, this.shadowsOn ? 1 : 0);
+    gl.uniform1f(U.uShadowTexel, sm ? 1 / sm.size : 0);
+    gl.uniform1f(U.uShadowSoft, this.quality.shadowSoft || 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.detailTex);
+    gl.uniform1i(U.uDetail, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, sm ? sm.tex : this.detailTex);
+    gl.uniform1i(U.uShadowMap, 2);
+    gl.activeTexture(gl.TEXTURE0);
 
-    // Distant mountains and clouds use a long fog so they read as haze.
+    // Distant mountains use a long fog so they read as haze.
     gl.uniform2f(U.uFog, 700, 3800);
+    gl.uniform1f(U.uShadowOn, 0);
     mat4.identity(this.tmp);
     this.drawLit(this.mountains, this.tmp);
-    if (this.quality.clouds) {
-      mat4.translate(this.tmp, this.tmp, (this.time * 2) % 400, 0, 0);
-      this.drawLit(this.clouds, this.tmp);
-    }
+    gl.uniform1f(U.uShadowOn, this.shadowsOn ? 1 : 0);
 
     gl.uniform2f(U.uFog, this.pal.fogNear * this.quality.fogScale, fogFar);
-    mat4.identity(this.tmp);
     for (const m of this.terrainTiles) if (this.visible(m, fogFar)) this.drawLit(m, this.tmp);
-    gl.uniform3f(U.uTint, 1, 1, 1 + Math.sin(this.time * 1.5) * 0.03);
+    gl.uniform1f(U.uWater, 1);
     this.drawLit(this.water, this.tmp);
-    gl.uniform3f(U.uTint, 1, 1, 1);
+    gl.uniform1f(U.uWater, 0);
     for (const m of this.chunks) if (this.visible(m, fogFar)) this.drawLit(m, this.tmp);
 
     for (const a of this.animated) {
       mat4.rotateZ(this.tmp, a.matrix, this.time * a.speed);
       this.drawLit(this.sails, this.tmp);
     }
-
-    // Traffic.
-    this.shadows.length = 0;
-    for (const c of session.traffic) {
-      const cz = this.lerpZ(c.prevZ, c.z, alpha);
-      const tf = T.frame(cz, c.x, this.frame2);
-      if (!this.near(tf.pos, fogFar)) continue;
-      const meshes = this.trafficMeshes[c.paint % this.trafficMeshes.length];
-      mat4.fromBasis(this.tmp, tf.R, tf.U, [-tf.T[0], -tf.T[1], -tf.T[2]], tf.pos);
-      this.drawCar(meshes, this.tmp, (this.time * c.speed * mpu) / -0.32, 0, false);
-      this.addShadow(tf, 1.3, 2.8);
+    for (let i = 0; i < this.carDrawCount; i++) {
+      const d = this.carDraws[i];
+      this.drawCar(d.meshes, d.m, d.spin, d.steer, d.brake);
     }
 
-    // Player.
-    this.drawCar(this.player, carM, this.wheelSpin, p.steer * 0.42, p.braking || p.speed < -10);
-    this.addShadow(f, 1.35, 2.9);
-
-    // --- Particles & shadows ---------------------------------------------
+    // --- Particles, clouds & contact shadows ---------------------------------
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, inTunnel);
     this.particles.update(dt);
-    this.particles.build(this.camRight, this.camUp, this.shadows);
+    this.particles.build(this.camRight, this.camUp, this.shadows, this.quality.clouds ? this.cloudBillboards() : null);
     this.drawFx();
 
     this.drawOverlay(dt);
+  }
+
+  getShadowMap(size) {
+    if (!(size in this.shadowMaps)) this.shadowMaps[size] = createShadowMap(this.gl, size);
+    return this.shadowMaps[size];
+  }
+
+  /** Render depth from the sun into the shadow map around the car. */
+  renderShadowMap(sm, carPos, camDir) {
+    const gl = this.gl;
+    const S = this.quality.shadowRange;
+    const L = this.pal.sunDir;
+    // Fixed light orientation; the box follows the car, snapped to whole
+    // texels so shadow edges don't shimmer as it moves.
+    mat4.lookAt(this.lightView, [L[0] * 100, L[1] * 100, L[2] * 100], [0, 0, 0], [0, 1, 0]);
+    const c = this.shadowCenter;
+    c[0] = carPos[0] + camDir[0] * S * 0.62;
+    c[1] = carPos[1];
+    c[2] = carPos[2] + camDir[2] * S * 0.62;
+    const v = this.lightView;
+    const lx = v[0] * c[0] + v[4] * c[1] + v[8] * c[2] + v[12];
+    const ly = v[1] * c[0] + v[5] * c[1] + v[9] * c[2] + v[13];
+    const lz = v[2] * c[0] + v[6] * c[1] + v[10] * c[2] + v[14];
+    const texel = (2 * S) / sm.size;
+    const sx = Math.round(lx / texel) * texel;
+    const sy = Math.round(ly / texel) * texel;
+    mat4.ortho(this.lightProj, sx - S, sx + S, sy - S, sy + S, -lz - 160, -lz + 160);
+    mat4.multiply(this.lightVP, this.lightProj, this.lightView);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sm.fb);
+    gl.viewport(0, 0, sm.size, sm.size);
+    gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.disable(gl.BLEND);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(1.5, 3);
+    gl.useProgram(this.depth.program);
+    this.useAttribs(1);
+    const DU = this.depth.uniforms;
+    gl.uniformMatrix4fv(DU.uLightVP, false, this.lightVP);
+    const reach = S * 1.6;
+    const casts = (mesh) => Math.hypot(mesh.center[0] - c[0], mesh.center[2] - c[2]) - mesh.radius < reach;
+    mat4.identity(this.tmp);
+    const draw = (mesh, m) => {
+      if (!mesh.count) return;
+      gl.uniformMatrix4fv(DU.uModel, false, m);
+      bindPositions(gl, mesh);
+      gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+    };
+    for (const m of this.chunks) if (casts(m)) draw(m, this.tmp);
+    for (const m of this.terrainTiles) if (casts(m)) draw(m, this.tmp);
+    for (const a of this.animated) {
+      mat4.rotateZ(this.wheelM, a.matrix, this.time * a.speed);
+      draw(this.sails, this.wheelM);
+    }
+    for (let i = 0; i < this.carDrawCount; i++) {
+      const d = this.carDraws[i];
+      draw(d.meshes.body, d.m);
+      for (const a of d.meshes.anchors.wheels) {
+        mat4.translate(this.wheelM, d.m, a[0], a[1], a[2]);
+        draw(d.meshes.wheel, this.wheelM);
+      }
+    }
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+  }
+
+  /** Enable exactly attributes 0..n-1 (others must not dangle). */
+  useAttribs(n) {
+    const gl = this.gl;
+    while (this.enabledAttribs < n) gl.enableVertexAttribArray(this.enabledAttribs++);
+    while (this.enabledAttribs > n) gl.disableVertexAttribArray(--this.enabledAttribs);
+  }
+
+  cloudBillboards() {
+    const drift = (this.time * 2.2) % 600;
+    const out = this.cloudPuffs;
+    for (const p of out) p.x = p.baseX + drift;
+    return out;
   }
 
   /** Lift the car onto the terrain when it leaves the road. */
@@ -396,7 +549,7 @@ export class Renderer3D {
     });
   }
 
-  addShadow(f, halfW, halfL) {
+  addShadow(f, halfW, halfL, alpha = 0.55) {
     const R = f.R;
     const Tt = f.T;
     this.shadows.push({
@@ -405,7 +558,7 @@ export class Renderer3D {
       z: f.pos[2] + f.U[2] * 0.05,
       rx: [R[0] * halfW, R[1] * halfW, R[2] * halfW],
       rz: [Tt[0] * halfL, Tt[1] * halfL, Tt[2] * halfL],
-      alpha: 0.55,
+      alpha,
     });
   }
 
@@ -457,6 +610,7 @@ export class Renderer3D {
     const P = this.particles;
     if (!P.alphaCount && !P.addCount) return;
     gl.useProgram(this.fx.program);
+    this.useAttribs(3);
     gl.uniformMatrix4fv(this.fx.uniforms.uViewProj, false, this.viewProj);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.softTex);

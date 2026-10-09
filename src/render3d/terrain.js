@@ -176,38 +176,65 @@ export function buildTerrain(track, seed = 77) {
     },
   };
 
-  // Mesh, split into tiles for culling.
+  // Smooth-shaded mesh with per-vertex colour blending, split into tiles.
   const grass = hexToRgb(pal.grass);
   const grassAlt = hexToRgb(pal.grassAlt);
+  const dry = hexToRgb(pal.dryGrass || '#a9b65a');
   const rockC = hexToRgb(pal.rockFace);
   const sand = hexToRgb(pal.shoulder);
   const snow = hexToRgb(pal.snow);
+  const H = (i, j) => heights[Math.max(0, Math.min(nz - 1, j)) * nx + Math.max(0, Math.min(nx - 1, i))];
+  const normals = new Float32Array(nx * nz * 3);
+  const colours = new Float32Array(nx * nz * 3);
+  const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      let ax = H(i - 1, j) - H(i + 1, j);
+      let ay = 2 * CELL;
+      let az = H(i, j - 1) - H(i, j + 1);
+      const l = Math.hypot(ax, ay, az);
+      ax /= l;
+      ay /= l;
+      az /= l;
+      normals[k * 3] = ax;
+      normals[k * 3 + 1] = ay;
+      normals[k * 3 + 2] = az;
+      const x = minX + i * CELL;
+      const z = minZ + j * CELL;
+      const h = heights[k];
+      const patch = noise(x * 0.012 + 11, z * 0.012 - 7) + 0.5;
+      const fleck = noise(x * 0.08, z * 0.08) + 0.5;
+      let c = mixc(grass, grassAlt, Math.min(1, Math.max(0, patch * 1.3 - 0.15)));
+      c = mixc(c, dry, Math.max(0, fleck - 0.62) * 1.4);
+      const steep = 1 - ay;
+      c = mixc(c, rockC, Math.min(1, Math.max(0, (steep - 0.22) * 4)));
+      c = mixc(c, sand, Math.min(1, Math.max(0, (water + 2.2 - h) / 2.5)));
+      c = mixc(c, snow, Math.min(1, Math.max(0, (h - 72) / 10)));
+      colours[k * 3] = c[0];
+      colours[k * 3 + 1] = c[1];
+      colours[k * 3 + 2] = c[2];
+    }
+  }
+  const P = (i, j) => [minX + i * CELL, heights[j * nx + i], minZ + j * CELL];
+  const N = (i, j) => {
+    const k = (j * nx + i) * 3;
+    return [normals[k], normals[k + 1], normals[k + 2]];
+  };
+  const Cc = (i, j) => {
+    const k = (j * nx + i) * 3;
+    return [colours[k], colours[k + 1], colours[k + 2]];
+  };
   const TILE = 24;
   const tiles = [];
-  const rand = mulberry32(seed + 1);
   for (let tj = 0; tj < nz - 1; tj += TILE) {
     for (let ti = 0; ti < nx - 1; ti += TILE) {
-      const mb = new MeshBuilder();
+      const mb = new MeshBuilder().material(0, 1);
       for (let j = tj; j < Math.min(tj + TILE, nz - 1); j++) {
         for (let i = ti; i < Math.min(ti + TILE, nx - 1); i++) {
-          const p = (ii, jj) => [minX + ii * CELL, heights[jj * nx + ii], minZ + jj * CELL];
-          const a = p(i, j);
-          const b = p(i + 1, j);
-          const c = p(i + 1, j + 1);
-          const d = p(i, j + 1);
-          for (const [t0, t1, t2] of [
-            [a, b, c],
-            [a, c, d],
-          ]) {
-            const avg = (t0[1] + t1[1] + t2[1]) / 3;
-            const steep = Math.max(t0[1], t1[1], t2[1]) - Math.min(t0[1], t1[1], t2[1]);
-            let col = rand() < 0.5 ? grass : grassAlt;
-            if (avg < water + 1.2) col = sand;
-            else if (steep > 6.5) col = rockC;
-            if (avg > 78) col = snow;
-            const k = 0.94 + rand() * 0.1;
-            mb.tri(t0, t2, t1, [col[0] * k, col[1] * k, col[2] * k]);
-          }
+          // Same diagonal split as sampler.height().
+          mb.triS(P(i, j), P(i + 1, j + 1), P(i + 1, j), N(i, j), N(i + 1, j + 1), N(i + 1, j), Cc(i, j), Cc(i + 1, j + 1), Cc(i + 1, j));
+          mb.triS(P(i, j), P(i, j + 1), P(i + 1, j + 1), N(i, j), N(i, j + 1), N(i + 1, j + 1), Cc(i, j), Cc(i, j + 1), Cc(i + 1, j + 1));
         }
       }
       tiles.push(mb);
@@ -215,10 +242,10 @@ export function buildTerrain(track, seed = 77) {
   }
 
   // Water plane covering the map (only visible where the ground dips below).
-  const waterMesh = new MeshBuilder();
+  const waterMesh = new MeshBuilder().material(1, 0);
   if (track.def.waterLevel !== undefined) {
     const w = hexToRgb(pal.water);
-    waterMesh.quad([minX, water, minZ], [maxX, water, minZ], [maxX, water, maxZ], [minX, water, maxZ], w, 0.25);
+    waterMesh.quad([minX, water, minZ], [maxX, water, minZ], [maxX, water, maxZ], [minX, water, maxZ], w, 0);
   }
 
   return { sampler, tiles, water: waterMesh, bounds: { minX, maxX, minZ, maxZ } };
