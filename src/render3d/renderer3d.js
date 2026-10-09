@@ -35,6 +35,8 @@ import { MeshBuilder } from '../gl/meshBuilder.js';
 import { ANIMAL_MODELS } from './animals.js';
 import { ANIMALS } from '../data/animals.js';
 import { nitroColour } from '../data/vehicles.js';
+import { PROP_MODELS } from './props.js';
+import { PROP_KINDS } from '../data/props.js';
 import { Particles, Weather, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
 
 // Draw scale of the hidden animals (small ones are drawn bigger).
@@ -185,6 +187,8 @@ export class Renderer3D {
     this.sails = uploadMesh(gl, windmillSails());
     this.starMesh = uploadMesh(gl, starModel());
     this.coneMesh = uploadMesh(gl, MODEL_BUILDERS.cone());
+    this.propMeshes = {};
+    for (const k of PROP_KINDS[track.def.id] || []) this.propMeshes[k] = uploadMesh(gl, PROP_MODELS[k]());
     this.animalMeshes = {};
     for (const a of ANIMALS) if (a.map === track.def.id) this.animalMeshes[a.id] = uploadMesh(gl, ANIMAL_MODELS[a.id]());
     const b = this.terrain.bounds;
@@ -223,7 +227,7 @@ export class Renderer3D {
   disposeWorld() {
     const gl = this.gl;
     if (!this.chunks) return;
-    for (const m of [...this.chunks, ...this.terrainTiles, this.water, this.mountains, this.sails, this.starMesh, this.coneMesh, ...Object.values(this.animalMeshes)]) deleteMesh(gl, m);
+    for (const m of [...this.chunks, ...this.terrainTiles, this.water, this.mountains, this.sails, this.starMesh, this.coneMesh, ...Object.values(this.animalMeshes), ...Object.values(this.propMeshes)]) deleteMesh(gl, m);
   }
 
   /** Meshes for AI racers (rebuilt per race). */
@@ -320,6 +324,10 @@ export class Renderer3D {
       const y = f.pos[1] + 1 + p.air;
       if (e.kind === 'star') {
         for (let i = 0; i < 14; i++) this.particles.spawn('sparkle', f.pos[0], y, f.pos[2], (r() - 0.5) * 6, r() * 4, (r() - 0.5) * 6, 0.12, 0.5);
+      }
+      if (e.kind === 'prop') {
+        for (let i = 0; i < 12; i++) this.particles.spawn('dust', f.pos[0] + f.T[0] * 2, f.pos[1] + 0.4, f.pos[2] + f.T[2] * 2, (r() - 0.5) * 6, 1 + r() * 3, (r() - 0.5) * 6, 0.25 + r() * 0.2, 0.6, 0.8, [0.72, 0.6, 0.45]);
+        if (!this.reduceEffects) this.shake = Math.max(this.shake, 0.12);
       }
       if (e.combo >= 4 || e.kind === 'jump') this.confetti(f.pos, y, e.combo >= 5 ? 40 : 22);
       return;
@@ -900,6 +908,24 @@ export class Renderer3D {
       }
       mat4.scale(m, m, 1.5);
       this.drawLit(this.coneMesh, m);
+    }
+    // Smashable props on the verges.
+    for (const o of fun.props) {
+      const mesh = this.propMeshes[o.kind];
+      if (!mesh) continue;
+      T.frame(o.z, o.x, fr);
+      if (!this.near(fr.pos, reach)) continue;
+      mat4.fromBasis(m, fr.R, fr.U, [-fr.T[0], -fr.T[1], -fr.T[2]], fr.pos);
+      if (o.hitTime >= 0) {
+        // Flung forward and sideways, tumbling, then lying on the ground.
+        const t = Math.min(now - o.hitTime, 0.9);
+        const y = Math.max(0, 6.5 * t - 8 * t * t);
+        mat4.translate(m, m, o.kickX * t * 0.6, y + (t >= 0.8 ? 0.15 : 0), -o.kickZ * t);
+        mat4.rotateX(m, m, -Math.min(Math.PI / 2, t * 7));
+        mat4.rotateZ(m, m, o.spin * t * 0.3);
+      }
+      if (o.yaw) mat4.rotateY(m, m, o.yaw);
+      this.drawLit(mesh, m);
     }
   }
 

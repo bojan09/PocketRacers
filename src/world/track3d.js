@@ -6,6 +6,7 @@
 // World axes: x = east, y = up, z = south (so "north" on the map is -z).
 // Simulation units: 240 units = 1 metre (handling values were tuned in units).
 
+import { PROP_KINDS } from '../data/props.js';
 import { clamp, mulberry32, wrap } from '../core/util.js';
 
 export const UNITS_PER_METRE = 240;
@@ -179,9 +180,11 @@ export function buildTrack3D(def) {
   const roadHalfWidthM = def.roadHalfWidth / UNITS_PER_METRE;
   const length = count * SL;
   const features = buildFeatures(def, segments, step / SL, count);
+  const propDefs = placeProps(def, segments, step / SL);
 
   const track = {
     def,
+    propDefs,
     segments,
     count,
     segmentLength: SL,
@@ -360,4 +363,38 @@ function placeScenery(def, segments) {
       }
     }
   }
+}
+
+/**
+ * Smashable props in small groups on the verges, clear of tunnels, bridges,
+ * rails, ramps and solid scenery. Positions are fixed per map (seeded).
+ */
+function placeProps(def, segments, mpu) {
+  const kinds = PROP_KINDS[def.id];
+  if (!kinds) return [];
+  const rand = mulberry32((def.seed || 1) * 7 + 3);
+  const count = segments.length;
+  const SL = def.segmentLength;
+  const segM = SL * mpu;
+  const at = (i) => segments[((i % count) + count) % count];
+  const clear = (i, side) => {
+    const s = at(i);
+    if (s.tunnel || s.bridge || s.rail || s.ramp || s.gantry) return false;
+    return !s.sprites.some((o) => o.solid && Math.sign(o.offset) === side && Math.abs(o.offset) < 1.6);
+  };
+  const out = [];
+  let i = Math.round(60 / segM);
+  while (i < count - Math.round(40 / segM)) {
+    const side = rand() < 0.5 ? -1 : 1;
+    const kind = kinds[Math.floor(rand() * kinds.length)];
+    const fence = kind === 'fence';
+    const n = fence ? 4 + Math.floor(rand() * 3) : 2 + Math.floor(rand() * 3);
+    const gap = Math.round((fence ? 2.05 : 2.4 + rand() * 1.2) / segM);
+    const x = side * (fence ? 1.32 : 1.15 + rand() * 0.2);
+    let ok = true;
+    for (let k = -2; k <= n * gap + 2 && ok; k++) ok = clear(i + k, side);
+    if (ok) for (let k = 0; k < n; k++) out.push({ z: ((i + k * gap) % count) * SL, x: fence ? x : x + (rand() - 0.5) * 0.12, kind, yaw: fence ? 0 : rand() * Math.PI * 2 });
+    i += Math.round((ok ? 28 + rand() * 30 : 6) / segM);
+  }
+  return out;
 }

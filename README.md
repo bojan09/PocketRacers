@@ -75,6 +75,16 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > (some in tunnels and on bridges), found by driving past them and collected
 > in a sticker book on the badges screen; fireworks, a fanfare, a podium with
 > the player's animal and confetti for top-three finishes.
+>
+> **Phase 5 — looks and smashing:** wheel openings are cut as exact arches
+> (dark liner, trim lip), fender bulges blend into the body, spoilers and
+> roof rails rest on the real roof, plus softly darker lower panels and door
+> shut lines. Nitro (trail, flames, sparkles, button ring) glows in the
+> car's own colour instead of a rainbow. Each map scatters smashable props
+> on its verges (hay bales, fences, crates, barrels, mailboxes, gifts, bins,
+> beach balls) that fly off for points and combos; trees, rocks and
+> buildings stay solid. In free drive Little Driver no longer pulls the car
+> back onto the road, so children can roam and smash; races keep the pull.
 
 ## Tests
 

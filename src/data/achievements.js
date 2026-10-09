@@ -29,6 +29,7 @@ export const ACHIEVEMENTS = [
   { id: 'knock', icon: '💥', name: 'Bumper Cars', desc: 'Bump 25 cars out of the way', stat: 'knocks', goal: 25, reward: 1000 },
   { id: 'near-miss', icon: '😮', name: 'Close Call', desc: 'Zoom past 25 cars really close', stat: 'nearMisses', goal: 25, reward: 750 },
   { id: 'smash', icon: '🚧', name: 'Cone Crusher', desc: 'Knock over 100 cones', stat: 'smashes', goal: 100, reward: 750 },
+  { id: 'wreck', icon: '📦', name: 'Wrecking Ball', desc: 'Knock over 50 things off the road', stat: 'propsSmashed', goal: 50, reward: 1000 },
   { id: 'stars', icon: '✨', name: 'Shiny!', desc: 'Grab 100 stars on the road', stat: 'starsPicked', goal: 100, reward: 750 },
   // Exploring and collecting
   { id: 'road-trip', icon: '🛣️', name: 'Road Trip', desc: 'Drive 25 km', stat: 'km', goal: 25, reward: 1000 },

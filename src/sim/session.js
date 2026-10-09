@@ -19,7 +19,8 @@ export const SUPER_TIME = 3.5; // seconds of Super Nitro
 const SUPER_TOP = 1.12; // Super Nitro top speed on top of normal nitro
 const SHOCKWAVE_RANGE = 24000; // sim units ahead that the activation shockwave clears
 // Little Driver (young children): corners push the car outward less, the
-// road edge pulls it back, and a stuck car is put back on the road.
+// road edge pulls it back (in races; free drive lets them roam off-road),
+// and a stuck car is put back on the road.
 export const ASSIST = {
   centrifugal: 0.45, // share of the outward push left in corners
   edge: 0.8, // where the edge pull starts (road half-width = 1)
@@ -87,6 +88,7 @@ export class DrivingSession {
     this.seed = seed;
     this.steerSensitivity = 1;
     this.assist = false; // Little Driver for the player
+    this.roam = false; // free drive (set by the game): Little Driver lets the car leave the road
     this.surfaceGrip = track.def.env?.grip ?? 1; // < 1 on snow
     this.events = [];
     this.fun = new FunSystem(this);
@@ -193,7 +195,7 @@ export class DrivingSession {
   watchStuck(input, dt) {
     const p = this.player;
     const trying = input.throttle > 0 || input.nitro;
-    const bad = !p.airborne && trying && (p.speed < this.car.handling.maxSpeed * 0.08 || Math.abs(p.x) > 1.05);
+    const bad = !p.airborne && trying && (p.speed < this.car.handling.maxSpeed * 0.08 || (!this.roam && Math.abs(p.x) > 1.05));
     this.stuck = bad ? this.stuck + dt : 0;
     if (this.stuck < ASSIST.stuckTime) return;
     this.stuck = 0;
@@ -295,7 +297,7 @@ export class DrivingSession {
     const authority = clamp(Math.abs(sp) * 3, 0, 1) * (p.airborne ? 0.35 : 1);
     let latTarget = p.steer * h.steerSpeed * authority * (nitro ? 0.9 : 1);
     const assist = b.isPlayer && this.assist;
-    if (assist && !p.airborne) {
+    if (assist && !this.roam && !p.airborne) {
       // Near the edge, steer back toward the road (stronger the further out).
       const out = Math.abs(p.x) - (ASSIST.edge - b.carHalf);
       if (out > 0) latTarget -= Math.sign(p.x) * Math.min(1, out * 5) * h.steerSpeed * ASSIST.pull * authority;

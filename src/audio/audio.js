@@ -221,6 +221,10 @@ export class GameAudio {
       else if (e.kind === 'nearMiss') this.whoosh(500, 2600, 0.4, 0.3);
       else if (e.kind === 'smash') this.clack();
       else if (e.kind === 'knock') this.thump(0.6);
+      else if (e.kind === 'prop') {
+        this.thump(0.5);
+        this.clack();
+      }
       else if (e.kind === 'trick') this.comboDing(Math.max(3, e.combo + 2));
       if (e.kind === 'jump' || e.kind === 'drift' || (e.combo >= 3 && e.kind !== 'trick')) this.comboDing(e.combo);
     }

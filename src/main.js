@@ -452,6 +452,9 @@ function trackEvent(e) {
     case 'smash':
       A.add('smashes');
       break;
+    case 'prop':
+      A.add('propsSmashed');
+      break;
     case 'star':
       A.add('starsPicked');
       break;
@@ -703,6 +706,7 @@ let km = 0; // distance not yet added to the badge stat
 const loop = new GameLoop({
   update(dt) {
     if (mode !== 'driving') return;
+    session.roam = !race;
     if (race) race.step(dt, input.read());
     else session.step(dt, input.read());
     km += (Math.abs(session.player.speed) * SPEED_TO_KMH * dt) / 3600;
@@ -726,7 +730,7 @@ const loop = new GameLoop({
       hud.onEvent(e);
       if (settings.vibration && canVibrate) {
         if (e.type === 'hit' || e.type === 'bump' || e.type === 'land') navigator.vibrate(Math.round(20 + Math.min(1, e.strength) * 40));
-        else if (e.type === 'score' && e.kind === 'smash') navigator.vibrate(15);
+        else if (e.type === 'score' && (e.kind === 'smash' || e.kind === 'prop')) navigator.vibrate(e.kind === 'prop' ? 30 : 15);
       }
       if (e.type === 'score') progress.add(e.points);
       if (e.type === 'rescue') audio.ui('open');

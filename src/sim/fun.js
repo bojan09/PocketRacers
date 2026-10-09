@@ -4,6 +4,7 @@
 
 import { loopDelta, wrap } from '../core/util.js';
 import { ANIMALS, ANIMAL_POINTS } from '../data/animals.js';
+import { PROP_SIZE, PROP_POINTS } from '../data/props.js';
 
 export const POINTS = {
   star: 50,
@@ -16,6 +17,7 @@ export const POINTS = {
   barrel: 500,
   corkscrew: 300, // bonus for a barrel roll with a spin
   knock: 100,
+  prop: PROP_POINTS,
 };
 // Super Nitro charge (fraction of the gold meter) earned per trick.
 export const SUPER_CHARGE = {
@@ -42,6 +44,7 @@ const PICKUP_DZ_M = 1.8;
 const STAR_DX = 0.24; // road half-widths
 const CONE_DZ_M = 1.3;
 const ANIMAL_DZ_M = 3;
+const PROP_DZ_M = 1.6;
 const ANIMAL_DX = 0.34; // road half-widths
 
 export class FunSystem {
@@ -56,13 +59,14 @@ export class FunSystem {
     const T = this.session.track;
     this.stars = (T.starDefs || []).map((s) => ({ ...s, taken: false }));
     this.cones = (T.coneDefs || []).map((c) => ({ ...c, hitTime: -1, kickX: 0, kickZ: 0 }));
+    this.props = (T.propDefs || []).map((p) => ({ ...p, hitTime: -1, kickX: 0, kickZ: 0, spin: 0 }));
     const SL = T.segmentLength;
     this.animals = ANIMALS.filter((a) => a.map === T.def?.id).map((a) => ({ ...a, z: a.seg * SL, met: false, hopTime: -10 }));
     this.score = 0;
     this.combo = 1;
     this.comboLeft = 0;
     this.driftTime = 0;
-    this.stats = { stars: 0, nearMiss: 0, smash: 0, jumps: 0, bestAir: 0, tricks: 0, knocks: 0, supers: 0 };
+    this.stats = { stars: 0, nearMiss: 0, smash: 0, props: 0, jumps: 0, bestAir: 0, tricks: 0, knocks: 0, supers: 0 };
   }
 
   /** Stars and cones come back every lap. */
@@ -70,6 +74,7 @@ export class FunSystem {
     for (const s of this.stars) s.taken = false;
     for (const c of this.cones) c.hitTime = -1;
     for (const a of this.animals) a.met = false;
+    for (const p of this.props) p.hitTime = -1;
   }
 
   refill(amount) {
@@ -164,6 +169,26 @@ export class FunSystem {
         p.speed *= 0.97;
         this.stats.smash++;
         this.award('smash', POINTS.smash, 'SMASH');
+        this.refill(NITRO_REFILL.smash);
+      }
+    }
+
+    // Smashable props on the verges: knocked flying, a small speed loss.
+    if (p.air < 0.8 && Math.abs(p.x) > 0.85) {
+      const rw = T.roadHalfWidthM;
+      for (const o of this.props) {
+        if (o.hitTime >= 0) continue;
+        const d = loopDelta(p.z, o.z, L) * mpu;
+        if (Math.abs(d) > PROP_DZ_M + (o.kind === 'fence' ? 0.8 : 0)) continue;
+        if (Math.abs(p.x - o.x) > S.carHalf + (PROP_SIZE[o.kind] || 0.4) / rw) continue;
+        o.hitTime = S.time;
+        // Away from the road and ahead of the car, so it never flies into the camera.
+        o.kickX = Math.sign(o.x) * (3 + S.rand() * 3);
+        o.kickZ = Math.min(48, Math.max(6, p.speed * mpu * 1.15));
+        o.spin = (S.rand() - 0.5) * 12;
+        p.speed *= 0.95;
+        this.stats.props++;
+        this.award('prop', POINTS.prop, 'SMASH', { prop: o.kind });
         this.refill(NITRO_REFILL.smash);
       }
     }
