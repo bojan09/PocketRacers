@@ -3,13 +3,31 @@
 // synthesised. The context is created/resumed only after a user gesture, as
 // mobile browsers require.
 
-import { Gearbox, EngineSampler } from './engine.js';
+import { Gearbox, EngineSampler, ENGINE_PROFILES } from './engine.js';
 
 export class GameAudio {
   constructor() {
     this.ctx = null;
     this.volume = 0.7;
     this.ready = false;
+    this.engineId = 'flat6';
+  }
+
+  /** Switch the engine sound (vehicle change). */
+  setEngine(id) {
+    this.engineId = ENGINE_PROFILES[id] ? id : 'flat6';
+    this.profile = ENGINE_PROFILES[this.engineId];
+    if (!this.ctx) return;
+    const P = this.profile;
+    this.gearbox = new Gearbox(P);
+    this.drive.curve = driveCurve(P.drive);
+    this.sampler?.dispose();
+    this.useSamples = false;
+    this.sampler = new EngineSampler(this.ctx, this.master, 'assets/audio/engine/');
+    const sampler = this.sampler;
+    sampler.load(this.engineId).then((ok) => {
+      if (sampler === this.sampler) this.useSamples = ok;
+    });
   }
 
   /** Call from a user gesture (tap). Safe to call repeatedly. */
@@ -43,12 +61,7 @@ export class GameAudio {
     this.engineFilter.frequency.value = 700;
     this.engineFilter.Q.value = 2.2;
     const drive = ac.createWaveShaper();
-    const curve = new Float32Array(1024);
-    for (let i = 0; i < curve.length; i++) {
-      const x = (i / (curve.length - 1)) * 2 - 1;
-      curve[i] = Math.tanh(x * 2.2);
-    }
-    drive.curve = curve;
+    this.drive = drive;
     const mixIn = ac.createGain();
     mixIn.gain.value = 0.6;
     this.osc1 = ac.createOscillator();
@@ -67,12 +80,14 @@ export class GameAudio {
     mixIn.connect(drive).connect(this.engineFilter).connect(this.engineGain).connect(this.master);
     for (const o of [this.osc1, this.osc2, this.osc3]) o.start();
 
-    this.gearbox = new Gearbox();
+    // Turbo whistle (diesel trucks).
+    this.whistle = ac.createOscillator();
+    this.whistle.type = 'sine';
+    this.whistleGain = ac.createGain();
+    this.whistleGain.gain.value = 0;
+    this.whistle.connect(this.whistleGain).connect(this.master);
+    this.whistle.start();
     this.lastThrottle = 0;
-    this.sampler = new EngineSampler(ac, this.master, 'assets/audio/engine/');
-    this.sampler.load().then((ok) => {
-      this.useSamples = ok;
-    });
 
     // Shared noise source for nitro hiss, tyre scrub and impacts.
     const len = ac.sampleRate;
@@ -83,6 +98,7 @@ export class GameAudio {
     this.nitroGain = this.loopNoise('bandpass', 1800, 0.8);
     this.skidGain = this.loopNoise('bandpass', 900, 3);
     this.scrapeGain = this.loopNoise('highpass', 3000, 1);
+    this.setEngine(this.engineId);
   }
 
   loopNoise(type, freq, q) {
@@ -120,6 +136,7 @@ export class GameAudio {
     if (this.lastLift && now - this.lastLift < 0.8) return;
     this.lastLift = now;
     this.whoosh(2400, 900, 0.35, 0.09);
+    if (!this.profile.crackle) return;
     for (let i = 0; i < 4; i++) {
       const t = now + 0.08 + i * 0.07 + Math.random() * 0.05;
       const n = this.ctx.createBufferSource();
@@ -142,7 +159,7 @@ export class GameAudio {
     if (!this.ctx) return;
     this.sampler?.silence();
     const t = this.ctx.currentTime;
-    for (const g of [this.engineGain, this.nitroGain, this.skidGain, this.scrapeGain]) g.gain.setTargetAtTime(0, t, 0.05);
+    for (const g of [this.engineGain, this.nitroGain, this.skidGain, this.scrapeGain, this.whistleGain]) g.gain.setTargetAtTime(0, t, 0.05);
   }
 
   /** Per-frame update from the player state. */
@@ -156,20 +173,26 @@ export class GameAudio {
     const rpmFrac = (rpm - this.gearbox.idle) / (this.gearbox.redline - this.gearbox.idle);
     // Upshift: a brief torque cut you can hear.
     const dip = gb.shifted === 1 && thr > 0.5 ? 0.45 : 1;
+    const P = this.profile;
     // Lifting off at high revs: turbo blow-off and a few exhaust pops.
-    if (this.lastThrottle > 0.6 && thr < 0.2 && rpm > 4500) this.liftOff();
+    if (this.lastThrottle > 0.6 && thr < 0.2 && rpmFrac > 0.55) this.liftOff();
     this.lastThrottle = thr;
+    // Trucks hiss their air brakes when coming to a stop.
+    if (P.airBrake && this.wasBraking && !player.braking && sp < 0.15) this.whoosh(5000, 3000, 0.5, 0.12);
+    this.wasBraking = player.braking;
+    this.whistleGain.gain.setTargetAtTime(P.whistle ? 0.012 + 0.03 * rpmFrac * thr : 0, t, 0.1);
+    if (P.whistle) this.whistle.frequency.setTargetAtTime(1800 + rpmFrac * 2600, t, 0.15);
 
     if (this.useSamples) {
       this.sampler.update(rpm, thr, 0.55 * dip);
       this.engineGain.gain.setTargetAtTime(0, t, 0.05);
     } else {
-      const f = (rpm / 60) * 2; // 4-cylinder: two firings per revolution
+      const f = (rpm / 60) * (P.cyl / 2); // firings per second
       this.osc1.frequency.setTargetAtTime(f, t, 0.025);
-      this.osc2.frequency.setTargetAtTime(f * 0.5 + 0.7, t, 0.025);
+      this.osc2.frequency.setTargetAtTime(f * P.lope + 0.7, t, 0.025);
       this.osc3.frequency.setTargetAtTime(f * 0.5, t, 0.025);
-      this.engineFilter.frequency.setTargetAtTime(280 + rpm * 0.32 + thr * 900, t, 0.04);
-      const gain = (0.07 + thr * 0.07 + rpmFrac * 0.04) * dip;
+      this.engineFilter.frequency.setTargetAtTime(P.filter[0] + rpm * P.filter[1] + thr * P.filter[2], t, 0.04);
+      const gain = (0.07 + thr * 0.07 + rpmFrac * 0.04) * dip * P.gain;
       if (dip < 1) {
         this.engineGain.gain.setValueAtTime(gain, t);
         this.engineGain.gain.setTargetAtTime(gain / dip, t + 0.08, 0.05);
@@ -349,4 +372,13 @@ export class GameAudio {
     o.start(t);
     o.stop(t + 0.09);
   }
+}
+
+function driveCurve(amount) {
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = Math.tanh(x * amount);
+  }
+  return curve;
 }

@@ -53,9 +53,24 @@ export class Gearbox {
   }
 }
 
+// Engine sound profiles, one per vehicle family's engine type. `cyl` sets
+// the firing frequency, `lope` the sub-harmonic (V8 burble), `filter` the
+// tone [base Hz, Hz per rpm, extra Hz at full throttle], `drive` the grit.
+export const ENGINE_PROFILES = {
+  i4: { cyl: 4, idle: 950, redline: 7600, shiftUp: 6900, shiftDown: 3600, lope: 0.5, filter: [320, 0.36, 1000], drive: 2.4, gain: 0.9 },
+  flat6: { cyl: 6, idle: 900, redline: 8200, shiftUp: 7600, shiftDown: 4200, lope: 0.5, filter: [300, 0.33, 1100], drive: 2.6, gain: 1, crackle: true },
+  v8: { cyl: 8, idle: 750, redline: 6800, shiftUp: 6200, shiftDown: 3200, tops: [0.24, 0.42, 0.6, 0.8, 1], lope: 0.25, filter: [200, 0.22, 700], drive: 3.2, gain: 1.15, crackle: true },
+  v10: { cyl: 10, idle: 1300, redline: 9500, shiftUp: 9000, shiftDown: 5500, tops: [0.18, 0.3, 0.42, 0.55, 0.68, 0.83, 1], lope: 0.5, filter: [400, 0.4, 1400], drive: 2.4, gain: 0.95, crackle: true },
+  v6: { cyl: 6, idle: 800, redline: 6200, shiftUp: 5600, shiftDown: 2800, tops: [0.24, 0.42, 0.6, 0.8, 1], lope: 0.5, filter: [240, 0.26, 800], drive: 2.6, gain: 1 },
+  v8truck: { cyl: 8, idle: 700, redline: 6000, shiftUp: 5400, shiftDown: 2600, tops: [0.24, 0.42, 0.6, 0.8, 1], lope: 0.25, filter: [190, 0.22, 650], drive: 3, gain: 1.1 },
+  monster: { cyl: 8, idle: 650, redline: 6200, shiftUp: 5600, shiftDown: 2800, tops: [0.3, 0.55, 0.8, 1], lope: 0.25, filter: [160, 0.2, 600], drive: 3.8, gain: 1.25, crackle: true },
+  diesel: { cyl: 6, idle: 600, redline: 2500, shiftUp: 2250, shiftDown: 1300, tops: [0.08, 0.14, 0.21, 0.29, 0.38, 0.48, 0.59, 0.72, 0.86, 1], lope: 0.5, filter: [150, 0.35, 500], drive: 3.5, gain: 1.25, whistle: true, airBrake: true },
+};
+
 /**
- * Recorded-engine player. manifest.json lists loops recorded at known RPMs:
- *   { "layers": [ { "file": "idle.wav", "rpm": 900 }, ... ], "gain": 1 }
+ * Recorded-engine player. manifest.json lists loops recorded at known RPMs,
+ * per engine profile:
+ *   { "profiles": { "v8": { "layers": [ { "file": "v8/idle.wav", "rpm": 750 }, ... ], "gain": 1 } } }
  * Loops play continuously; each frame the two layers nearest the current
  * RPM are crossfaded (equal power) and every layer is pitched by
  * rpm / recordedRpm so the engine sweeps smoothly through the rev range.
@@ -72,11 +87,12 @@ export class EngineSampler {
     this.out.connect(destination);
   }
 
-  async load() {
+  async load(profile) {
     try {
       const res = await fetch(`${this.baseUrl}manifest.json`, { cache: 'no-cache' });
       if (!res.ok) return false;
-      const manifest = await res.json();
+      const manifest = (await res.json()).profiles?.[profile];
+      if (!manifest || this.disposed) return false;
       const defs = (manifest.layers || []).filter((l) => l.file && l.rpm > 0).sort((a, b) => a.rpm - b.rpm);
       if (!defs.length) return false;
       const buffers = await Promise.all(
@@ -85,6 +101,7 @@ export class EngineSampler {
           return this.ac.decodeAudioData(data);
         }),
       );
+      if (this.disposed) return false;
       this.gainScale = manifest.gain ?? 1;
       this.layers = defs.map((l, i) => {
         const src = this.ac.createBufferSource();
@@ -124,6 +141,13 @@ export class EngineSampler {
       l.src.playbackRate.setTargetAtTime(Math.min(2.2, Math.max(0.5, rpm / l.rpm)), t, 0.03);
     });
     this.out.gain.setTargetAtTime(volume * this.gainScale * (0.65 + 0.35 * throttle), t, 0.05);
+  }
+
+  dispose() {
+    this.disposed = true;
+    for (const l of this.layers) l.src.stop();
+    this.out.disconnect();
+    this.ready = false;
   }
 
   silence() {

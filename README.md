@@ -17,8 +17,15 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > drift points, a ×5 combo multiplier, pop-ups, confetti and trick sounds.
 > Points are banked (localStorage for now) for future unlocks.
 >
-> Next: 2D garage, 6 cars & per-car sounds · 2E races & AI · 2F more maps ·
-> then offline service worker and IndexedDB saves.
+> **Phase 2D — vehicle platform & garage:** 12 vehicles across 9 families
+> (race, sports, muscle, hatch, jeep, SUV, pickup, monster truck, cab-over
+> cargo truck), each with its own handling and engine sound (8 engine
+> profiles incl. diesel with turbo whistle and air brakes). 3D turntable
+> garage: unlock with earned points, paint (body/accent/stripes), rims,
+> livery and ride height. All vehicle names are invented.
+>
+> Next: 2E tricks & Super Nitro · 2F races & AI · 2G maps · 2H full 50-vehicle
+> roster & deep customisation · 3 offline, achievements, performance pass.
 
 ## Run locally
 
@@ -45,16 +52,16 @@ npm run test:e2e       # headless mobile Chromium, real multi-touch (needs Playw
 index.html             app shell, HUD, touch controls, menus
 styles/main.css        interface styles (mobile-first, safe areas)
 src/main.js            bootstrap + screen flow
-src/core/              fixed-timestep loop, settings, math utils
-src/data/              car + track definitions (data, not code paths)
+src/core/              fixed-timestep loop, settings, points wallet, garage save
+src/data/              vehicle families + roster, traffic, tracks (data, not code paths)
 src/world/track3d.js   closed-spline 3D track → segments (curvature, banking, flags, colliders)
 src/sim/session.js     driving physics, jumps, collisions, traffic, lap timing (pure, testable)
 src/sim/fun.js         stars, cones, boost pads, near misses, drifts, combo scoring
 src/input/             touch buttons / steering wheel / tilt / keyboard → one input state
 src/gl/                WebGL helpers, shaders, matrix math, mesh builder
 src/render3d/          renderer, terrain, track/scenery meshes, car models, sky, particles
-src/audio/audio.js     Web Audio synthesised engine, nitro, impacts
-src/ui/                HUD, dev tuning panel
+src/audio/             Web Audio: per-family engine profiles + gearbox, optional recorded loops, effects
+src/ui/                HUD, garage screen, dev tuning panel
 tests/                 unit + e2e
 tools/                 dev server, icon rasteriser (not shipped)
 ```

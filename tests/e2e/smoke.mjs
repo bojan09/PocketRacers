@@ -243,7 +243,8 @@ async function drive(page) {
     s = await state(page);
     assert.ok(Math.abs(s.steer) < 0.1, `neutral steer ${s.steer}`);
     await page.evaluate(() => (window.__fakeRoll = 25));
-    await page.waitForTimeout(500);
+    // Sensor events are timer-driven, so allow for a busy headless renderer.
+    await page.waitForFunction(() => window.__pocketRacers.session.player.steer > 0.4, null, { timeout: 2000 }).catch(() => {});
     s = await state(page);
     assert.ok(s.steer > 0.4, `tilted steer ${s.steer}`);
     if (shots) await page.screenshot({ path: `${shots}/landscape-tilt.png` });
@@ -253,6 +254,65 @@ async function drive(page) {
 }
 
 // ----------------------------------------------------------- performance
+{
+  // Garage: browse, customise, unlock with earned points, drive the new vehicle.
+  const { context, page, errors } = await open({ width: 844, height: 390 });
+  await page.evaluate(() => {
+    localStorage.setItem('pocketracers.progress', JSON.stringify({ v: 1, points: 2600 }));
+  });
+  await page.reload();
+  await page.waitForFunction(() => window.__pocketRacers);
+  await check('garage opens on the selected vehicle', async () => {
+    await page.click('#btn-garage');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.mode), 'garage');
+    assert.equal(await page.textContent('#garage-name'), 'Zippy GT');
+    assert.match(await page.textContent('#garage-bank'), /2,600/);
+  });
+  await check('arrows and cards preview other vehicles', async () => {
+    await page.click('#garage-next');
+    assert.equal(await page.textContent('#garage-name'), 'Pip');
+    await page.click('.car-card:has-text("Trailhound")');
+    assert.equal(await page.textContent('#garage-name'), 'Trailhound');
+    assert.match(await page.textContent('#garage-action'), /Unlock/);
+  });
+  await check('paint, rims and style change the preview and persist', async () => {
+    await page.click('[data-tab=paint]');
+    await page.click('.swatches[data-key=body] button[data-value="#ff006e"]');
+    await page.click('[data-tab=wheels]');
+    await page.click('.choices[data-key=rimStyle] button[data-value=star]');
+    await page.click('[data-tab=style]');
+    await page.click('.choices[data-key=ride] button[data-value=max]');
+    const custom = await page.evaluate(() => JSON.parse(localStorage.getItem('pocketracers.garage')).custom.trailhound);
+    assert.deepEqual(custom, { body: '#ff006e', rimStyle: 'star', ride: 'max' });
+    assert.equal(await page.evaluate(() => window.__pocketRacers.renderer.carDef.paint.body), '#ff006e');
+  });
+  await check('unlock spends points; locked-and-unaffordable shows what is missing', async () => {
+    await page.click('#garage-action');
+    assert.match(await page.textContent('#garage-bank'), /600/);
+    assert.equal(await page.textContent('#garage-action'), 'Drive!');
+    await page.click('[data-tab=cars]');
+    await page.click('.car-card:has-text("Bolt R")');
+    assert.ok(await page.isDisabled('#garage-action'));
+    await page.click('.car-card:has-text("Trailhound")');
+  });
+  await check('drive the unlocked vehicle', async () => {
+    await page.click('#garage-action');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'driving');
+    const car = await page.evaluate(() => ({ id: window.__pocketRacers.car.id, session: window.__pocketRacers.session.car.id }));
+    assert.deepEqual(car, { id: 'trailhound', session: 'trailhound' });
+    await page.waitForTimeout(600);
+    assert.ok(await page.evaluate(() => window.__pocketRacers.session.player.speed > 0));
+  });
+  await check('selection survives a reload', async () => {
+    await page.reload();
+    await page.waitForFunction(() => window.__pocketRacers);
+    assert.equal(await page.evaluate(() => window.__pocketRacers.car.id), 'trailhound');
+    assert.match(await page.textContent('#title-car'), /Trailhound/);
+  });
+  await check('no console errors (garage)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+
 {
   const { context, page, cdp } = await open({ width: 844, height: 390 }, '', 'high');
   await drive(page);

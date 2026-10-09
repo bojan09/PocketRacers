@@ -3,7 +3,10 @@
 
 import { GameLoop } from './core/loop.js';
 import { loadSettings, saveSettings } from './core/settings.js';
-import { CARS, TRAFFIC_MODELS, TRAFFIC_PAINTS } from './data/cars.js';
+import { TRAFFIC_MODELS, TRAFFIC_PAINTS } from './data/cars.js';
+import { makeVehicle, VEHICLE_BY_ID } from './data/vehicles.js';
+import { Garage } from './core/garage.js';
+import { GarageScreen } from './ui/garageScreen.js';
 import testTrack from './data/tracks/testTrack.js';
 import { buildTrack3D } from './world/track3d.js';
 import { DrivingSession } from './sim/session.js';
@@ -19,7 +22,8 @@ const $ = (id) => document.getElementById(id);
 
 const settings = loadSettings();
 const track = buildTrack3D(testTrack);
-const car = structuredClone(CARS.zippy);
+const garage = new Garage();
+let car = makeVehicle(garage.selected, garage.custom(garage.selected));
 const session = new DrivingSession(track, car);
 let renderer;
 try {
@@ -42,7 +46,8 @@ const hud = new Hud();
 const canVibrate = typeof navigator.vibrate === 'function';
 const progress = new Progress();
 
-let mode = 'title'; // 'title' | 'driving' | 'paused'
+let mode = 'title'; // 'title' | 'garage' | 'driving' | 'paused'
+audio.setEngine(car.engine);
 
 // ---------------------------------------------------------------- settings
 
@@ -164,6 +169,42 @@ function toTitle() {
   updateRotateNote();
 }
 
+/** Make `id` the player's vehicle (session, renderer, engine sound). */
+function useVehicle(id) {
+  car = makeVehicle(id, garage.custom(id));
+  session.setCar(car);
+  renderer.setVehicle(car);
+  audio.setEngine(car.engine);
+  $('title-car').textContent = car.name;
+}
+
+const garageScreen = new GarageScreen({
+  garage,
+  progress,
+  click: () => audio.click(),
+  onPreview: (id) => renderer.setVehicle(makeVehicle(id, garage.custom(id))),
+  onUnlock: () => hud.toast('Unlocked!'),
+  onDrive: (id) => {
+    garageScreen.close();
+    useVehicle(id);
+    toTitle();
+    $('btn-drive').click(); // same path as the title's Drive button (tilt permission etc.)
+  },
+  onBack: () => {
+    garageScreen.close();
+    useVehicle(garage.selected);
+    toTitle();
+  },
+});
+
+function openGarage() {
+  audio.unlock();
+  mode = 'garage';
+  $('screen-title').hidden = true;
+  $('rotate-note').hidden = true;
+  garageScreen.open();
+}
+
 function updateBank() {
   const pts = progress.points;
   $('title-bank').textContent = pts ? `★ ${pts.toLocaleString()} points earned` : '';
@@ -186,6 +227,10 @@ for (const b of document.querySelectorAll('.scheme')) {
 $('title-auto').addEventListener('change', (e) => {
   settings.autoAccelerate = e.target.checked;
   applySettings();
+});
+$('btn-garage').addEventListener('click', () => {
+  audio.click();
+  openGarage();
 });
 $('btn-drive').addEventListener('click', async () => {
   audio.unlock();
@@ -262,6 +307,13 @@ const loop = new GameLoop({
     if (mode === 'driving') session.step(dt, input.read());
   },
   render(alpha, frameDt) {
+    if (mode === 'garage') {
+      garageScreen.tick(frameDt);
+      renderer.renderGarage(frameDt, garageScreen.yaw, garageScreen.view());
+      session.events.length = 0;
+      hud.tickFps(frameDt, loop.frameMs, settings.showFps);
+      return;
+    }
     renderer.render(session, mode === 'driving' ? alpha : 1, frameDt);
     for (const e of session.events) {
       renderer.onEvent(e, session);
@@ -283,6 +335,7 @@ const loop = new GameLoop({
 });
 
 applySettings();
+$('title-car').textContent = car.name;
 updateBank();
 updateRotateNote();
 loop.start();
@@ -291,4 +344,4 @@ window.addEventListener('pagehide', () => progress.save());
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, input, renderer, settings, loop, get mode() { return mode; } };
+window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, get car() { return car; }, get mode() { return mode; } };

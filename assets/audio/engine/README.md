@@ -1,18 +1,27 @@
 # Engine recordings
 
-Drop seamless engine **loops** here and list them in `manifest.json`. The game
-crossfades the two loops nearest the current RPM and pitches each one by
-`rpm / recordedRpm`. With no layers listed it uses the synthesised engine.
+Drop seamless engine **loops** here (one folder per engine profile) and list
+them in `manifest.json`. The game crossfades the two loops nearest the current
+RPM and pitches each one by `rpm / recordedRpm`. A profile with no entry uses
+the synthesised engine.
+
+Profiles (see `src/audio/engine.js`): `i4` (hatch), `flat6` (sports), `v8`
+(muscle), `v10` (race), `v6` (jeep, SUV), `v8truck` (pickup), `monster`,
+`diesel` (cargo truck).
 
 ```json
 {
-  "layers": [
-    { "file": "idle.wav", "rpm": 900 },
-    { "file": "low.wav", "rpm": 2500 },
-    { "file": "mid.wav", "rpm": 4500 },
-    { "file": "high.wav", "rpm": 6500 }
-  ],
-  "gain": 1
+  "profiles": {
+    "v8": {
+      "layers": [
+        { "file": "v8/idle.wav", "rpm": 750 },
+        { "file": "v8/low.wav", "rpm": 2500 },
+        { "file": "v8/mid.wav", "rpm": 4500 },
+        { "file": "v8/high.wav", "rpm": 6500 }
+      ],
+      "gain": 1
+    }
+  }
 }
 ```
 

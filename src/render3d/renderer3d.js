@@ -8,6 +8,7 @@ import {
   createContext,
   createProgram,
   uploadMesh,
+  deleteMesh,
   bindLitMesh,
   bindPositions,
   createSoftTexture,
@@ -30,6 +31,7 @@ import { buildTrackChunks } from './trackMesh.js';
 import { buildMountains, buildCloudPuffs } from './environment.js';
 import { buildCarBody, buildWheel } from './carModel.js';
 import { windmillSails, starModel, MODEL_BUILDERS } from './models.js';
+import { MeshBuilder } from '../gl/meshBuilder.js';
 import { Particles, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
 
 const TRAIL_LIFE = 0.5; // seconds a rainbow sample stays visible
@@ -102,7 +104,7 @@ export class Renderer3D {
 
     // --- Cars ---------------------------------------------------------------
     this.player = null;
-    this.setPaint(carDef.paint);
+    this.setVehicle(carDef);
     this.trafficMeshes = traffic.map(({ model, paint }) => {
       const body = buildCarBody(model, paint);
       return { body: uploadMesh(gl, body.body), brake: null, wheel: uploadMesh(gl, buildWheel(model, paint)), anchors: body.anchors };
@@ -164,14 +166,16 @@ export class Renderer3D {
     this.resize();
   }
 
-  setPaint(paint) {
+  /** Build (or rebuild after a garage change) the player's vehicle meshes. */
+  setVehicle(def) {
     const gl = this.gl;
-    const spec = this.carDef.model;
-    const body = buildCarBody(spec, paint);
+    if (this.player) for (const k of ['body', 'brake', 'wheel']) deleteMesh(gl, this.player[k]);
+    this.carDef = def;
+    const body = buildCarBody(def.model, def.paint);
     this.player = {
       body: uploadMesh(gl, body.body),
       brake: uploadMesh(gl, body.brake),
-      wheel: uploadMesh(gl, buildWheel(spec, paint)),
+      wheel: uploadMesh(gl, buildWheel(def.model, def.paint)),
       anchors: body.anchors,
     };
   }
@@ -318,8 +322,13 @@ export class Renderer3D {
     this.camDir = cd;
     this.nitroFx += ((p.nitro ? 1 : 0) - this.nitroFx) * Math.min(1, dt * 5);
     const portrait = this.portrait;
-    const dist = (portrait ? 7.8 : 6.4) + this.nitroFx * 0.8;
-    const height = portrait ? 3.9 : 2.45;
+    // Bigger vehicles pull the camera back and up.
+    const cs = this.carDef.camera || 1;
+    const dist = (portrait ? 7.8 : 6.4) * cs + this.nitroFx * 0.8;
+    // Tall vehicles (trucks, monster trucks) need the eye above their roof
+    // so the road ahead stays visible.
+    const tall = Math.max(0, this.player.anchors.height - 1.3);
+    const height = Math.max((portrait ? 3.9 : 2.45) * (0.4 + 0.6 * cs), this.player.anchors.height + (portrait ? 2.2 : 1.3));
     const eye = this.eye;
     eye[0] = f.pos[0] - cd[0] * dist;
     // Let the car rise in frame a little when it jumps.
@@ -332,7 +341,7 @@ export class Renderer3D {
     // clears the touch controls.
     const ahead = portrait ? 2 : 4;
     tgt[0] = f.pos[0] + cd[0] * ahead;
-    tgt[1] = f.pos[1] + (portrait ? 0.35 : 1.15) + f.T[1] * ahead;
+    tgt[1] = f.pos[1] + (portrait ? 0.35 : 1.15) + tall * 0.75 + f.T[1] * ahead;
     tgt[2] = f.pos[2] + cd[2] * ahead;
     if (this.shake > 0.01) {
       const s = this.shake;
@@ -394,7 +403,8 @@ export class Renderer3D {
     sf.T = f.T;
     sf.U = f.U;
     sf.pos = gp;
-    this.addShadow(sf, 1.25, 2.6, (this.shadowsOn ? 0.3 : 0.55) * shadowFade);
+    const pa = this.player.anchors;
+    this.addShadow(sf, pa.halfWidth * 1.25, pa.length * 0.58, (this.shadowsOn ? 0.3 : 0.55) * shadowFade);
 
     // --- Shadow pass -------------------------------------------------------
     this.shadowsOn = false;
@@ -415,52 +425,9 @@ export class Renderer3D {
     gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.BLEND);
 
-    // Sky (full-screen ray gradient with sun).
-    mat4.invert(this.invViewProj, this.viewProj);
-    gl.useProgram(this.sky.program);
-    this.useAttribs(1);
-    const SU = this.sky.uniforms;
-    gl.uniformMatrix4fv(SU.uInvViewProj, false, this.invViewProj);
-    gl.uniform3fv(SU.uSkyTop, this.pal.skyTop);
-    gl.uniform3fv(SU.uSkyHorizon, this.pal.skyHorizon);
-    gl.uniform3fv(SU.uFogColor, fog);
-    gl.uniform3fv(SU.uSunDir, this.pal.sunDir);
-    gl.uniform3fv(SU.uSunColor, this.pal.sun);
-    gl.depthMask(false);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.skyTri);
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 12, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.depthMask(true);
-
-    // Lit world.
+    this.drawSky(this.pal);
+    this.beginLit(eye, sm, this.pal);
     const U = this.lit.uniforms;
-    gl.useProgram(this.lit.program);
-    this.useAttribs(4);
-    gl.uniformMatrix4fv(U.uViewProj, false, this.viewProj);
-    gl.uniformMatrix4fv(U.uLightVP, false, this.lightVP);
-    gl.uniform3fv(U.uCamPos, eye);
-    gl.uniform3fv(U.uSunDir, this.pal.sunDir);
-    gl.uniform3fv(U.uSunDirV, this.pal.sunDir);
-    gl.uniform3fv(U.uSunColor, this.pal.sun);
-    gl.uniform3fv(U.uSkyAmb, this.pal.skyAmb);
-    gl.uniform3fv(U.uGroundAmb, this.pal.groundAmb);
-    gl.uniform3fv(U.uFogColor, fog);
-    gl.uniform3fv(U.uSkyTop, this.pal.skyTop);
-    gl.uniform3fv(U.uSkyHorizon, this.pal.skyHorizon);
-    gl.uniform3fv(U.uGroundRefl, this.pal.groundRefl);
-    gl.uniform3f(U.uTint, 1, 1, 1);
-    gl.uniform1f(U.uTime, this.time);
-    gl.uniform1f(U.uWater, 0);
-    gl.uniform1f(U.uShadowOn, this.shadowsOn ? 1 : 0);
-    gl.uniform1f(U.uShadowTexel, sm ? 1 / sm.size : 0);
-    gl.uniform1f(U.uShadowSoft, this.quality.shadowSoft || 0);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.detailTex);
-    gl.uniform1i(U.uDetail, 1);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, sm ? sm.tex : this.detailTex);
-    gl.uniform1i(U.uShadowMap, 2);
-    gl.activeTexture(gl.TEXTURE0);
 
     // Distant mountains use a long fog so they read as haze.
     gl.uniform2f(U.uFog, 700, 3800);
@@ -493,6 +460,190 @@ export class Renderer3D {
     this.drawFx();
 
     this.drawOverlay(dt);
+  }
+
+  /** Full-screen sky gradient (with sun unless the palette hides it). */
+  drawSky(pal) {
+    const gl = this.gl;
+    mat4.invert(this.invViewProj, this.viewProj);
+    gl.useProgram(this.sky.program);
+    this.useAttribs(1);
+    const SU = this.sky.uniforms;
+    gl.uniformMatrix4fv(SU.uInvViewProj, false, this.invViewProj);
+    gl.uniform3fv(SU.uSkyTop, pal.skyTop);
+    gl.uniform3fv(SU.uSkyHorizon, pal.skyHorizon);
+    gl.uniform3fv(SU.uFogColor, pal.fog);
+    gl.uniform3fv(SU.uSunDir, pal.sunDir);
+    gl.uniform3fv(SU.uSunColor, pal.skySun || pal.sun);
+    gl.depthMask(false);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.skyTri);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 12, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.depthMask(true);
+  }
+
+  /** Bind the lit program and set its per-frame uniforms. */
+  beginLit(eye, sm, pal) {
+    const gl = this.gl;
+    const U = this.lit.uniforms;
+    gl.useProgram(this.lit.program);
+    this.useAttribs(4);
+    gl.uniformMatrix4fv(U.uViewProj, false, this.viewProj);
+    gl.uniformMatrix4fv(U.uLightVP, false, this.lightVP);
+    gl.uniform3fv(U.uCamPos, eye);
+    gl.uniform3fv(U.uSunDir, pal.sunDir);
+    gl.uniform3fv(U.uSunDirV, pal.sunDir);
+    gl.uniform3fv(U.uSunColor, pal.sun);
+    gl.uniform3fv(U.uSkyAmb, pal.skyAmb);
+    gl.uniform3fv(U.uGroundAmb, pal.groundAmb);
+    gl.uniform3fv(U.uFogColor, pal.fog);
+    gl.uniform3fv(U.uSkyTop, pal.skyTop);
+    gl.uniform3fv(U.uSkyHorizon, pal.skyHorizon);
+    gl.uniform3fv(U.uGroundRefl, pal.groundRefl);
+    gl.uniform3f(U.uTint, 1, 1, 1);
+    gl.uniform1f(U.uTime, this.time);
+    gl.uniform1f(U.uWater, 0);
+    gl.uniform1f(U.uShadowOn, this.shadowsOn ? 1 : 0);
+    gl.uniform1f(U.uShadowTexel, sm ? 1 / sm.size : 0);
+    gl.uniform1f(U.uShadowSoft, this.quality.shadowSoft || 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.detailTex);
+    gl.uniform1i(U.uDetail, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, sm ? sm.tex : this.detailTex);
+    gl.uniform1i(U.uShadowMap, 2);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
+  /**
+   * Garage showroom: the player's vehicle on a turntable in a studio.
+   * @param yaw  turntable angle (radians)
+   * @param view {shiftX, shiftY} where the vehicle sits on screen (NDC offset)
+   */
+  renderGarage(dt, yaw, view = {}) {
+    if (this.lost) return;
+    const gl = this.gl;
+    this.time += dt;
+    if (!this.studio) this.studio = this.buildStudio();
+    const pal = this.studio.pal;
+    const a = this.player.anchors;
+    const size = Math.max(a.length, a.halfWidth * 2.2, a.height * 1.5);
+
+    // Vehicle on the turntable (centred on its wheelbase).
+    const carM = this.model;
+    mat4.identity(carM);
+    mat4.rotateY(carM, carM, yaw);
+    this.wheelSpin = 0;
+
+    // Fixed camera, slightly above; the vehicle turns.
+    const eye = this.eye;
+    const tgt = this.target;
+    const d = 2.4 + size * (this.portrait ? 1.1 : 1.2);
+    eye[0] = 0;
+    eye[1] = a.height * 0.45 + d * 0.3;
+    eye[2] = d;
+    tgt[0] = 0;
+    tgt[1] = a.height * 0.38;
+    tgt[2] = 0;
+    const aspect = this.W / this.H;
+    const vfov = this.portrait ? 2 * Math.atan(Math.tan(30 * DEG) / aspect) * 0.95 : 42 * DEG;
+    mat4.perspective(this.proj, vfov, aspect, 0.3, 400);
+    this.proj[8] = -(view.shiftX || 0);
+    this.proj[9] = -(view.shiftY || 0);
+    mat4.lookAt(this.view, eye, tgt, [0, 1, 0]);
+    mat4.multiply(this.viewProj, this.proj, this.view);
+    const v = this.view;
+    this.camRight[0] = v[0];
+    this.camRight[1] = v[4];
+    this.camRight[2] = v[8];
+    this.camUp[0] = v[1];
+    this.camUp[1] = v[5];
+    this.camUp[2] = v[9];
+
+    const pd = this.carDraws[0];
+    pd.meshes = this.player;
+    pd.m.set(carM);
+    pd.spin = 0;
+    pd.steer = 0.25;
+    pd.brake = false;
+    this.carDrawCount = 1;
+
+    this.shadowsOn = false;
+    const sm = this.quality.shadow && !this.reduceShadows ? this.getShadowMap(this.quality.shadow) : null;
+    if (sm) {
+      this.renderShadowMap(sm, [0, 0, 0], [0, 0, 0], false, Math.max(6, size * 0.9));
+      this.shadowsOn = true;
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.W, this.H);
+    gl.clearColor(pal.fog[0], pal.fog[1], pal.fog[2], 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.disable(gl.BLEND);
+    this.drawSky(pal);
+    this.beginLit(eye, sm, pal);
+    const U = this.lit.uniforms;
+    gl.uniform2f(U.uFog, d * 1.6, d * 4.5);
+    mat4.identity(this.tmp);
+    mat4.scale(this.tmp, this.tmp, (size * 0.62) / 3.6);
+    this.drawLit(this.studio.floor, this.tmp);
+    mat4.rotateY(this.tmp, this.tmp, yaw);
+    this.drawLit(this.studio.table, this.tmp);
+    this.drawCar(pd.meshes, pd.m, 0, pd.steer, false);
+
+    // Soft contact shadow (the only shadow on Low quality).
+    this.shadows.length = 0;
+    const c = Math.cos(yaw);
+    const sn = Math.sin(yaw);
+    this.shadows.push({
+      x: 0,
+      y: 0.02,
+      z: 0,
+      rx: [c * a.halfWidth * 1.25, 0, -sn * a.halfWidth * 1.25],
+      rz: [-sn * a.length * 0.6, 0, -c * a.length * 0.6],
+      alpha: this.shadowsOn ? 0.3 : 0.5,
+    });
+    this.trailCount = 0;
+    this.particles.update(dt);
+    this.particles.build(this.camRight, this.camUp, this.shadows, null);
+    this.drawFx();
+    this.flash = 0;
+    this.nitroFx = 0;
+    this.drawOverlay(dt);
+  }
+
+  buildStudio() {
+    const floor = new MeshBuilder().material(0.35, 0.15);
+    const floorCol = [0.6, 0.64, 0.8];
+    const ring = (mb, r0, r1, y, col, emissive = 0, n = 48) => {
+      for (let i = 0; i < n; i++) {
+        const a0 = (i / n) * Math.PI * 2;
+        const a1 = ((i + 1) / n) * Math.PI * 2;
+        mb.quad([Math.cos(a0) * r0, y, Math.sin(a0) * r0], [Math.cos(a0) * r1, y, Math.sin(a0) * r1], [Math.cos(a1) * r1, y, Math.sin(a1) * r1], [Math.cos(a1) * r0, y, Math.sin(a1) * r0], col, emissive);
+      }
+    };
+    ring(floor, 0, 4.2, -0.005, floorCol);
+    ring(floor, 4.2, 200, -0.005, floorCol);
+    // Turntable: a dark disc with a glowing rim and a few rings.
+    const table = new MeshBuilder().material(0.8, 0.1);
+    ring(table, 0, 3.6, 0.0, [0.17, 0.19, 0.3]);
+    ring(table, 3.6, 3.75, 0.004, [0.3, 0.95, 0.9], 0.85);
+    for (const r of [1.4, 2.5]) ring(table, r, r + 0.03, 0.003, [0.32, 0.36, 0.55]);
+    const pal = {
+      fog: [0.58, 0.63, 0.86],
+      sun: [1.0, 0.97, 0.92],
+      skySun: [0, 0, 0],
+      skyAmb: [0.36, 0.38, 0.5],
+      groundAmb: [0.22, 0.22, 0.28],
+      skyTop: [0.15, 0.17, 0.38],
+      skyHorizon: [0.58, 0.63, 0.86],
+      groundRefl: [0.3, 0.32, 0.42],
+      sunDir: normalize([0.45, 0.85, 0.35]),
+    };
+    return { floor: uploadMesh(this.gl, floor), table: uploadMesh(this.gl, table), pal };
   }
 
   /** Spinning stars and knock-over cones. */
@@ -538,9 +689,9 @@ export class Renderer3D {
   }
 
   /** Render depth from the sun into the shadow map around the car. */
-  renderShadowMap(sm, carPos, camDir) {
+  renderShadowMap(sm, carPos, camDir, world = true, range = this.quality.shadowRange) {
     const gl = this.gl;
-    const S = this.quality.shadowRange;
+    const S = range;
     const L = this.pal.sunDir;
     // Fixed light orientation; the box follows the car, snapped to whole
     // texels so shadow edges don't shimmer as it moves.
@@ -580,11 +731,13 @@ export class Renderer3D {
       bindPositions(gl, mesh);
       gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     };
-    for (const m of this.chunks) if (casts(m)) draw(m, this.tmp);
-    for (const m of this.terrainTiles) if (casts(m)) draw(m, this.tmp);
-    for (const a of this.animated) {
-      mat4.rotateZ(this.wheelM, a.matrix, this.time * a.speed);
-      draw(this.sails, this.wheelM);
+    if (world) {
+      for (const m of this.chunks) if (casts(m)) draw(m, this.tmp);
+      for (const m of this.terrainTiles) if (casts(m)) draw(m, this.tmp);
+      for (const a of this.animated) {
+        mat4.rotateZ(this.wheelM, a.matrix, this.time * a.speed);
+        draw(this.sails, this.wheelM);
+      }
     }
     for (let i = 0; i < this.carDrawCount; i++) {
       const d = this.carDraws[i];
@@ -651,7 +804,7 @@ export class Renderer3D {
     const w = this.wheelM;
     meshes.anchors.wheels.forEach((a, i) => {
       mat4.translate(w, carM, a[0], a[1], a[2]);
-      if (i < 2 && steerAngle) mat4.rotateY(w, w, -steerAngle);
+      if (steerAngle && meshes.anchors.steer[i]) mat4.rotateY(w, w, -steerAngle);
       mat4.rotateX(w, w, spin);
       this.drawLit(meshes.wheel, w);
     });
@@ -699,7 +852,7 @@ export class Renderer3D {
         this.particles.spawn('sparkle', P[0], P[1], P[2], (r() - 0.5) * 2, 1 + r() * 2, (r() - 0.5) * 2, 0.09, 0.5);
       }
     }
-    const rear = anchors.wheels.slice(2);
+    const rear = anchors.rearWheels;
     if (p.sliding) {
       for (const w of rear) {
         transformPoint(P, carM, [w[0], 0.1, w[2]]);
@@ -735,7 +888,7 @@ export class Renderer3D {
     for (let k = n - 1; k > 0; k--) tr[k] = tr[k - 1];
     tr[0] = recycled;
     const P = this.p3;
-    transformPoint(P, carM, [0, 0.42, anchors.rearZ + 0.15]);
+    transformPoint(P, carM, [0, anchors.trailY, anchors.rearZ + 0.15]);
     recycled.x = P[0];
     recycled.y = P[1];
     recycled.z = P[2];

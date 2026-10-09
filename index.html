@@ -105,9 +105,62 @@
             </button>
           </div>
           <label class="toggle-row"><input type="checkbox" id="title-auto" /> <span>Auto-accelerate</span></label>
-          <button id="btn-drive" class="big-btn">Drive!</button>
+          <div class="title-actions">
+            <button id="btn-garage" class="btn btn-garage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9H3z" /><path d="M7 20v-6h10v6" class="cut" /></svg><span>Garage<small id="title-car"></small></span></button>
+            <button id="btn-drive" class="big-btn">Drive!</button>
+          </div>
           <p class="hint" id="title-hint"></p>
           <p class="bank" id="title-bank"></p>
+        </div>
+      </section>
+
+      <!-- Garage: pick, unlock and customise vehicles -->
+      <section id="screen-garage" class="screen screen-garage" hidden>
+        <div class="garage-stage" id="garage-stage" aria-hidden="true"></div>
+        <header class="garage-top">
+          <button id="garage-back" class="icon-btn" aria-label="Back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></button>
+          <div class="garage-title">
+            <small id="garage-family"></small>
+            <b id="garage-name"></b>
+          </div>
+          <span class="bank-pill" id="garage-bank"></span>
+        </header>
+        <div class="garage-stats" id="garage-stats"></div>
+        <button class="garage-arrow prev" id="garage-prev" aria-label="Previous vehicle"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></button>
+        <button class="garage-arrow next" id="garage-next" aria-label="Next vehicle"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg></button>
+        <div class="garage-panel">
+          <div class="tabs" role="tablist">
+            <button role="tab" data-tab="cars" aria-selected="true">Vehicles</button>
+            <button role="tab" data-tab="paint" aria-selected="false">Paint</button>
+            <button role="tab" data-tab="wheels" aria-selected="false">Wheels</button>
+            <button role="tab" data-tab="style" aria-selected="false">Style</button>
+          </div>
+          <div class="tab-body" data-body="cars">
+            <div class="chips" id="garage-filters"></div>
+            <div class="car-grid" id="garage-cars"></div>
+          </div>
+          <div class="tab-body" data-body="paint" hidden>
+            <h3>Body</h3>
+            <div class="swatches" data-key="body"></div>
+            <h3>Accent</h3>
+            <div class="swatches" data-key="accent"></div>
+            <h3>Stripes</h3>
+            <div class="swatches" data-key="stripe"></div>
+          </div>
+          <div class="tab-body" data-body="wheels" hidden>
+            <h3>Rims</h3>
+            <div class="choices" data-key="rimStyle"></div>
+            <h3>Rim colour</h3>
+            <div class="swatches" data-key="rim"></div>
+          </div>
+          <div class="tab-body" data-body="style" hidden>
+            <h3>Livery</h3>
+            <div class="choices" data-key="livery"></div>
+            <h3>Ride height</h3>
+            <div class="choices" data-key="ride"></div>
+            <button class="btn" id="garage-reset">Reset to factory look</button>
+          </div>
+          <button id="garage-action" class="big-btn garage-action"></button>
         </div>
       </section>
 

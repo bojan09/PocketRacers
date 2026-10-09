@@ -2,12 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildTrack3D } from '../../src/world/track3d.js';
 import testTrack from '../../src/data/tracks/testTrack.js';
-import { CARS } from '../../src/data/cars.js';
+import { makeVehicle } from '../../src/data/vehicles.js';
 import { DrivingSession } from '../../src/sim/session.js';
 import { FIXED_DT } from '../../src/core/loop.js';
 
 const track = buildTrack3D(testTrack);
-const car = () => structuredClone(CARS.zippy);
+const car = () => makeVehicle('zippy');
 const input = (o = {}) => ({ steer: 0, analog: false, throttle: 1, brake: 0, nitro: false, ...o });
 const session = () => new DrivingSession(track, car(), { trafficCount: 0 });
 

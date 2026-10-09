@@ -1,5 +1,5 @@
-// Player progress: total points earned across sessions (spent on unlocks in
-// the garage phase). Prototype persistence uses localStorage; the versioned
+// Player progress: the points wallet, earned by tricks and spent on garage
+// unlocks. Prototype persistence uses localStorage; the versioned
 // IndexedDB save system replaces this later.
 
 const KEY = 'pocketracers.progress';
@@ -14,6 +14,14 @@ export class Progress {
     } catch {
       /* storage unavailable: start from zero */
     }
+  }
+
+  /** Spend points (vehicle unlocks). Returns false if there are not enough. */
+  spend(points) {
+    if (!Number.isFinite(points) || points < 0 || points > this.points) return false;
+    this.points -= points;
+    this.dirty = true;
+    return true;
   }
 
   add(points) {

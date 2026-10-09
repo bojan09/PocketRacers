@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildTrack3D } from '../../src/world/track3d.js';
 import testTrack from '../../src/data/tracks/testTrack.js';
-import { CARS } from '../../src/data/cars.js';
+import { makeVehicle } from '../../src/data/vehicles.js';
 import { DrivingSession } from '../../src/sim/session.js';
 import { advance, FIXED_DT } from '../../src/core/loop.js';
 
@@ -13,7 +13,7 @@ const circlePoints = Array.from({ length: 24 }, (_, i) => {
   return { p: [Math.cos(a) * 2500, Math.sin(a) * 2500], y: 0 };
 });
 const straight = buildTrack3D({ ...testTrack, points: circlePoints, scenery: [], features: {} });
-const car = () => structuredClone(CARS.zippy);
+const car = () => makeVehicle('zippy');
 const input = (o = {}) => ({ steer: 0, analog: false, throttle: 0, brake: 0, nitro: false, ...o });
 const newSession = (opts = { trafficCount: 0 }) => new DrivingSession(track, car(), opts);
 

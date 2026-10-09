@@ -11,12 +11,12 @@ const LANES3 = [-2 / 3, 0, 2 / 3];
 const MAX_EVENTS = 32;
 const GRAVITY = 2600; // sim units / s^2 per unit of slope (arcade-scaled)
 export const NITRO_DRAIN = 0.22; // a full tank lasts ~4.5 s of boosting
+const TRAFFIC_SPEED = 12000; // traffic pace is the same whatever the player drives
 
 export class DrivingSession {
   constructor(track, car, { trafficCount = track.def.trafficCount ?? 0, seed = 7 } = {}) {
     this.track = track;
-    this.car = car;
-    this.carHalf = car.widthWorld / 2 / track.roadHalfWidth;
+    this.setCar(car, false);
     this.trafficCount = trafficCount;
     this.seed = seed;
     this.steerSensitivity = 1;
@@ -24,6 +24,13 @@ export class DrivingSession {
     this.events = [];
     this.fun = new FunSystem(this);
     this.reset();
+  }
+
+  /** Swap the player's vehicle (garage). */
+  setCar(car, reset = true) {
+    this.car = car;
+    this.carHalf = car.widthWorld / 2 / this.track.roadHalfWidth;
+    if (reset) this.reset();
   }
 
   reset() {
@@ -65,7 +72,7 @@ export class DrivingSession {
       nitroFuel: 1,
     };
     this.traffic = [];
-    const max = this.car.handling.maxSpeed;
+    const max = TRAFFIC_SPEED;
     for (let i = 0; i < this.trafficCount; i++) {
       const lane = Math.floor(rand() * 3);
       const z = wrap(6000 + (i * this.track.length) / this.trafficCount, this.track.length);
@@ -253,7 +260,7 @@ export class DrivingSession {
       const speedM = p.speed * mpu;
       p.airborne = true;
       p.airTime = 0;
-      p.vy = overLip && speedM > 6 ? (speedM * left.height) / left.length : 0;
+      p.vy = overLip && speedM > 6 ? ((speedM * left.height) / left.length) * (this.car.handling.jumpBoost ?? 1) : 0;
       if (p.vy > 0) this.emit({ type: 'takeoff' });
       return;
     }
