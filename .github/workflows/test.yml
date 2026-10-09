@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Offline file list is up to date
+        run: node tools/precache.mjs && git diff --exit-code sw.js
+      - name: Unit tests
+        run: npm test
+      # Playwright is a CI-only tool; the game itself has no dependencies.
+      - name: Install headless Chromium
+        run: npm install --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: node tests/e2e/smoke.mjs e2e-shots
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e-shots
+          if-no-files-found: ignore

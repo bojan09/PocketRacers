@@ -144,6 +144,14 @@ export class Hud {
       this.popup('SUPER NITRO!', '', true);
       return;
     }
+    if (e.type === 'animal' && !e.first) {
+      this.popup(`${e.icon} 💗`, '', true);
+      return;
+    }
+    if (e.type === 'score' && e.kind === 'animal') {
+      this.popup(`${e.label} +${e.points}`, '', true);
+      return;
+    }
     if (e.type === 'score') {
       const big = (e.kind === 'jump' && e.label === 'BIG AIR') || e.kind === 'trick';
       this.popup(`${e.label}! +${e.points}`, e.combo > 1 ? `×${e.combo}` : '', big || e.combo >= 4);

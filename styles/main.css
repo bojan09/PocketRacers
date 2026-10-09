@@ -168,6 +168,27 @@ button {
   place-items: center;
 }
 
+.honk-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(255, 190, 11, 0.85);
+  box-shadow: 0 4px 0 rgba(27, 31, 59, 0.3);
+  font-size: 30px;
+  line-height: 1;
+  touch-action: none;
+}
+
+.honk-btn.honking {
+  animation: honk 0.4s ease-out;
+}
+
+@keyframes honk {
+  30% {
+    transform: scale(1.25) rotate(-12deg);
+  }
+}
+
 .icon-btn svg {
   width: 26px;
   height: 26px;
@@ -1174,6 +1195,20 @@ button {
   min-height: 40px;
 }
 
+.choices.toppers {
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.choices.toppers button {
+  font-size: 28px;
+  line-height: 1;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 50%;
+}
+
 .choices button[aria-pressed='true'] {
   border-color: var(--coral);
   background: #fff1f2;
@@ -1611,6 +1646,62 @@ button {
 
 /* ---------- Badges ---------- */
 
+.sticker-book {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 14px;
+}
+
+.sticker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 22px;
+  background: var(--sky);
+  box-shadow: 0 4px 0 rgba(27, 31, 59, 0.18);
+}
+
+.sticker-map {
+  font-size: 22px;
+  width: 30px;
+  text-align: center;
+}
+
+.sticker {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  font-size: 32px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.35);
+  border: 3px dashed rgba(255, 255, 255, 0.8);
+}
+
+.sticker i {
+  font-style: normal;
+  filter: brightness(0) opacity(0.35);
+}
+
+.sticker.got {
+  background: #fff;
+  border: 3px solid #fff;
+  box-shadow: 0 3px 0 rgba(27, 31, 59, 0.25);
+  transform: rotate(-6deg);
+}
+
+.sticker.got i {
+  filter: none;
+}
+
+.sticker.got:nth-child(odd) {
+  transform: rotate(5deg);
+}
+
 .badge-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -2026,6 +2117,138 @@ button {
   background: rgba(255, 255, 255, 0.7);
   padding: 2px 8px;
   border-radius: 999px;
+}
+
+/* ---------- Results celebrations ---------- */
+
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 6px auto 4px;
+}
+
+.podium .step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 64px;
+}
+
+.podium .who {
+  font-size: 30px;
+  line-height: 1.1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--c, #fff);
+  margin-bottom: 4px;
+  animation: podium-in 0.5s ease-out both;
+}
+
+.podium .me .who {
+  background: #fff;
+  box-shadow: 0 0 0 4px var(--sun);
+  font-size: 32px;
+  animation: podium-in 0.5s ease-out both, podium-bounce 0.9s 0.6s ease-in-out infinite;
+}
+
+.podium .step b {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  border-radius: 10px 10px 0 0;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.podium .step-1 b {
+  height: 52px;
+  background: linear-gradient(#ffd23f, #e8a500);
+}
+
+.podium .step-2 b {
+  height: 38px;
+  background: linear-gradient(#dfe4ee, #a9b2c4);
+}
+
+.podium .step-3 b {
+  height: 28px;
+  background: linear-gradient(#f0a46a, #c4703a);
+}
+
+.podium .step-2 .who {
+  animation-delay: 0.15s;
+}
+
+.podium .step-3 .who {
+  animation-delay: 0.3s;
+}
+
+@keyframes podium-in {
+  from {
+    transform: translateY(-40px) scale(0.4);
+    opacity: 0;
+  }
+}
+
+@keyframes podium-bounce {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.confetti-rain {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.confetti-rain i {
+  position: absolute;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confetti-fall linear both;
+}
+
+@keyframes confetti-fall {
+  to {
+    transform: translateY(110vh) rotate(var(--spin));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-rain {
+    display: none;
+  }
+}
+
+@media (max-height: 480px) {
+  .podium .who {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+  .podium .step-1 b {
+    height: 36px;
+  }
+  .podium .step-2 b {
+    height: 26px;
+  }
+  .podium .step-3 b {
+    height: 20px;
+  }
+  .podium .step b {
+    font-size: 15px;
+  }
 }
 
 /* ---------- Pause ---------- */

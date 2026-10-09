@@ -1,0 +1,27 @@
+// Hidden animals: three on every map, waiting at the side of the road (some
+// in tunnels or on bridges). Driving past one says hello; the first time a
+// player finds it, it goes into their sticker book. `seg` is the track
+// segment, `x` the lateral position in road half-widths.
+
+export const ANIMALS = [
+  { id: 'bunny', icon: '🐰', map: 'sunny-valley', seg: 250, x: -0.8 },
+  { id: 'pig', icon: '🐷', map: 'sunny-valley', seg: 1110, x: -0.8 },
+  { id: 'duck', icon: '🦆', map: 'sunny-valley', seg: 1480, x: 0.8 },
+  { id: 'fox', icon: '🦊', map: 'desert-canyon', seg: 1080, x: -0.8 },
+  { id: 'camel', icon: '🐫', map: 'desert-canyon', seg: 1380, x: 0.8 },
+  { id: 'lizard', icon: '🦎', map: 'desert-canyon', seg: 2520, x: 0.8 },
+  { id: 'polarbear', icon: '🐻‍❄️', map: 'snowy-peaks', seg: 300, x: -0.8 },
+  { id: 'owl', icon: '🦉', map: 'snowy-peaks', seg: 1230, x: 0.8 },
+  { id: 'penguin', icon: '🐧', map: 'snowy-peaks', seg: 1650, x: 0.8 },
+  { id: 'cat', icon: '🐱', map: 'night-city', seg: 1000, x: 0.8 },
+  { id: 'dog', icon: '🐶', map: 'night-city', seg: 1250, x: -0.8 },
+  { id: 'raccoon', icon: '🦝', map: 'night-city', seg: 2170, x: 0.8 },
+  { id: 'crab', icon: '🦀', map: 'tropical-coast', seg: 220, x: 0.8 },
+  { id: 'parrot', icon: '🦜', map: 'tropical-coast', seg: 680, x: 0.8 },
+  { id: 'turtle', icon: '🐢', map: 'tropical-coast', seg: 1600, x: -0.8 },
+];
+
+export const ANIMAL_BY_ID = Object.fromEntries(ANIMALS.map((a) => [a.id, a]));
+
+/** Points for finding an animal for the first time. */
+export const ANIMAL_POINTS = 500;

@@ -403,6 +403,8 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     const n = await page.$$eval('.badge-card', (c) => c.length);
     assert.ok(n >= 20, `${n} badges`);
     assert.equal(await page.$$eval('.badge-card.earned', (c) => c.length), 0);
+    assert.equal(await page.locator('#sticker-book .sticker').count(), 15, 'sticker book has every animal');
+    assert.equal(await page.locator('#sticker-book .sticker.got').count(), 0);
     await page.click('#badges-back');
     await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
   });
@@ -415,6 +417,32 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     assert.ok(after.got);
     assert.ok(after.pts >= before + 150, `${before} -> ${after.pts}`);
     assert.match(await page.textContent('.badge-pop'), /Lift Off/);
+  });
+  await check('driving past a hidden animal finds it: points, sticker, badge', async () => {
+    const before = await page.evaluate(() => window.__pocketRacers.progress.points);
+    await page.evaluate(() => {
+      const S = window.__pocketRacers.session;
+      const a = S.fun.animals.find((x) => x.id === 'bunny');
+      S.player.z = a.z - 12 / S.track.metresPerUnit;
+      S.player.x = a.x * 0.8;
+    });
+    await page.waitForFunction(() => window.__pocketRacers.achievements.found('bunny'), null, { timeout: 5000 });
+    const after = await page.evaluate(() => window.__pocketRacers.progress.points);
+    assert.ok(after >= before + 500, `${before} -> ${after}`);
+    assert.ok(await page.evaluate(() => window.__pocketRacers.achievements.earned('animal')));
+  });
+  await check('HONK button honks while driving', async () => {
+    const t0 = await page.evaluate(() => window.__pocketRacers.session.lastHonk);
+    await page.click('#btn-honk');
+    const t1 = await page.evaluate(() => window.__pocketRacers.session.lastHonk);
+    assert.ok(t1 > t0);
+    await home(page);
+    await page.click('#btn-badges');
+    assert.equal(await page.locator('#sticker-book .sticker.got').count(), 1);
+    assert.equal(await page.locator('#sticker-book .sticker.got[data-animal=bunny]').count(), 1);
+    await page.click('#badges-back');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
+    await drive(page);
   });
   await check('graphics settings offer Auto', async () => {
     await home(page);
@@ -494,6 +522,10 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     const custom = await page.evaluate(() => window.__pocketRacers.garage.custom('trailhound'));
     assert.equal(custom.bullbar, 'bullbar');
     assert.equal(custom.neon, '#8ac926');
+    assert.equal(await page.locator('.toppers button').count(), 5);
+    await page.click('.toppers button[data-value=duck]');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.garage.custom('trailhound').topper), 'duck');
+    assert.equal(await page.getAttribute('.toppers button[data-value=duck]', 'aria-pressed'), 'true');
     await page.click('[data-tab=tune]');
     const before = await page.evaluate(() => window.__pocketRacers.progress.points);
     await page.click('.tune-buy[data-upgrade=tyres]');
@@ -556,6 +588,12 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).events.rookie.stars, PLAYER('career'));
     assert.ok(saved >= 1);
     assert.ok(await page.isVisible('#results-next'), 'next race offered');
+    assert.equal(await page.locator('#results-podium .step').count(), 3, 'podium with the top three');
+    const place = await page.evaluate(() => window.__pocketRacers.race.results.place);
+    if (place <= 3) {
+      assert.equal(await page.textContent('#results-podium .me .who'), '🦊');
+      assert.ok((await page.locator('#results-confetti i').count()) > 0, 'confetti for a podium finish');
+    }
     assert.ok((await page.locator('#results-badges .badge-chip').count()) >= 1, 'badges shown inside the results');
   });
   await check('retry restarts the race; menu returns to free drive', async () => {

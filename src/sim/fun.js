@@ -3,6 +3,7 @@
 // multiplier. Pure logic (no DOM) so it is unit-testable like the session.
 
 import { loopDelta, wrap } from '../core/util.js';
+import { ANIMALS, ANIMAL_POINTS } from '../data/animals.js';
 
 export const POINTS = {
   star: 50,
@@ -40,10 +41,14 @@ const MAX_COMBO = 5;
 const PICKUP_DZ_M = 1.8;
 const STAR_DX = 0.24; // road half-widths
 const CONE_DZ_M = 1.3;
+const ANIMAL_DZ_M = 3;
+const ANIMAL_DX = 0.34; // road half-widths
 
 export class FunSystem {
   constructor(session) {
     this.session = session;
+    /** Animal ids the current player has already found (set by the game). */
+    this.known = new Set();
     this.reset();
   }
 
@@ -51,6 +56,8 @@ export class FunSystem {
     const T = this.session.track;
     this.stars = (T.starDefs || []).map((s) => ({ ...s, taken: false }));
     this.cones = (T.coneDefs || []).map((c) => ({ ...c, hitTime: -1, kickX: 0, kickZ: 0 }));
+    const SL = T.segmentLength;
+    this.animals = ANIMALS.filter((a) => a.map === T.def?.id).map((a) => ({ ...a, z: a.seg * SL, met: false, hopTime: -10 }));
     this.score = 0;
     this.combo = 1;
     this.comboLeft = 0;
@@ -62,6 +69,7 @@ export class FunSystem {
   respawn() {
     for (const s of this.stars) s.taken = false;
     for (const c of this.cones) c.hitTime = -1;
+    for (const a of this.animals) a.met = false;
   }
 
   refill(amount) {
@@ -126,6 +134,22 @@ export class FunSystem {
       this.stats.stars++;
       this.award('star', POINTS.star, 'STAR');
       this.refill(NITRO_REFILL.star);
+    }
+
+    // Hidden animals: say hello when driving past (once a lap). The first
+    // time for this player it is a new sticker.
+    for (const a of this.animals) {
+      if (a.met || p.air > 2.5) continue;
+      if (Math.abs(loopDelta(p.z, a.z, L)) * mpu > ANIMAL_DZ_M || Math.abs(p.x - a.x) > ANIMAL_DX) continue;
+      a.met = true;
+      a.hopTime = S.time;
+      const first = !this.known.has(a.id);
+      this.known.add(a.id);
+      S.emit({ type: 'animal', id: a.id, icon: a.icon, first });
+      if (first) {
+        this.score += ANIMAL_POINTS;
+        S.emit({ type: 'score', kind: 'animal', points: ANIMAL_POINTS, combo: 1, total: this.score, label: a.icon, id: a.id });
+      }
     }
 
     // Cones: knocked flying, a tiny speed loss, points.

@@ -123,6 +123,9 @@ export class ResultsScreen {
         list.append(li);
       }
     }
+    this.podium(r, e, info.avatar);
+    const won = e.mode === 'timetrial' ? info.stars === 3 : !r.eliminated && r.place <= 3;
+    this.confetti(won ? (r.place === 1 || e.mode === 'timetrial' ? 60 : 30) : 0);
     $('results-points').textContent = `+${info.points.toLocaleString()} ★ points`;
     const next = $('results-next');
     next.hidden = !info.next;
@@ -132,8 +135,48 @@ export class ResultsScreen {
     this.root.hidden = false;
   }
 
+  /** Top three on a podium; the player is their animal. */
+  podium(r, e, avatar) {
+    const box = $('results-podium');
+    box.textContent = '';
+    box.hidden = e.mode === 'timetrial' || r.total < 2;
+    if (box.hidden) return;
+    const top = r.standings.filter((s) => !s.eliminated).slice(0, 3);
+    for (const place of [2, 1, 3]) {
+      const s = top[place - 1];
+      if (!s) continue;
+      const step = document.createElement('div');
+      step.className = `step step-${place}${s.player ? ' me' : ''}`;
+      const who = document.createElement('span');
+      who.className = 'who';
+      who.textContent = s.player ? avatar || '🙂' : '🚗';
+      if (!s.player && s.colour) who.style.setProperty('--c', s.colour);
+      const block = document.createElement('b');
+      block.textContent = String(place);
+      step.append(who, block);
+      box.append(step);
+    }
+  }
+
+  /** Paper confetti falling over the results. */
+  confetti(n) {
+    const box = $('results-confetti');
+    box.textContent = '';
+    const colours = ['#ff4d5e', '#ffd23f', '#2ec4b6', '#4c8dff', '#a259ff', '#ff8c42'];
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('i');
+      c.style.left = `${Math.random() * 100}%`;
+      c.style.background = colours[i % colours.length];
+      c.style.animationDelay = `${Math.random() * 1.6}s`;
+      c.style.animationDuration = `${2.4 + Math.random() * 1.6}s`;
+      c.style.setProperty('--spin', `${Math.random() > 0.5 ? '' : '-'}${360 + Math.floor(Math.random() * 540)}deg`);
+      box.append(c);
+    }
+  }
+
   close() {
     this.root.hidden = true;
+    $('results-confetti').textContent = '';
     this.onClose?.();
   }
 }

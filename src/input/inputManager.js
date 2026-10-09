@@ -27,6 +27,7 @@ export class InputManager {
     this.autoAccelerate = true;
     this.state = { steer: 0, analog: false, throttle: 0, brake: 0, nitro: false };
     this.onPauseKey = null;
+    this.onHonkKey = null;
 
     window.addEventListener('keydown', (e) => {
       const k = KEYMAP[e.code];
@@ -35,6 +36,8 @@ export class InputManager {
         e.preventDefault();
       } else if ((e.code === 'Escape' || e.code === 'KeyP') && this.onPauseKey) {
         this.onPauseKey();
+      } else if (e.code === 'KeyH' && !e.repeat && this.onHonkKey) {
+        this.onHonkKey();
       }
     });
     window.addEventListener('keyup', (e) => {

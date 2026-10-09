@@ -153,7 +153,7 @@ export class Race {
       time: me.result.time,
       bestLap: me.p.bestLap,
       total: this.entrants.length,
-      standings: this.order.map((b) => ({ name: b.isPlayer ? 'You' : b.name, car: b.car.name, place: b.result.place, time: b.result.time, eliminated: b.result.eliminated, player: b.isPlayer })),
+      standings: this.order.map((b) => ({ name: b.isPlayer ? 'You' : b.name, car: b.car.name, colour: b.car.paint?.body, place: b.result.place, time: b.result.time, eliminated: b.result.eliminated, player: b.isPlayer })),
     };
     // The AI keep cruising behind the results screen.
     return this.results;

@@ -32,8 +32,19 @@ import { buildMountains, buildCloudPuffs } from './environment.js';
 import { buildCarBody, buildWheel } from './carModel.js';
 import { windmillSails, starModel, MODEL_BUILDERS } from './models.js';
 import { MeshBuilder } from '../gl/meshBuilder.js';
+import { ANIMAL_MODELS } from './animals.js';
+import { ANIMALS } from '../data/animals.js';
 import { Particles, Weather, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
 
+// Draw scale of the hidden animals (small ones are drawn bigger).
+const ANIMAL_SIZE = { lizard: 2.2, turtle: 1.9, crab: 1.8, duck: 1.7 };
+const FIREWORK_COLOURS = [
+  [1, 0.3, 0.4],
+  [1, 0.85, 0.25],
+  [0.3, 0.8, 1],
+  [0.65, 0.45, 1],
+  [0.35, 1, 0.55],
+];
 const TRAIL_LIFE = 0.5; // seconds a rainbow sample stays visible
 const GOLD = [1, 0.82, 0.25];
 
@@ -173,6 +184,8 @@ export class Renderer3D {
     this.sails = uploadMesh(gl, windmillSails());
     this.starMesh = uploadMesh(gl, starModel());
     this.coneMesh = uploadMesh(gl, MODEL_BUILDERS.cone());
+    this.animalMeshes = {};
+    for (const a of ANIMALS) if (a.map === track.def.id) this.animalMeshes[a.id] = uploadMesh(gl, ANIMAL_MODELS[a.id]());
     const b = this.terrain.bounds;
     const center = [(b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2];
     this.mountains = uploadMesh(gl, env.mountains === false ? new MeshBuilder() : buildMountains(pal, center, Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.5 + 520));
@@ -201,6 +214,7 @@ export class Renderer3D {
     }
     this.weather = env.weather && env.weather !== 'none' ? new Weather(env.weather, this.quality ? this.quality.particles + 0.2 : 1) : null;
     this.trailCount = 0;
+    this.fireworks = [];
     this.particles?.clear();
     this.camDir = null;
   }
@@ -208,7 +222,7 @@ export class Renderer3D {
   disposeWorld() {
     const gl = this.gl;
     if (!this.chunks) return;
-    for (const m of [...this.chunks, ...this.terrainTiles, this.water, this.mountains, this.sails, this.starMesh, this.coneMesh]) deleteMesh(gl, m);
+    for (const m of [...this.chunks, ...this.terrainTiles, this.water, this.mountains, this.sails, this.starMesh, this.coneMesh, ...Object.values(this.animalMeshes)]) deleteMesh(gl, m);
   }
 
   /** Meshes for AI racers (rebuilt per race). */
@@ -308,6 +322,20 @@ export class Renderer3D {
       if (e.combo >= 4 || e.kind === 'jump') this.confetti(f.pos, y, e.combo >= 5 ? 40 : 22);
       return;
     }
+    if (e.type === 'animal' && e.first) {
+      const a = session.fun.animals.find((x) => x.id === e.id);
+      if (a) {
+        this.track.frame(a.z, a.x, f);
+        this.confetti(f.pos, f.pos[1] + 2, 50);
+      }
+      return;
+    }
+    if (e.type === 'finish' && e.place <= 3) {
+      this.launchFireworks(session, e.place === 1 ? 9 : 5);
+      this.track.frame(p.z, p.x, f);
+      this.confetti(f.pos, f.pos[1] + 2.5, 80);
+      return;
+    }
     if (e.type === 'lap' && e.best && e.lap > 1) {
       this.track.frame(p.z, p.x, f);
       this.confetti(f.pos, f.pos[1] + 2, 60);
@@ -350,6 +378,41 @@ export class Renderer3D {
           0.4 + r() * 0.3,
         );
       }
+    }
+  }
+
+  /** Queue firework bursts in the sky ahead of the player. */
+  launchFireworks(session, n) {
+    const p = session.player;
+    const f = makeFrame();
+    for (let i = 0; i < n; i++) {
+      this.track.frame(p.z + (40 + this.rand() * 20) / this.track.metresPerUnit, (this.rand() - 0.5) * 3, f);
+      this.fireworks.push({
+        at: this.time + 0.15 + i * 0.32 + this.rand() * 0.15,
+        pos: [f.pos[0], f.pos[1] + 7 + this.rand() * 5, f.pos[2]],
+        colour: FIREWORK_COLOURS[i % FIREWORK_COLOURS.length],
+      });
+    }
+  }
+
+  /** Burst any fireworks that are due. */
+  stepFireworks() {
+    for (let i = this.fireworks.length - 1; i >= 0; i--) {
+      const fw = this.fireworks[i];
+      if (fw.at > this.time) continue;
+      this.fireworks.splice(i, 1);
+      const r = this.rand;
+      const [x, y, z] = fw.pos;
+      for (let k = 0; k < 70; k++) {
+        // Even spread over a sphere.
+        const u = r() * 2 - 1;
+        const a = r() * Math.PI * 2;
+        const s = Math.sqrt(1 - u * u);
+        const v = 13 + r() * 4;
+        this.particles.spawn('firework', x, y, z, Math.cos(a) * s * v, u * v + 1.5, Math.sin(a) * s * v, 0.7, 1.1 + r() * 0.5, 0, k % 5 ? fw.colour : [1, 1, 1]);
+      }
+      this.flash = Math.max(this.flash, 0.08);
+      this.onFirework?.();
     }
   }
 
@@ -599,9 +662,11 @@ export class Renderer3D {
       this.drawCar(d.meshes, d.m, d.spin, d.steer, d.brake);
     }
     this.drawPickups(session, fogFar);
+    this.drawAnimals(session, fogFar);
 
     // --- Particles, clouds & contact shadows ---------------------------------
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, inTunnel);
+    this.stepFireworks();
     this.particles.update(dt);
     if (this.weather && !inTunnel) this.weather.update(dt, eye);
     this.particles.build(this.camRight, this.camUp, this.shadows, this.quality.clouds ? this.cloudBillboards() : null, this.weather && !inTunnel ? this.weather : null, this.collectGlows(session, f));
@@ -834,6 +899,45 @@ export class Renderer3D {
       mat4.scale(m, m, 1.5);
       this.drawLit(this.coneMesh, m);
     }
+  }
+
+  /**
+   * Hidden animals: breathe while waiting, hop when greeted or honked at,
+   * and sparkle until this player has found them.
+   */
+  drawAnimals(session, fogFar) {
+    const T = this.track;
+    const fun = session.fun;
+    const fr = this.frame2;
+    const m = this.tmp;
+    const reach = Math.min(fogFar, 200);
+    const now = session.time;
+    const gl = this.gl;
+    // At night they glow softly so they can still be spotted.
+    if (this.env.night) gl.uniform3f(this.lit.uniforms.uTint, 2.6, 2.6, 2.6);
+    for (let i = 0; i < fun.animals.length; i++) {
+      const a = fun.animals[i];
+      const mesh = this.animalMeshes[a.id];
+      if (!mesh) continue;
+      T.frame(a.z, a.x, fr);
+      if (!this.near(fr.pos, reach)) continue;
+      const t = now - a.hopTime;
+      const hop = t >= 0 && t < 0.7 ? Math.sin((t / 0.7) * Math.PI) * 1.4 : 0;
+      const breathe = 1 + Math.sin(this.time * 2.2 + i) * 0.025;
+      mat4.fromBasis(m, fr.R, fr.U, [-fr.T[0], -fr.T[1], -fr.T[2]], fr.pos);
+      mat4.translate(m, m, 0, hop, 0);
+      // Turn a little toward the road so they look at passing cars.
+      mat4.rotateY(m, m, -Math.sign(a.x) * 0.5);
+      const k = ANIMAL_SIZE[a.id] || 1.5;
+      mat4.scale(m, m, k, k * breathe, k);
+      this.drawLit(mesh, m);
+      this.addShadow(fr, 0.9 / (1 + hop * 0.4), 0.9 / (1 + hop * 0.4), 0.4);
+      if (!fun.known.has(a.id) && this.rand() < 0.12) {
+        const r = this.rand;
+        this.particles.spawn('sparkle', fr.pos[0] + (r() - 0.5) * 2.4, fr.pos[1] + 0.4 + r() * 2.6, fr.pos[2] + (r() - 0.5) * 2.4, 0, 0.8, 0, 0.12, 0.7);
+      }
+    }
+    if (this.env.night) gl.uniform3f(this.lit.uniforms.uTint, 1, 1, 1);
   }
 
   getShadowMap(size) {

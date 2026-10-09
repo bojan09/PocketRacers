@@ -40,6 +40,7 @@
           <div class="pill time"><span class="pill-label">BEST</span> <b id="hud-best">--:--.--</b></div>
         </div>
         <div class="hud-right">
+          <button id="btn-honk" class="icon-btn honk-btn" aria-label="Honk"><span aria-hidden="true">📯</span></button>
           <div class="speedo"><b id="hud-speed">0</b><span>km/h</span></div>
           <button id="btn-pause" class="icon-btn" aria-label="Pause">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5" /><rect x="14" y="5" width="4" height="14" rx="1.5" /></svg>
@@ -166,6 +167,7 @@
             <div id="garage-tune"></div>
           </div>
           <div class="tab-body" data-body="style" hidden>
+            <div class="choices toppers" data-key="topper" aria-label="Roof topper"></div>
             <h3>Livery</h3>
             <div class="choices" data-key="livery"></div>
             <h3>Ride height</h3>
@@ -201,16 +203,19 @@
             <h2>Badges</h2>
             <span class="bank-pill" id="badges-count"></span>
           </header>
+          <div class="sticker-book" id="sticker-book" aria-label="Animals found"></div>
           <div class="badge-grid" id="badge-grid"></div>
         </div>
       </section>
 
       <!-- Race results -->
       <section id="screen-results" class="screen screen-results" hidden>
+        <div class="confetti-rain" id="results-confetti" aria-hidden="true"></div>
         <div class="panel results-panel" role="dialog" aria-modal="true" aria-labelledby="results-title">
           <div class="result-medal" id="results-medal" aria-hidden="true"></div>
           <h2 id="results-title"></h2>
           <div class="result-stars" id="results-stars" aria-label="Stars"></div>
+          <div class="podium" id="results-podium" aria-hidden="true"></div>
           <p class="result-sub" id="results-sub"></p>
           <ol class="standings" id="results-standings"></ol>
           <p class="result-points" id="results-points"></p>

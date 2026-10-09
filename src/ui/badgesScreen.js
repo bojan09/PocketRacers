@@ -2,6 +2,8 @@
 // earned" pop-ups, which can appear over any screen.
 
 import { ACHIEVEMENTS } from '../data/achievements.js';
+import { ANIMALS } from '../data/animals.js';
+import { TRACKS, TRACK_ART } from '../data/tracks/index.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => (Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1));
@@ -33,6 +35,7 @@ export class BadgesScreen {
   render() {
     const A = this.achievements;
     $('badges-count').textContent = `🏅 ${this.label}`;
+    this.renderStickers();
     const grid = $('badge-grid');
     grid.textContent = '';
     // Earned first, then the closest to being earned.
@@ -47,6 +50,38 @@ export class BadgesScreen {
       card.querySelector('.badge-bar i').style.width = `${Math.round(p * 100)}%`;
       card.querySelector('small').textContent = got ? `Earned! ★${a.reward.toLocaleString()}` : a.goal > 1 ? `${fmt(Math.min(a.goal, Math.floor(A.stat(a.stat) * 10) / 10))} / ${fmt(a.goal)} · ★${a.reward.toLocaleString()}` : `★${a.reward.toLocaleString()}`;
       grid.append(card);
+    }
+  }
+
+  /**
+   * Sticker book: one row per map with its hidden animals. Ones not found
+   * yet show as dark shapes, a hint of what to look for.
+   */
+  renderStickers() {
+    const book = $('sticker-book');
+    book.textContent = '';
+    for (const t of TRACKS) {
+      const art = TRACK_ART[t.id];
+      const row = document.createElement('div');
+      row.className = 'sticker-row';
+      row.style.setProperty('--sky', `linear-gradient(${art.sky[0]}, ${art.sky[1]} 60%, ${art.ground} 60%)`);
+      const map = document.createElement('span');
+      map.className = 'sticker-map';
+      map.textContent = art.sun;
+      map.setAttribute('aria-label', t.name);
+      row.append(map);
+      for (const a of ANIMALS.filter((x) => x.map === t.id)) {
+        const got = this.achievements.found(a.id);
+        const st = document.createElement('span');
+        st.className = got ? 'sticker got' : 'sticker';
+        st.dataset.animal = a.id;
+        const icon = document.createElement('i');
+        icon.textContent = a.icon;
+        st.append(icon);
+        st.setAttribute('aria-label', got ? a.id : 'not found yet');
+        row.append(st);
+      }
+      book.append(row);
     }
   }
 

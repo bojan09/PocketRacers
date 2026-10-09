@@ -327,7 +327,7 @@ function showResults() {
   audio.quiet();
   $('hud').hidden = true;
   controlsEl.hidden = true;
-  resultsScreen.show(r, { event: e, stars, points, next, medals: e.mode === 'timetrial' ? medalTimes(e, car) : null });
+  resultsScreen.show(r, { event: e, stars, points, next, avatar: AVATARS[profiles.current]?.icon, medals: e.mode === 'timetrial' ? medalTimes(e, car) : null });
 }
 
 /**
@@ -416,7 +416,7 @@ function syncGarageStats() {
   for (const u of Object.values(g.upgrades)) for (const lv of Object.values(u)) (bought += lv), (top = Math.max(top, lv));
   achievements.max('upgrades', bought);
   achievements.max('maxUpgrade', top);
-  const styled = Object.entries(g.custom).some(([id, c]) => (c.neon && c.neon !== 'none') || kitSlots(VEHICLE_BY_ID[id]).some((s) => c[s] && c[s] !== 'stock' && c[s] !== 'none'));
+  const styled = Object.entries(g.custom).some(([id, c]) => (c.neon && c.neon !== 'none') || (c.topper && c.topper !== 'none') || kitSlots(VEHICLE_BY_ID[id]).some((s) => c[s] && c[s] !== 'stock' && c[s] !== 'none'));
   if (styled) achievements.max('styled', 1);
 }
 garage.onChange = syncGarageStats;
@@ -424,6 +424,7 @@ garage.onChange = syncGarageStats;
 /** Badge stats from gameplay events. */
 function trackEvent(e) {
   if (e.type === 'super') achievements.add('supers');
+  if (e.type === 'animal' && e.first) achievements.findAnimal(e.id);
   if (e.type !== 'score') return;
   const A = achievements;
   switch (e.kind) {
@@ -469,6 +470,7 @@ function rebindPlayer() {
   syncGarageStats();
   updateBank();
   session.assist = profiles.littleDriver();
+  session.fun.known = new Set(achievements.state.animals);
 }
 
 function usePlayer(id) {
@@ -616,6 +618,21 @@ $('btn-grownup').addEventListener('click', () => {
 
 // Pause screen
 $('btn-pause').addEventListener('click', pause);
+
+function honk() {
+  if (mode !== 'driving' || !session.honk()) return;
+  audio.honk(car.family);
+  const b = $('btn-honk');
+  b.classList.remove('honking');
+  void b.offsetWidth; // restart the wiggle
+  b.classList.add('honking');
+}
+$('btn-honk').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  honk();
+});
+input.onHonkKey = honk;
+renderer.onFirework = () => audio.pop();
 input.onPauseKey = () => (mode === 'driving' ? pause() : mode === 'paused' ? resume() : null);
 $('btn-resume').addEventListener('click', resume);
 $('btn-restart').addEventListener('click', () => {
@@ -733,6 +750,7 @@ const loop = new GameLoop({
 applySettings();
 syncGarageStats();
 session.assist = profiles.littleDriver();
+session.fun.known = new Set(achievements.state.animals);
 $('title-car').textContent = car.name;
 updateBank();
 enforceLandscape();

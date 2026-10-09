@@ -2,17 +2,19 @@
 // and validated on load like the other saves. Stats only ever go up.
 
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, ACHIEVEMENT_STATS } from '../data/achievements.js';
+import { ANIMAL_BY_ID } from '../data/animals.js';
 
 const KEY = 'pocketracers.achievements';
 const VERSION = 1;
 
 export function sanitizeAchievements(raw) {
-  const a = { v: VERSION, stats: {}, maps: [], earned: [] };
+  const a = { v: VERSION, stats: {}, maps: [], earned: [], animals: [] };
   if (!raw || typeof raw !== 'object' || raw.v !== VERSION) return a;
   if (raw.stats && typeof raw.stats === 'object') {
     for (const k of ACHIEVEMENT_STATS) if (Number.isFinite(raw.stats[k]) && raw.stats[k] > 0) a.stats[k] = raw.stats[k];
   }
   if (Array.isArray(raw.maps)) a.maps = raw.maps.filter((m) => typeof m === 'string' && m.length < 40).slice(0, 20);
+  if (Array.isArray(raw.animals)) a.animals = raw.animals.filter((id, i, l) => ANIMAL_BY_ID[id] && l.indexOf(id) === i);
   if (Array.isArray(raw.earned)) a.earned = raw.earned.filter((id, i, l) => ACHIEVEMENT_BY_ID[id] && l.indexOf(id) === i);
   return a;
 }
@@ -73,6 +75,20 @@ export class Achievements {
     if (this.state.maps.includes(id)) return;
     this.state.maps.push(id);
     this.max('maps', this.state.maps.length);
+  }
+
+  found(id) {
+    return this.state.animals.includes(id);
+  }
+
+  /** A hidden animal found for the first time goes into the sticker book. */
+  findAnimal(id) {
+    if (!ANIMAL_BY_ID[id] || this.found(id)) return false;
+    this.state.animals.push(id);
+    this.dirty = true;
+    this.max('animals', this.state.animals.length);
+    this.save();
+    return true;
   }
 
   /** Earn every badge on stat `k` whose goal is now met. Returns them. */

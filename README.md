@@ -68,6 +68,19 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > gently steers it back, and a car stuck off the road or going nowhere is
 > rescued (🛟) after 2.5 s. ▶ Play skips knockout races and AI rivals drop
 > one difficulty level.
+>
+> **Phase 4C — delight without reading:** silly roof toppers (👑 🦆 🦄 🦈,
+> free, in the garage's ✨ tab); a 📯 HONK button (or H) that makes traffic
+> ahead move over and nearby animals jump; 15 hidden animals, three per map
+> (some in tunnels and on bridges), found by driving past them and collected
+> in a sticker book on the badges screen; fireworks, a fanfare, a podium with
+> the player's animal and confetti for top-three finishes.
+
+## Tests
+
+GitHub Actions runs the unit tests (`npm test`) and the headless-Chromium
+end-to-end test (`npm run test:e2e`) on every push; screenshots are uploaded
+as a build artifact.
 
 ## Run locally
 

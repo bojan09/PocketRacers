@@ -3,7 +3,7 @@
 // older save never breaks the game.
 
 import { VEHICLE_BY_ID, VEHICLES, DEFAULT_VEHICLE, LIVERIES, RIM_STYLES, RIDE_HEIGHTS, KIT_OPTIONS, NEON_COLOURS, TINTS, UPGRADES, UPGRADE_MAX, upgradeCost } from '../data/vehicles.js';
-import { kitSlots } from '../data/kits.js';
+import { kitSlots, TOPPERS } from '../data/kits.js';
 
 const KEY = 'pocketracers.garage';
 const VERSION = 1;
@@ -29,6 +29,7 @@ export function sanitizeGarage(raw) {
       for (const slot of kitSlots(VEHICLE_BY_ID[id])) if (KIT_OPTIONS[slot].includes(c[slot])) clean[slot] = c[slot];
       if (NEON_COLOURS.includes(c.neon)) clean.neon = c.neon;
       if (c.tint in TINTS) clean.tint = c.tint;
+      if (Object.hasOwn(TOPPERS, c.topper)) clean.topper = c.topper;
       g.custom[id] = clean;
     }
   }

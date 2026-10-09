@@ -3,7 +3,7 @@
 // drawn by the renderer from `previewId` and `yaw`.
 
 import { VEHICLES, VEHICLE_BY_ID, PAINT_SWATCHES, RIM_SWATCHES, RIDE_HEIGHTS, LIVERIES, RIM_STYLES, TINTS, NEON_COLOURS, UPGRADES, UPGRADE_MAX, upgradeCost, resolveLook, vehicleStats } from '../data/vehicles.js';
-import { kitSlots, KIT_OPTIONS, KIT_LABELS } from '../data/kits.js';
+import { kitSlots, KIT_OPTIONS, KIT_LABELS, TOPPERS } from '../data/kits.js';
 import { FAMILIES, FAMILY_ORDER } from '../data/vehicleFamilies.js';
 
 const $ = (id) => document.getElementById(id);
@@ -93,10 +93,11 @@ export class GarageScreen {
     }
     for (const box of this.root.querySelectorAll('.choices')) {
       const key = box.dataset.key;
-      const values = key === 'livery' ? LIVERIES : key === 'rimStyle' ? RIM_STYLES : key === 'tint' ? Object.keys(TINTS) : Object.keys(RIDE_HEIGHTS);
+      const values = key === 'livery' ? LIVERIES : key === 'rimStyle' ? RIM_STYLES : key === 'tint' ? Object.keys(TINTS) : key === 'topper' ? Object.keys(TOPPERS) : Object.keys(RIDE_HEIGHTS);
       for (const v of values) {
         const b = document.createElement('button');
-        b.textContent = LABELS[key][v];
+        b.textContent = key === 'topper' ? TOPPERS[v] : LABELS[key][v];
+        if (key === 'topper') b.setAttribute('aria-label', v);
         b.dataset.value = v;
         b.addEventListener('click', () => this.customise(key, v));
         box.append(b);
@@ -364,6 +365,7 @@ export class GarageScreen {
       ride: Object.keys(RIDE_HEIGHTS).find((k) => RIDE_HEIGHTS[k] === look.ride) || 'stock',
       tint: custom.tint || 'clear',
       neon: custom.neon || 'none',
+      topper: custom.topper || 'none',
     };
     for (const box of this.root.querySelectorAll('.swatches[data-key], .choices[data-key]')) {
       const value = current[box.dataset.key];

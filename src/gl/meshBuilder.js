@@ -69,7 +69,15 @@ export class MeshBuilder {
 
   /** Triangle with explicit (smooth) normals and optional per-vertex colours. */
   triS(a, b, c, na, nb, nc, ca, cb = ca, cc = ca, emissive = 0) {
-    if (!faceNormal(a, b, c)) return;
+    const f = faceNormal(a, b, c);
+    if (!f) return;
+    // The shader picks the lit side from the winding, so wind the triangle
+    // to agree with its smooth normals.
+    if (f[0] * (na[0] + nb[0] + nc[0]) + f[1] * (na[1] + nb[1] + nc[1]) + f[2] * (na[2] + nb[2] + nc[2]) < 0) {
+      [b, c] = [c, b];
+      [nb, nc] = [nc, nb];
+      [cb, cc] = [cc, cb];
+    }
     this.push(a, na, ca, emissive);
     this.push(b, nb, cb, emissive);
     this.push(c, nc, cc, emissive);

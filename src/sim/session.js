@@ -8,6 +8,8 @@ import { FunSystem } from './fun.js';
 
 export const SPEED_TO_KMH = 0.015;
 const LANES3 = [-2 / 3, 0, 2 / 3];
+const HONK_GAP = 0.45; // seconds between honks
+const HONK_REACH_M = 70; // traffic this far ahead hears the horn
 const MAX_EVENTS = 32;
 const GRAVITY = 2600; // sim units / s^2 per unit of slope (arcade-scaled)
 export const NITRO_DRAIN = 0.22; // a full tank lasts ~4.5 s of boosting
@@ -116,6 +118,7 @@ export class DrivingSession {
     this.rand = rand;
     this.time = 0;
     this.stuck = 0;
+    this.lastHonk = -10;
     this.player = newCarState();
     this.body = { p: this.player, car: this.car, carHalf: this.carHalf, isPlayer: true };
     this.racers = [];
@@ -140,6 +143,28 @@ export class DrivingSession {
     }
     this.events.length = 0;
     this.fun.reset();
+  }
+
+  /**
+   * Honk: traffic just ahead in the player's way moves over to another lane.
+   * Returns false while the horn is still sounding.
+   */
+  honk() {
+    if (this.time - this.lastHonk < HONK_GAP) return false;
+    this.lastHonk = this.time;
+    const p = this.player;
+    const T = this.track;
+    for (const c of this.traffic) {
+      const ahead = loopDelta(p.z, c.z, T.length) * T.metresPerUnit;
+      if (ahead < 0 || ahead > HONK_REACH_M || Math.abs(c.x - p.x) > 0.6) continue;
+      c.targetX = LANES3.reduce((best, x) => (Math.abs(x - p.x) > Math.abs(best - p.x) ? x : best));
+      c.laneTimer = 4;
+      c.honkTime = this.time;
+    }
+    // Animals nearby jump in surprise.
+    for (const a of this.fun.animals) if (Math.abs(loopDelta(p.z, a.z, T.length)) * T.metresPerUnit < HONK_REACH_M) a.hopTime = this.time;
+    this.emit({ type: 'honk' });
+    return true;
   }
 
   emit(e) {
@@ -540,7 +565,7 @@ export class DrivingSession {
       const ahead = loopDelta(c.z, p.z, L);
       const blocked = ahead > 0 && ahead < 2500 && Math.abs(p.x - c.x) < width && p.speed < c.speed;
       c.speed = approach(c.speed, blocked ? Math.max(0, p.speed * 0.9) : c.cruise, 3000 * dt);
-      c.x = approach(c.x, c.targetX, (this.time - (c.knockTime ?? -10) < 1 ? 1.6 : 0.45) * dt);
+      c.x = approach(c.x, c.targetX, (this.time - (c.knockTime ?? -10) < 1 ? 1.6 : this.time - (c.honkTime ?? -10) < 2 ? 1.1 : 0.45) * dt);
       c.z = wrap(c.z + c.speed * dt, L);
 
       // Player <-> traffic collision (bump-car style, never punishing).

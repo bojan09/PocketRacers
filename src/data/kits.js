@@ -38,6 +38,9 @@ export const KIT_LABELS = {
   bullbar: 'Bull bar',
 };
 
+/** Silly roof toppers (free, any vehicle), shown as pictures in the garage. */
+export const TOPPERS = { none: '🚫', crown: '👑', duck: '🦆', horn: '🦄', fin: '🦈' };
+
 export const NEON_COLOURS = ['none', '#ff2e88', '#4cc9f0', '#8ac926', '#ffd23f', '#7b5cff', '#ff8c42', '#ffffff'];
 export const TINTS = { clear: '#1f2b45', dark: '#0d1220', blue: '#1d4f8a', gold: '#7a5a14', purple: '#4b2a7a' };
 
@@ -143,6 +146,11 @@ export function applyKit(model, v, kit = {}) {
       { box: [hw * 0.55, (y0 + y1) / 2 + 0.05, zf, 0.04, (y1 - y0) / 2 + 0.05, 0.04], paint: 'dark', mirror: true },
     );
   }
+  if (kit.topper && kit.topper !== 'none' && TOPPERS[kit.topper]) {
+    const spot = roofSpot(m, v);
+    m.parts.push(...topperParts(kit.topper, spot));
+    m.height = Math.max(m.height || 0, spot.y + spot.k * 0.62);
+  }
   // Neon underglow: glowing strips under the sills (the light pool on the
   // ground is drawn by the renderer).
   if (kit.neon && kit.neon !== 'none') {
@@ -154,4 +162,121 @@ export function applyKit(model, v, kit = {}) {
     m.neon = c;
   }
   return m;
+}
+
+/** Highest point of the model at (x = 0, z): body, cabin roof or a box part. */
+function topAt(m, z) {
+  let y = bodyAt(m.body, z).yt;
+  for (const c of m.cabin || []) if (Math.abs(c[0] - z) < 0.6) y = Math.max(y, c[4]);
+  if (m.cabin) {
+    // Roof height between cabin stations.
+    for (let i = 0; i < m.cabin.length - 1; i++) {
+      const a = m.cabin[i];
+      const b = m.cabin[i + 1];
+      if (z >= a[0] && z <= b[0]) y = Math.max(y, lerp(a[4], b[4], (z - a[0]) / (b[0] - a[0] || 1)));
+    }
+  }
+  for (const p of m.parts) {
+    if (!p.box || p.emissive) continue;
+    const [x, py, pz, hx, hy, hz] = p.box;
+    if (Math.abs(x) <= hx && Math.abs(z - pz) <= Math.max(hz * 0.6, 0.05) && hy > 0.03) y = Math.max(y, py + hy);
+  }
+  return y;
+}
+
+/**
+ * Where a roof topper sits: the middle of the flat part of the roof (the cab
+ * deflector on trucks; the rear deck when there is no roof). `k` scales the
+ * topper with the vehicle's width.
+ */
+function roofSpot(m, v) {
+  const hw = Math.max(...m.body.map((s) => s[1]));
+  const k = 1.8 * Math.min(1.25, Math.max(0.8, hw / 0.95));
+  const c = m.cabin;
+  let z;
+  if (c && c.length >= 3) {
+    const roof = Math.max(...c.map((s) => s[4]));
+    const flat = c.filter((s) => s[4] > roof - 0.04);
+    z = (flat[0][0] + flat[flat.length - 1][0]) / 2;
+    if (flat.length === 1) z = flat[0][0];
+  } else {
+    // Open top: on the roll bar's cross bar, else the rear deck.
+    const bar = m.parts.filter((p) => p.box && Math.abs(p.box[0]) < 0.01 && p.box[3] > 0.3 && !p.emissive).sort((a, b) => b.box[1] - a.box[1])[0];
+    z = bar ? bar.box[2] : m.body[m.body.length - 1][0] * 0.45;
+  }
+  if (v.family === 'truck') {
+    const deflector = m.parts.find((p) => p.box && p.box[1] > 3.1 && p.box[4] > 0.2);
+    if (deflector) z = deflector.box[2];
+  }
+  return { y: topAt(m, z), z, k };
+}
+
+const GOLD = [1, 0.78, 0.18];
+
+function topperParts(kind, { y, z, k }) {
+  const s = (v) => v * k;
+  if (kind === 'crown') {
+    const parts = [{ cyl: [0, y + s(0.09), z, s(0.22), s(0.09), 'y'], topR: s(0.24), paint: GOLD, sides: 18 }];
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const px = Math.cos(a) * s(0.2);
+      const pz = z + Math.sin(a) * s(0.2);
+      parts.push({ cyl: [px, y + s(0.25), pz, s(0.065), s(0.08), 'y'], topR: 0, paint: GOLD, sides: 8 });
+      parts.push({ sphere: [px, y + s(0.34), pz, s(0.035), s(0.035), s(0.035)], paint: GOLD });
+    }
+    parts.push(
+      { sphere: [0, y + s(0.1), z - s(0.235), s(0.045), s(0.045), s(0.02)], paint: [0.9, 0.08, 0.2], mat: 'glass' },
+      { sphere: [s(0.235), y + s(0.1), z, s(0.02), s(0.04), s(0.04)], paint: [0.15, 0.4, 1], mat: 'glass', mirror: true },
+    );
+    return parts;
+  }
+  if (kind === 'duck') {
+    const yellow = [1, 0.85, 0.12];
+    return [
+      { sphere: [0, y + s(0.15), z + s(0.04), s(0.22), s(0.16), s(0.29)], paint: yellow },
+      { sphere: [0, y + s(0.24), z + s(0.29), s(0.09), s(0.08), s(0.08)], paint: yellow },
+      { sphere: [s(0.17), y + s(0.18), z + s(0.07), s(0.06), s(0.08), s(0.16)], paint: [1, 0.78, 0.08], mirror: true },
+      { sphere: [0, y + s(0.42), z - s(0.13), s(0.14), s(0.14), s(0.14)], paint: yellow },
+      { sphere: [0, y + s(0.39), z - s(0.29), s(0.075), s(0.03), s(0.07)], paint: [1, 0.45, 0.08] },
+      { sphere: [s(0.065), y + s(0.47), z - s(0.24), s(0.032), s(0.032), s(0.02)], paint: [0.04, 0.04, 0.05], mat: 'glass', mirror: true },
+    ];
+  }
+  if (kind === 'horn') {
+    // A striped unicorn horn with a pastel mane running back over the roof.
+    const bands = [
+      [0.1, 0.075, [1, 0.72, 0.86]],
+      [0.075, 0.052, [1, 0.97, 0.9]],
+      [0.052, 0.03, [0.78, 0.66, 1]],
+      [0.03, 0.0, [1, 0.88, 0.45]],
+    ];
+    const parts = [];
+    bands.forEach(([r0, r1, c], i) => parts.push({ cyl: [0, y + s(0.06 + i * 0.12), z - s(0.15), s(r0), s(0.06), 'y'], topR: s(r1), paint: c, sides: 12 }));
+    const mane = [
+      [1, 0.45, 0.7],
+      [0.75, 0.5, 1],
+      [0.45, 0.75, 1],
+      [0.5, 0.9, 0.65],
+      [1, 0.85, 0.4],
+    ];
+    mane.forEach((c, i) => parts.push({ sphere: [0, y + s(0.06), z + s(0.02 + i * 0.13), s(0.08), s(0.08 - i * 0.006), s(0.09)], paint: c }));
+    return parts;
+  }
+  if (kind === 'fin') {
+    // Shark fin: swept leading edge, hooked trailing edge.
+    const grey = [0.42, 0.5, 0.6];
+    const pts = [
+      [0, -0.32],
+      [0.2, -0.16],
+      [0.4, 0.04],
+      [0.56, 0.24],
+      [0.44, 0.17],
+      [0.24, 0.18],
+      [0, 0.3],
+    ].map(([py, pz]) => [y - s(0.02) + s(py), z + s(pz)]);
+    return [
+      { prism: [0, s(0.04), pts], paint: grey },
+      { box: [0, y + s(0.012), z, s(0.06), s(0.012), s(0.3)], paint: [0.9, 0.92, 0.95] },
+    ];
+  }
+  return [];
 }

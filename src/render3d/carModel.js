@@ -590,6 +590,18 @@ function addPart(mb, part, P) {
       const [x, y, z, rad, half, axis] = part.cyl;
       const cap = part.cap ? (Array.isArray(part.cap) ? part.cap : P[part.cap]) : colour;
       mb.cylinder(x * sx, y, z, rad, half, part.sides || 12, axis, colour, cap, part.topR ?? rad);
+    } else if (part.prism) {
+      // A side profile [[y, z], ...] (convex from its first point) extruded
+      // across x, e.g. a fin.
+      const [x, hx, profile] = part.prism;
+      const L = profile.map(([y, z]) => [x * sx - hx, y, z]);
+      const R = profile.map(([y, z]) => [x * sx + hx, y, z]);
+      mb.poly([...L].reverse(), colour);
+      mb.poly(R, colour);
+      for (let i = 0; i < profile.length; i++) {
+        const j = (i + 1) % profile.length;
+        mb.quad(L[i], L[j], R[j], R[i], colour);
+      }
     }
   }
 }

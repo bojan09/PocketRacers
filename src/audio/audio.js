@@ -214,6 +214,8 @@ export class GameAudio {
     else if (e.type === 'boost') this.boost();
     else if (e.type === 'super') this.superBoost();
     else if (e.type === 'superReady') this.chime(true);
+    else if (e.type === 'animal') this.ui(e.first ? 'buy' : 'open');
+    else if (e.type === 'finish' && e.place <= 3) this.fanfare(e.place);
     else if (e.type === 'score') {
       if (e.kind === 'star') this.blip(1320, e.combo);
       else if (e.kind === 'nearMiss') this.whoosh(500, 2600, 0.4, 0.3);
@@ -221,6 +223,87 @@ export class GameAudio {
       else if (e.kind === 'knock') this.thump(0.6);
       else if (e.kind === 'trick') this.comboDing(Math.max(3, e.combo + 2));
       if (e.kind === 'jump' || e.kind === 'drift' || (e.combo >= 3 && e.kind !== 'trick')) this.comboDing(e.combo);
+    }
+  }
+
+  /** Victory fanfare: ta-ta-ta-taaa (shorter for 2nd and 3rd). */
+  fanfare(place = 1) {
+    const ac = this.ctx;
+    const notes =
+      place === 1
+        ? [
+            [523, 0, 0.12],
+            [523, 0.14, 0.12],
+            [523, 0.28, 0.12],
+            [659, 0.42, 0.22],
+            [784, 0.66, 0.6],
+          ]
+        : [
+            [523, 0, 0.14],
+            [659, 0.16, 0.14],
+            [784, 0.32, 0.45],
+          ];
+    for (const [freq, at, len] of notes) {
+      for (const [type, mult, vol] of [
+        ['square', 1, 0.05],
+        ['triangle', 2, 0.07],
+      ]) {
+        const t = ac.currentTime + at;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.value = freq * mult;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+        g.gain.setValueAtTime(vol, t + len * 0.7);
+        g.gain.exponentialRampToValueAtTime(0.001, t + len);
+        o.connect(g).connect(this.master);
+        o.start(t);
+        o.stop(t + len + 0.02);
+      }
+    }
+  }
+
+  /** A firework bursting: crackly pop. */
+  pop() {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const ac = this.ctx;
+    const t = ac.currentTime;
+    const n = ac.createBufferSource();
+    n.buffer = this.noiseBuf;
+    const f = ac.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 900 + Math.random() * 900;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.35, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    n.connect(f).connect(g).connect(this.master);
+    n.start(t);
+    n.stop(t + 0.52);
+  }
+
+  /** Car horn: two detuned reeds, deeper on big vehicles. */
+  honk(family) {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const ac = this.ctx;
+    const t = ac.currentTime;
+    const pitch = family === 'truck' ? [196, 247] : family === 'monster' || family === 'pickup' ? [262, 330] : [392, 494];
+    const f = ac.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 2400;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.11, t + 0.02);
+    g.gain.setValueAtTime(0.11, t + 0.32);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+    f.connect(g).connect(this.master);
+    for (const freq of pitch) {
+      const o = ac.createOscillator();
+      o.type = 'square';
+      o.frequency.value = freq;
+      o.connect(f);
+      o.start(t);
+      o.stop(t + 0.45);
     }
   }
 
