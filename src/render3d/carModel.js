@@ -29,7 +29,7 @@ const WELL_GAP = 0.04; // clearance between a tyre and its wheel well
 const WELL_DEPTH = 0.06; // inner wall of the well, inside the tyre's inner face
 const WELL_EDGE = 0.02; // extra opening around the tyre
 const WELL_STEP = 0.05;
-const ARCH_WIDTH = 0.13; // width of the trim band around each well // extra loft stations around each wheel (metres)
+const ARCH_WIDTH = 0.07; // width of the trim lip around each well
 const CABIN_J = 10; // points over a cabin section
 
 export const LIVERIES = ['clean', 'racing', 'tri', 'side', 'twotone', 'lower', 'split'];
@@ -148,51 +148,52 @@ function densify(st, wells) {
   return out.sort((a, b) => a[0] - b[0]);
 }
 
+/** Inside a well's opening: a round arch above the axle, straight sides below. */
+function inOpening(w, dy, dz, Rc = w.R + WELL_EDGE) {
+  return dy > 0 ? dy * dy + dz * dz < Rc * Rc : Math.abs(dz) < Rc;
+}
+
 /**
- * Push body vertices out of the wheel wells (inwards, towards the centre).
- * The carved region is grown by one ring of grid neighbours so the sloped
- * faces at the well's edge always start outside the tyre.
+ * Cut the wheel openings: body vertices that fall inside an opening (on the
+ * outer side of the well) move onto its edge, so the edge is an exact arc
+ * rather than following the mesh. Returns which vertices sit on an edge;
+ * faces with all four corners on an edge are inside the opening.
  */
 function carve(grid, wells) {
-  const I = grid.length;
-  const J = grid[0].length;
-  const target = (p, grow) => {
-    let x = Infinity;
-    for (const w of wells) {
-      if (Math.sign(p[0]) !== w.side) continue;
-      const dy = p[1] - w.y;
-      const dz = p[2] - w.z;
-      const xin = w.xin(dy);
-      const Rc = w.R + WELL_EDGE + (grow ? 0.12 : 0);
-      if (Math.abs(p[0]) > xin && dy * dy + dz * dz < Rc * Rc) x = Math.min(x, xin);
-    }
-    return x;
-  };
-  const core = grid.map((row) => row.map((p) => target(p, false)));
-  const out = [];
-  for (let i = 0; i < I; i++) {
-    out.push([]);
-    for (let j = 0; j < J; j++) {
-      let x = core[i][j];
-      if (x === Infinity) {
-        const near = [
-          [i - 1, j],
-          [i + 1, j],
-          [i, (j + 1) % J],
-          [i, (j - 1 + J) % J],
-        ].some(([a, b]) => a >= 0 && a < I && core[a][b] !== Infinity);
-        if (near) x = target(grid[i][j], true);
+  return grid.map((row) =>
+    row.map((p) => {
+      for (const w of wells) {
+        if (Math.sign(p[0]) !== w.side) continue;
+        const Rc = w.R + WELL_EDGE;
+        const dy = p[1] - w.y;
+        const dz = p[2] - w.z;
+        if (Math.abs(p[0]) <= w.xin(dy) || !inOpening(w, dy, dz, Rc)) continue;
+        if (dy > 0) {
+          const k = Rc / (Math.hypot(dy, dz) || 1);
+          p[1] = w.y + dy * k;
+          p[2] = w.z + dz * k;
+        } else {
+          p[2] = w.z + (dz < 0 ? -Rc : Rc);
+        }
+        return true;
       }
-      out[i].push(x);
-    }
-  }
-  return grid.map((row, i) =>
-    row.map((p, j) => {
-      if (out[i][j] === Infinity) return false;
-      p[0] = Math.sign(p[0]) * out[i][j];
-      return true;
+      return false;
     }),
   );
+}
+
+/** The outline of a well opening from the bottom of one side, over the arch, to the other. */
+function openingOutline(w, yBottom, segs = 24) {
+  const Rc = w.R + WELL_EDGE;
+  const yb = Math.min(yBottom, w.y);
+  const pts = [];
+  if (yb < w.y - 0.02) pts.push([yb, w.z - Rc]);
+  for (let k = 0; k <= segs; k++) {
+    const a = Math.PI - (k / segs) * Math.PI;
+    pts.push([w.y + Math.sin(a) * Rc, w.z + Math.cos(a) * Rc]);
+  }
+  if (yb < w.y - 0.02) pts.push([yb, w.z + Rc]);
+  return pts;
 }
 
 /**
@@ -217,24 +218,32 @@ function sectionHalfWidth(st, y, z, minSide = 0) {
 function fenderPods(st, wells, spec) {
   const pods = [];
   const { width: w } = spec.wheels;
+  const front = st[0][0] + 0.12;
+  const rear = st[st.length - 1][0] - 0.12;
   for (const well of wells) {
     const b = bodyAt(st, well.z);
     const opening = well.y + well.R + WELL_EDGE;
     if (b.yt >= opening + 0.07) continue; // enough body above the well already
     const top = opening + 0.09;
     const hw = w / 2 + 0.07;
-    const L = well.R + 0.3;
+    const L = well.R + 0.38;
     const yb = Math.max(0.12, b.yb);
+    // Ends dip into the body (inside its top and nose), so the pod grows out
+    // of the bodywork instead of sitting on it.
+    const z0 = Math.max(front, well.z - L);
+    const z1 = Math.min(rear, well.z + L);
+    const end = (z) => Math.max(yb + 0.1, bodyAt(st, z).yt - 0.04);
+    const mid = (z, t) => lerp(end(z), top - 0.01, t);
     pods.push({
       x: well.side * (Math.abs(well.x) - 0.01),
       wells: [well],
       J: 22,
       stations: [
-        [well.z - L, hw * 0.55, yb + 0.06, top - 0.12, 3],
-        [well.z - L * 0.62, hw, yb, top - 0.01, 4],
+        [z0, hw * 0.5, yb + 0.08, end(z0), 3],
+        [lerp(z0, well.z, 0.45), hw * 0.92, yb, mid(lerp(z0, well.z, 0.45), 0.8), 3.6],
         [well.z, hw, yb, top, 4.5],
-        [well.z + L * 0.62, hw, yb, top - 0.01, 4],
-        [well.z + L, hw * 0.55, yb + 0.06, top - 0.12, 3],
+        [lerp(well.z, z1, 0.55), hw * 0.92, yb, mid(lerp(well.z, z1, 0.55), 0.8), 3.6],
+        [z1, hw * 0.5, yb + 0.08, end(z1), 3],
       ],
     });
   }
@@ -242,7 +251,7 @@ function fenderPods(st, wells, spec) {
 }
 
 /** A closed loft (body or extra panel) coloured by `colourFn(ny, x, i, j)`. */
-function loft(mb, stations, colourFn, materialFn, wells = [], wellColour = null, xOffset = 0, J = BODY_J) {
+function loft(mb, stations, colourFn, materialFn, wells = [], xOffset = 0, J = BODY_J) {
   // Only wells this panel can reach get the extra resolution and carving.
   const z0 = stations[0][0];
   const z1 = stations[stations.length - 1][0];
@@ -250,34 +259,26 @@ function loft(mb, stations, colourFn, materialFn, wells = [], wellColour = null,
   wells = wells.filter((w) => w.z + w.R + 0.2 > z0 && w.z - w.R - 0.2 < z1 && reach + w.side * xOffset > w.xin(0));
   if (wells.length) stations = densify(stations, wells);
   const grid = stations.map((st) => bodySection(st, J).map((p) => [p[0] + xOffset, p[1], p[2]]));
-  const carved = carve(grid, wells);
-  const inWell = (i, j) => {
+  const edge = carve(grid, wells);
+  const I = grid.length;
+  const opening = (i, j) => {
     const j1 = (j + 1) % J;
-    const i1 = Math.min(i + 1, grid.length - 1);
-    return carved[i][j] || carved[i][j1] || carved[i1][j] || carved[i1][j1];
-  };
-  // Dark only right around the tyre; the rest of a recess keeps the paint.
-  const nearTyre = (i, j) => {
-    const a = grid[i][j];
-    const b = grid[Math.min(i + 1, grid.length - 1)][(j + 1) % J];
-    const y = (a[1] + b[1]) / 2;
-    const z = (a[2] + b[2]) / 2;
-    return wells.some((w) => Math.sign(a[0] + b[0]) === w.side && Math.hypot(y - w.y, z - w.z) < w.R + WELL_EDGE + ARCH_WIDTH);
+    const i1 = Math.min(i + 1, I - 1);
+    return edge[i][j] && edge[i][j1] && edge[i1][j] && edge[i1][j1];
   };
   const info = (i, j) => {
     const a = grid[i][j];
     const b = grid[i][(j + 1) % J];
-    const c = grid[Math.min(i + 1, grid.length - 1)][j];
+    const c = grid[Math.min(i + 1, I - 1)][j];
     return [Math.sin(-Math.PI / 2 + ((j + 0.5) / J) * Math.PI * 2), (a[0] + b[0]) / 2 - xOffset, (a[2] + c[2]) / 2];
   };
   mb.grid(
     grid,
     (i, j) => {
-      if (inWell(i, j) && nearTyre(i, j)) return wellColour;
       const [ny, x, z] = info(i, j);
       return colourFn(ny, x, z);
     },
-    { wrapJ: true, materialFn: (i, j) => (inWell(i, j) && nearTyre(i, j) ? MAT.plastic : materialFn(info(i, j)[0])) },
+    { wrapJ: true, materialFn: (i, j) => materialFn(info(i, j)[0]), skipFn: opening },
   );
   return grid;
 }
@@ -307,11 +308,17 @@ export function buildCarBody(spec, paintHex) {
     return P.body;
   };
   const paintMat = (ny) => (ny < -0.2 ? MAT.plastic : MAT.paint);
+  // Lower panels catch less sky light: a soft gradient grounds the car.
+  const grounded = (c, ny) => {
+    const t = Math.min(1, Math.max(0, (ny + 0.5) / 0.85));
+    return shade(c, 0.8 + 0.2 * t * t * (3 - 2 * t));
+  };
+  const bodyPaint = (ny, x, z) => grounded(paintFace(ny, x, z), ny);
 
   // --- Body shell -------------------------------------------------------
   const ride = paintHex.ride || 0;
   const wells = wheelWells(spec, ride);
-  const grid = loft(mb, st, paintFace, paintMat, wells, P.dark);
+  const grid = loft(mb, st, bodyPaint, paintMat, wells);
   mb.material(...MAT.paint);
   mb.poly(grid[0].slice().reverse(), shade(P.body, 0.9));
   mb.poly(grid[grid.length - 1], shade(P.body, 0.9));
@@ -332,17 +339,17 @@ export function buildCarBody(spec, paintHex) {
   const surfaces = [{ stations: st, x: 0 }];
   for (const l of [...(spec.lofts || []), ...pods]) {
     const base = colourOf(l.paint || 'body');
-    const g = loft(mb, l.stations, (ny, x, z) => (l.paint && l.paint !== 'body' ? (ny < -0.45 ? P.dark : base) : paintFace(ny, x, z)), paintMat, l.wells || wells, P.dark, l.x || 0, l.J);
+    const g = loft(mb, l.stations, (ny, x, z) => (l.paint && l.paint !== 'body' ? (ny < -0.45 ? P.dark : grounded(base, ny)) : bodyPaint(ny, x, z)), paintMat, l.wells || wells, l.x || 0, l.J);
     mb.material(...MAT.paint);
     mb.poly(g[0].slice().reverse(), shade(base, 0.9));
     mb.poly(g[g.length - 1], shade(base, 0.9));
     surfaces.push({ stations: l.stations, x: l.x || 0 });
   }
   // Outer skin position at (y, z) on one side, over all body surfaces.
-  const skinX = (side, y, z) => {
+  const skinX = (side, y, z, minSide = 0.86) => {
     let best = null;
     for (const sf of surfaces) {
-      const h = sectionHalfWidth(sf.stations, y, z, 0.86);
+      const h = sectionHalfWidth(sf.stations, y, z, minSide);
       if (h === null) continue;
       const x = side * sf.x + h;
       if (best === null || x > best) best = x;
@@ -408,47 +415,90 @@ export function buildCarBody(spec, paintHex) {
     }
   }
 
-  // --- Wheel arches: a trim band hugging the body around each well ------
+  // --- Door seams: thin shut lines on the body side ------------------------
+  if (spec.cabin && !spec.cabinStrips && spec.doors !== false) {
+    const c = spec.cabin;
+    const zA = c[1][0] - 0.02;
+    const zB = spec.bPillar ? c[spec.bPillar][0] + 0.06 : lerp(c[1][0], c[c.length - 2][0], 0.8);
+    const seams = [zA, zB];
+    if (spec.bPillar && c.length > spec.bPillar + 2) seams.push(lerp(zB, c[c.length - 2][0], 0.85));
+    mb.material(...MAT.plastic);
+    for (const z of seams) {
+      const b = bodyAt(st, z);
+      const y0 = b.yb + (b.yt - b.yb) * 0.22;
+      const y1 = b.yt - 0.03;
+      for (const side of [-1, 1]) {
+        const N = 8;
+        for (let k = 0; k < N; k++) {
+          const ya = lerp(y0, y1, k / N);
+          const yb2 = lerp(y0, y1, (k + 1) / N);
+          if (wells.some((w) => w.side === side && (inOpening(w, ya - w.y, z - w.z, w.R + WELL_EDGE + ARCH_WIDTH) || inOpening(w, yb2 - w.y, z - w.z, w.R + WELL_EDGE + ARCH_WIDTH)))) continue;
+          const xa = skinX(side, ya, z, 0.3);
+          const xb = skinX(side, yb2, z, 0.3);
+          if (xa === null || xb === null) continue;
+          const o = 0.004;
+          mb.quad([side * (xa + o), ya, z - 0.007], [side * (xb + o), yb2, z - 0.007], [side * (xb + o), yb2, z + 0.007], [side * (xa + o), ya, z + 0.007], shade(P.body, 0.35));
+        }
+      }
+    }
+  }
+
+  // --- Wheel wells: dark liner and inner wall, plus an arch trim lip ---------
   const r = spec.wheels.radius;
-  if (spec.arches !== false) {
+  for (const w of wells) {
+    const xin = (y) => w.side * w.xin(y - w.y);
+    const yBottom = Math.min(...surfaces.map((sf) => (stationAt(sf.stations, w.z) || [0, 0, 9])[2]));
+    const outline = openingOutline(w, yBottom);
+    // Liner: from the body skin at the opening's edge in to the inner wall.
+    mb.material(...MAT.rubber);
+    for (let k = 0; k < outline.length - 1; k++) {
+      const [ya, za] = outline[k];
+      const [yb, zb] = outline[k + 1];
+      const xa = skinX(w.side, ya, za, 0);
+      const xb = skinX(w.side, yb, zb, 0);
+      if (xa === null || xb === null || xa < w.xin(ya - w.y) || xb < w.xin(yb - w.y)) continue;
+      mb.quad([w.side * xa, ya, za], [w.side * xb, yb, zb], [xin(yb), yb, zb], [xin(ya), ya, za], P.dark);
+    }
+    // Inner wall closing the well.
+    const c = [xin(w.y), w.y, w.z];
+    for (let k = 0; k < outline.length - 1; k++) {
+      const [ya, za] = outline[k];
+      const [yb, zb] = outline[k + 1];
+      mb.tri(c, [xin(ya), ya, za], [xin(yb), yb, zb], P.dark);
+    }
+    if (outline[0][0] < w.y - 0.02) mb.tri(c, [xin(outline.at(-1)[0]), outline.at(-1)[0], outline.at(-1)[1]], [xin(outline[0][0]), outline[0][0], outline[0][1]], P.dark);
+
+    // Trim lip: a thin band standing just proud of the body around the arch.
+    if (spec.arches === false) continue;
     mb.material(...MAT.plastic);
     const trim = spec.archPaint ? colourOf(spec.archPaint) : P.trim;
-    const segs = 28;
-    for (const w of wells) {
-      const rin = w.R + WELL_EDGE;
-      const rout = rin + ARCH_WIDTH;
-      const at = (a, rr, dx) => {
-        const y = w.y + Math.sin(a) * rr;
-        const z = w.z + Math.cos(a) * rr;
-        const sx = skinX(w.side, y, z);
-        return sx === null || y < 0.03 ? null : [w.side * (sx + dx), y, z];
-      };
-      // Outer edge: narrow the band where the body curves away above it,
-      // smoothed so the edge stays a clean curve.
-      const ang = (k) => Math.PI * (-0.2 + (1.4 * k) / segs);
-      const widest = [];
-      for (let k = 0; k <= segs; k++) {
-        let rr = rout;
-        while (rr > rin + 0.03 && !at(ang(k), rr, 0.018)) rr -= 0.01;
-        widest.push(rr);
-      }
-      const edge = widest.map((_, k) => Math.min(...widest.slice(Math.max(0, k - 2), k + 3)));
-      for (let k = 0; k < segs; k++) {
-        const a0 = ang(k);
-        const a1 = ang(k + 1);
-        const i0 = at(a0, rin, 0.018);
-        const i1 = at(a1, rin, 0.018);
-        const o0 = edge[k] > rin + 0.03 ? at(a0, edge[k], 0.018) : null;
-        const o1 = edge[k + 1] > rin + 0.03 ? at(a1, edge[k + 1], 0.018) : null;
-        if (!i0 || !i1 || !o0 || !o1) continue;
-        mb.quad(i0, i1, o1, o0, trim);
-        // Lip turning into the well and an outer edge back to the body, only
-        // where the body side was actually cut (not over a curved shoulder).
-        const cut = (p) => Math.abs(p[0]) - 0.018 > w.xin(p[1] - w.y) + 0.02;
-        if (!cut(i0) || !cut(i1)) continue;
-        mb.quad(i0, i1, [i1[0] - w.side * 0.1, i1[1], i1[2]], [i0[0] - w.side * 0.1, i0[1], i0[2]], P.dark);
-        mb.quad(o0, o1, [o1[0] - w.side * 0.03, o1[1], o1[2]], [o0[0] - w.side * 0.03, o0[1], o0[2]], trim);
-      }
+    const Rc = w.R + WELL_EDGE;
+    const band = (rr, out) => (k) => {
+      const [y, z] = outline[k];
+      const dy = y - w.y;
+      const dz = z - w.z;
+      // Grow outward from the axle above it, sideways below it.
+      const g = dy > 0 ? rr / Rc : 1;
+      const yy = dy > 0 ? w.y + dy * g : y;
+      const zz = dy > 0 ? w.z + dz * g : w.z + Math.sign(dz) * rr;
+      const sx = skinX(w.side, yy, zz);
+      return sx === null ? null : [w.side * (sx + out), yy, zz];
+    };
+    // Starts just inside the opening so it doesn't fight with the liner.
+    const inner = band(Rc - 0.015, 0.022);
+    const outer = band(Rc + ARCH_WIDTH, 0.004);
+    for (let k = 0; k < outline.length - 1; k++) {
+      const i0 = inner(k);
+      const i1 = inner(k + 1);
+      const o0 = outer(k);
+      const o1 = outer(k + 1);
+      if (!i0 || !i1 || !o0 || !o1 || i0[1] < 0.05 || i1[1] < 0.05) continue;
+      if (Math.abs(i0[0]) < w.xin(i0[1] - w.y) || Math.abs(i1[0]) < w.xin(i1[1] - w.y)) continue;
+      // Only where the side is close to upright (not over a curved shoulder).
+      if (Math.abs(o0[0] - i0[0]) > 0.04 || Math.abs(o1[0] - i1[0]) > 0.04) continue;
+      mb.quad(i0, i1, o1, o0, trim);
+      // The lip's edge turning into the well.
+      mb.quad(i0, i1, [i1[0] - w.side * 0.04, i1[1], i1[2]], [i0[0] - w.side * 0.04, i0[1], i0[2]], trim);
     }
   }
 
@@ -491,19 +541,40 @@ export function buildCarBody(spec, paintHex) {
     for (const sx of [-1, 1]) mb.cylinder(sx * 0.34, rear[2] + 0.07, rz + 0.01, 0.055, 0.07, 10, 'z', [0.82, 0.84, 0.88], [0.05, 0.05, 0.05]);
   }
 
-  // --- Spoiler -------------------------------------------------------------
+  // --- Spoiler (resting on the surface below it) ---------------------------
   if (spec.spoiler) {
     const s = spec.spoiler;
     const d = s.d ?? 0.17;
     if (s.type === 'lip') {
+      // Front edge on the roof or boot lid, overhanging behind.
+      const y = surfaceTop(spec, 0, s.z - d * 0.6) + 0.03;
       mb.material(...MAT.paint);
-      mb.box(0, s.y, s.z, s.w, 0.03, d, P.accent, 0, 0.9);
+      mb.box(0, y, s.z, s.w, 0.03, d, P.accent, 0, 0.9);
     } else {
+      const post = s.post ?? 0.09;
+      const base = Math.max(surfaceTop(spec, s.w * 0.6, s.z), surfaceTop(spec, -s.w * 0.6, s.z));
+      const y = Number.isFinite(base) ? base - 0.01 + post * 2 : s.y;
       mb.material(...MAT.plastic);
-      for (const sx of [-1, 1]) mb.box(sx * s.w * 0.6, s.y - (s.post ?? 0.09), s.z, 0.03, s.post ?? 0.09, 0.06, [0.1, 0.1, 0.11]);
+      for (const sx of [-1, 1]) mb.box(sx * s.w * 0.6, y - post, s.z, 0.03, post + 0.01, 0.06, [0.1, 0.1, 0.11]);
       mb.material(...MAT.paint);
-      mb.box(0, s.y + 0.02, s.z, s.w, 0.025, d, P.accent, 0, 0.96);
-      for (const sx of [-1, 1]) mb.box(sx * s.w, s.y + 0.05, s.z, 0.015, s.plate ?? 0.075, d + 0.03, shade(P.accent, 0.8));
+      mb.box(0, y + 0.02, s.z, s.w, 0.025, d, P.accent, 0, 0.96);
+      for (const sx of [-1, 1]) mb.box(sx * s.w, y + 0.05, s.z, 0.015, s.plate ?? 0.075, d + 0.03, shade(P.accent, 0.8));
+    }
+  }
+
+  // --- Roof rails: bars on feet standing on the roof ------------------------
+  if (spec.roofRails) {
+    const { x, z0, z1 } = spec.roofRails;
+    let top = -Infinity;
+    for (let z = z0; z <= z1; z += 0.05) top = Math.max(top, surfaceTop(spec, x, z));
+    const bar = top + 0.06;
+    mb.material(...MAT.plastic);
+    for (const sx of [-1, 1]) {
+      mb.box(sx * x, bar, (z0 + z1) / 2, 0.028, 0.022, (z1 - z0) / 2 + 0.04, P.trim);
+      for (const z of [z0, (z0 + z1) / 2, z1]) {
+        const foot = surfaceTop(spec, x, z);
+        mb.box(sx * x, (foot + bar) / 2 - 0.01, z, 0.032, (bar - foot) / 2 + 0.01, 0.05, P.trim);
+      }
     }
   }
 
@@ -542,6 +613,39 @@ export function buildCarBody(spec, paintHex) {
       neon: spec.neon || null,
     },
   };
+}
+
+/** Height of the cabin roof at (x, z); -Infinity off the cabin. */
+function cabinTopAt(spec, x, z) {
+  const c = spec.cabin;
+  if (!c || z < c[0][0] || z > c[c.length - 1][0]) return -Infinity;
+  let i = 0;
+  while (i < c.length - 2 && z > c[i + 1][0]) i++;
+  const t = (z - c[i][0]) / (c[i + 1][0] - c[i][0] || 1);
+  const [hwB, hwT, yb, yt] = [1, 2, 3, 4].map((k) => lerp(c[i][k], c[i + 1][k], t));
+  const [ex, ey] = spec.cabinShape || [0.75, 0.6];
+  // Same curve as cabinSection: walk the arch angle until it reaches |x|.
+  const xAt = (a) => spow(Math.cos(a), ex) * lerp(hwB, hwT, Math.pow(Math.sin(a), ey));
+  const ax = Math.abs(x);
+  if (ax > xAt(0)) return -Infinity;
+  let lo = 0;
+  let hi = Math.PI / 2;
+  for (let k = 0; k < 30; k++) {
+    const mid = (lo + hi) / 2;
+    if (xAt(mid) > ax) lo = mid;
+    else hi = mid;
+  }
+  return yb + Math.pow(Math.sin(lo), ey) * (yt - yb);
+}
+
+/** Top of the vehicle's shell (body, cabin, extra lofts) at (x, z). */
+function surfaceTop(spec, x, z) {
+  let y = cabinTopAt(spec, x, z);
+  for (const sts of [spec.body, ...(spec.lofts || []).map((l) => l.stations)]) {
+    const s = stationAt(sts, z);
+    if (s && Math.abs(x) < s[1]) y = Math.max(y, topAt(s, x));
+  }
+  return y;
 }
 
 /** Height of a body section's top surface at lateral position x. */

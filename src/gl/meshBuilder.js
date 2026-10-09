@@ -106,13 +106,14 @@ export class MeshBuilder {
    * from neighbouring faces; colourFn(i, j) colours the face (i..i+1, j..j+1).
    * wrapJ closes the surface around j (tubes, lofts).
    */
-  grid(P, colourFn, { wrapJ = false, emissiveFn = null, flatJ = null, materialFn = null } = {}) {
+  grid(P, colourFn, { wrapJ = false, emissiveFn = null, flatJ = null, materialFn = null, skipFn = null } = {}) {
     const I = P.length;
     const J = P[0].length;
     const N = P.map((row) => row.map(() => [0, 0, 0]));
     const jEnd = wrapJ ? J : J - 1;
     for (let i = 0; i < I - 1; i++) {
       for (let j = 0; j < jEnd; j++) {
+        if (skipFn && skipFn(i, j)) continue;
         const j2 = (j + 1) % J;
         const n = faceNormal(P[i][j], P[i + 1][j], P[i + 1][j2]) || faceNormal(P[i][j], P[i + 1][j2], P[i][j2]);
         if (!n) continue;
@@ -131,6 +132,7 @@ export class MeshBuilder {
     for (const row of N) for (const n of row) normalizeInPlace(n);
     for (let i = 0; i < I - 1; i++) {
       for (let j = 0; j < jEnd; j++) {
+        if (skipFn && skipFn(i, j)) continue;
         const j2 = (j + 1) % J;
         const col = colourFn(i, j);
         const em = emissiveFn ? emissiveFn(i, j) : 0;

@@ -471,10 +471,8 @@ export const FAMILIES = {
       bPillar: 2,
       stripeHalf: 0.2,
       spoiler: { type: 'lip', z: 2.12, y: 1.69, w: 0.7, d: 0.14 },
+      roofRails: { x: 0.6, z0: -0.4, z1: 1.5 },
       parts: [
-        { box: [0.6, 1.72, 0.55, 0.03, 0.025, 1.05], paint: 'dark', mirror: true },
-        { box: [0.6, 1.7, -0.4, 0.035, 0.03, 0.06], paint: 'dark', mirror: true },
-        { box: [0.6, 1.7, 1.5, 0.035, 0.03, 0.06], paint: 'dark', mirror: true },
         { box: [0, 0.5, -2.32, 0.6, 0.06, 0.05], paint: 'chrome' },
         ...(o.lux
           ? [
@@ -645,6 +643,7 @@ export function scaleModel(m, [sx, sy, sz]) {
     lofts: m.lofts && m.lofts.map((l) => ({ ...l, stations: st(l.stations) })),
     parts: m.parts && m.parts.map(part),
     spoiler: m.spoiler && { ...m.spoiler, z: m.spoiler.z * sz, y: m.spoiler.y * sy, w: m.spoiler.w * sx },
+    roofRails: m.roofRails && { x: m.roofRails.x * sx, z0: m.roofRails.z0 * sz, z1: m.roofRails.z1 * sz },
     exhausts: m.exhausts && m.exhausts.map(([x, y, z]) => [x * sx, y * sy, z * sz]),
     wheels: { ...m.wheels, positions: m.wheels.positions.map(([x, z]) => [x * sx, z * sz]) },
   };
