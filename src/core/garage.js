@@ -120,5 +120,6 @@ export class Garage {
     } catch {
       /* full or blocked: keep in memory */
     }
+    this.onChange?.();
   }
 }

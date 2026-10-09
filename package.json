@@ -7,6 +7,7 @@
   "scripts": {
     "serve": "node tools/serve.mjs",
     "test": "node --test \"tests/unit/*.test.js\"",
-    "test:e2e": "node tests/e2e/smoke.mjs"
+    "test:e2e": "node tests/e2e/smoke.mjs",
+    "sw": "node tools/precache.mjs"
   }
 }

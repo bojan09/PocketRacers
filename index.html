@@ -118,7 +118,10 @@
             <button id="btn-drive" class="btn btn-free">Free drive</button>
           </div>
           <p class="hint" id="title-hint"></p>
-          <p class="bank" id="title-bank"></p>
+          <div class="title-foot">
+            <button id="btn-badges" class="pill-btn">🏅 Badges <b id="title-badges"></b></button>
+            <p class="bank" id="title-bank"></p>
+          </div>
         </div>
       </section>
 
@@ -197,6 +200,18 @@
         </div>
       </section>
 
+      <!-- Badges (achievements) -->
+      <section id="screen-badges" class="screen screen-events" hidden>
+        <div class="events-wrap">
+          <header class="events-top">
+            <button id="badges-back" class="icon-btn" aria-label="Back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></button>
+            <h2>Badges</h2>
+            <span class="bank-pill" id="badges-count"></span>
+          </header>
+          <div class="badge-grid" id="badge-grid"></div>
+        </div>
+      </section>
+
       <!-- Race results -->
       <section id="screen-results" class="screen screen-results" hidden>
         <div class="panel results-panel" role="dialog" aria-modal="true" aria-labelledby="results-title">
@@ -251,7 +266,8 @@
             <span>Volume</span>
             <input type="range" min="0" max="1" step="0.05" data-setting="volume" />
           </label>
-          <div class="segmented" data-setting="quality" aria-label="Graphics quality">
+          <div class="segmented" data-setting="graphics" aria-label="Graphics quality">
+            <button data-value="auto" id="graphics-auto">Auto</button>
             <button data-value="low">Low</button>
             <button data-value="medium">Medium</button>
             <button data-value="high">High</button>
@@ -260,6 +276,9 @@
           <label class="toggle-row"><input type="checkbox" data-setting="showFps" /> <span>Show FPS</span></label>
         </div>
       </section>
+
+      <!-- "Badge earned" pop-ups show over every screen. -->
+      <div id="badge-pops" class="badge-pops" aria-live="polite"></div>
 
       <!-- Phones and tablets play in landscape only. -->
       <div id="rotate-screen" class="rotate-screen" role="alert" aria-live="assertive">

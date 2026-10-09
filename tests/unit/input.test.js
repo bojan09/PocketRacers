@@ -51,10 +51,10 @@ test('settings: round trip and invalid values are rejected', () => {
   const back = loadSettings();
   assert.equal(back.controlScheme, 'wheel');
   assert.equal(back.steerSensitivity, 1.5, 'clamped');
-  localStorage.setItem('pocketracers.settings', JSON.stringify({ v: 1, data: { controlScheme: 'jetpack', quality: 7 } }));
+  localStorage.setItem('pocketracers.settings', JSON.stringify({ v: 1, data: { controlScheme: 'jetpack', graphics: 7 } }));
   const bad = loadSettings();
   assert.equal(bad.controlScheme, 'buttons');
-  assert.equal(bad.quality, 'high');
+  assert.equal(bad.graphics, 'auto');
 });
 
 test('settings: save failure does not throw', () => {

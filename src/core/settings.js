@@ -15,7 +15,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   swapSides: false,
   vibration: true,
   volume: 0.7, // 0 – 1, 0 = muted
-  quality: 'high', // 'low' | 'medium' | 'high'
+  graphics: 'auto', // 'auto' | 'low' | 'medium' | 'high'
+  autoTier: 'high', // where Auto settled last time
   reduceEffects: false,
   showFps: false,
   triedSchemes: [],
@@ -25,7 +26,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
 const VALID = {
   controlScheme: ['buttons', 'wheel', 'tilt'],
   buttonSize: ['s', 'm', 'l'],
-  quality: ['low', 'medium', 'high'],
+  graphics: ['auto', 'low', 'medium', 'high'],
+  autoTier: ['low', 'medium', 'high'],
   track: TRACKS.map((t) => t.id),
 };
 

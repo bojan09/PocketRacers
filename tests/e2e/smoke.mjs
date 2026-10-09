@@ -43,7 +43,7 @@ async function open(viewport, query = '', quality = 'low') {
   // on the Low preset to stay fast; rendering cost is measured separately.
   await context.addInitScript((q) => {
     if (!localStorage.getItem('pocketracers.settings')) {
-      localStorage.setItem('pocketracers.settings', JSON.stringify({ v: 1, data: { quality: q } }));
+      localStorage.setItem('pocketracers.settings', JSON.stringify({ v: 1, data: { graphics: q } }));
     }
   }, quality);
   const page = await context.newPage();
@@ -255,6 +255,53 @@ async function drive(page) {
     if (shots) await page.screenshot({ path: `${shots}/landscape-tilt.png` });
   });
   await check('no console errors (tilt)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+
+// ------------------------------------------------------- badges + offline
+{
+  const { context, page, errors } = await open({ width: 844, height: 390 });
+  await check('badges screen lists every badge with progress', async () => {
+    await page.click('#btn-badges');
+    await page.waitForSelector('#screen-badges:not([hidden])');
+    const n = await page.$$eval('.badge-card', (c) => c.length);
+    assert.ok(n >= 20, `${n} badges`);
+    assert.equal(await page.$$eval('.badge-card.earned', (c) => c.length), 0);
+    await page.click('#badges-back');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
+  });
+  await check('a jump in free drive earns a badge, pays points and pops up', async () => {
+    await drive(page);
+    const before = await page.evaluate(() => window.__pocketRacers.progress.points);
+    await page.evaluate(() => window.__pocketRacers.session.fun.onLand(0.8, 0, 0));
+    await page.waitForSelector('.badge-pop');
+    const after = await page.evaluate(() => ({ pts: window.__pocketRacers.progress.points, got: window.__pocketRacers.achievements.earned('jump') }));
+    assert.ok(after.got);
+    assert.ok(after.pts >= before + 150, `${before} -> ${after.pts}`);
+    assert.match(await page.textContent('.badge-pop'), /Lift Off/);
+  });
+  await check('graphics Auto is the default and shows its level', async () => {
+    await page.click('#btn-pause');
+    assert.match(await page.textContent('#graphics-auto'), /Auto/);
+  });
+  await check('no console errors (badges)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+{
+  const { context, page, errors } = await open({ width: 844, height: 390 }, '?sw');
+  await check('installed game works offline', async () => {
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 15000 }).catch(() => page.reload());
+    await page.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 15000 });
+    await context.setOffline(true);
+    await page.reload();
+    await page.waitForFunction(() => window.__pocketRacers);
+    await drive(page);
+    await page.waitForTimeout(500);
+    assert.ok((await state(page)).speed > 0);
+    await context.setOffline(false);
+  });
+  await check('no console errors (offline)', async () => assert.deepEqual(errors, []));
   await context.close();
 }
 

@@ -82,12 +82,12 @@ export class FunSystem {
     }
   }
 
-  award(kind, base, label) {
+  award(kind, base, label, extra) {
     this.combo = this.comboLeft > 0 ? Math.min(MAX_COMBO, this.combo + 1) : 1;
     this.comboLeft = COMBO_WINDOW;
     const points = Math.round(base * this.combo);
     this.score += points;
-    this.session.emit({ type: 'score', kind, points, combo: this.combo, total: this.score, label });
+    this.session.emit({ type: 'score', kind, points, combo: this.combo, total: this.score, label, ...extra });
     return points;
   }
 
@@ -148,13 +148,13 @@ export class FunSystem {
     if (p.sliding && !p.airborne) {
       this.driftTime += dt;
       if (this.driftTime > 3) {
-        this.award('drift', POINTS.driftPerSecond * this.driftTime, 'DRIFT');
+        this.award('drift', POINTS.driftPerSecond * this.driftTime, 'DRIFT', { seconds: this.driftTime });
         this.refill(NITRO_REFILL.driftPerSecond * this.driftTime);
         this.driftTime = 0;
       }
     } else if (this.driftTime > 0) {
       if (this.driftTime > 0.6) {
-        this.award('drift', POINTS.driftPerSecond * this.driftTime, 'DRIFT');
+        this.award('drift', POINTS.driftPerSecond * this.driftTime, 'DRIFT', { seconds: this.driftTime });
         this.refill(NITRO_REFILL.driftPerSecond * this.driftTime);
       }
       this.driftTime = 0;
@@ -175,7 +175,7 @@ export class FunSystem {
     const barrel = roll > turn * 0.9;
     if (!spins && !barrel) {
       const big = airTime > 1.1;
-      this.award('jump', Math.max(POINTS.jumpMin, POINTS.jumpPerSecond * airTime), big ? 'BIG AIR' : 'JUMP');
+      this.award('jump', Math.max(POINTS.jumpMin, POINTS.jumpPerSecond * airTime), big ? 'BIG AIR' : 'JUMP', { airTime });
       if (big) this.charge(SUPER_CHARGE.bigAir);
     } else {
       this.stats.tricks++;
@@ -187,7 +187,7 @@ export class FunSystem {
         charge += SUPER_CHARGE.corkscrew;
         label = `CORKSCREW ${SPIN_NAMES[spins]}`;
       }
-      this.award('trick', points, label);
+      this.award('trick', points, label, { airTime, spins, barrel });
       this.charge(charge);
     }
     this.refill(Math.max(NITRO_REFILL.jumpMin, NITRO_REFILL.jumpPerSecond * airTime) + (spins || barrel ? 0.15 : 0));

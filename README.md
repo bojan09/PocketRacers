@@ -48,7 +48,12 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > splitters, skirts, scoops/blowers, light bars, bull bars), 7 liveries,
 > window tints, neon underglow, and 4 performance upgrades × 5 levels.
 >
-> Next: 3 offline install, achievements, performance pass.
+> **Phase 3 — offline, badges, performance:** a service worker caches the
+> whole game, so the installed app plays with no connection (updates download
+> in the background and apply on the next visit to the title screen).
+> 26 badges with progress bars and point rewards. Graphics "Auto" (the new
+> default) watches real frame times while driving and steps High → Medium →
+> Low on devices that can't keep up.
 
 ## Run locally
 
@@ -58,6 +63,10 @@ npm run serve          # http://localhost:5173  (zero-dependency static server)
 
 Any static server works; there is no build step. Tilt steering needs HTTPS
 on real devices (use the Vercel deployment).
+
+Offline: the service worker only registers over HTTPS (append `?sw` to test
+it on localhost). After changing any shipped file run `npm run sw` to restamp
+`sw.js`; a unit test fails if it is stale.
 
 Developer extras: append `?tune` to the URL for a live handling-tuning panel.
 Keyboard (development only): arrows/WASD, Space = nitro, Esc/P = pause.

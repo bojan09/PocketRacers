@@ -21,6 +21,11 @@ import { Race } from './sim/race.js';
 import { EVENTS, pickOpponents, vehicleFor, starsFor, rewards, medalTimes } from './data/events.js';
 import { Career } from './core/career.js';
 import { EventsScreen, ResultsScreen } from './ui/raceScreens.js';
+import { Achievements } from './core/achievements.js';
+import { BadgesScreen } from './ui/badgesScreen.js';
+import { AutoQuality } from './core/autoQuality.js';
+import { SPEED_TO_KMH } from './sim/session.js';
+import { kitSlots } from './data/kits.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -53,8 +58,9 @@ const audio = new GameAudio();
 const hud = new Hud();
 const canVibrate = typeof navigator.vibrate === 'function';
 const progress = new Progress();
+const achievements = new Achievements();
 
-let mode = 'title'; // 'title' | 'garage' | 'events' | 'driving' | 'paused' | 'results'
+let mode = 'title'; // 'title' | 'garage' | 'events' | 'badges' | 'driving' | 'paused' | 'results'
 const career = new Career();
 let FREE_TRAFFIC = session.trafficCount;
 let race = null; // active Race (null in free drive)
@@ -65,14 +71,30 @@ audio.setEngine(car.engine);
 
 // ---------------------------------------------------------------- settings
 
+// Graphics: a fixed level, or Auto, which adapts to the device while driving
+// and remembers where it settled.
 let appliedQuality = null;
+let autoQuality = null;
+function applyQuality(level) {
+  if (appliedQuality === level) return;
+  appliedQuality = level;
+  renderer.setQuality(level);
+}
+function syncAutoLabel() {
+  const l = autoQuality?.level;
+  $('graphics-auto').textContent = l ? `Auto (${l[0].toUpperCase()}${l.slice(1)})` : 'Auto';
+}
 function applySettings() {
   input.configure(settings);
   session.steerSensitivity = settings.steerSensitivity;
-  if (appliedQuality !== settings.quality) {
-    appliedQuality = settings.quality;
-    renderer.setQuality(settings.quality);
+  if (settings.graphics === 'auto') {
+    autoQuality ||= new AutoQuality(settings.autoTier);
+    applyQuality(autoQuality.level);
+  } else {
+    autoQuality = null;
+    applyQuality(settings.graphics);
   }
+  syncAutoLabel();
   renderer.reduceEffects = settings.reduceEffects;
   audio.setVolume(settings.volume);
   controlsEl.dataset.scheme = settings.controlScheme;
@@ -147,6 +169,8 @@ function showDriving() {
   controlsEl.hidden = false;
   input.touch.enabled = true;
   mode = 'driving';
+  achievements.visitMap(trackId);
+  autoQuality?.reset();
   audio.resume();
   requestAnimationFrame(() => input.touch.measure());
 }
@@ -155,6 +179,7 @@ function pause() {
   if (mode !== 'driving') return;
   mode = 'paused';
   progress.save();
+  achievements.save();
   input.releaseAll();
   input.touch.enabled = false;
   audio.quiet();
@@ -211,6 +236,7 @@ function toTitle() {
   endRace();
   $('screen-events').hidden = true;
   $('screen-results').hidden = true;
+  $('screen-badges').hidden = true;
   mode = 'title';
   input.releaseAll();
   input.touch.enabled = false;
@@ -221,6 +247,8 @@ function toTitle() {
   controlsEl.hidden = true;
   $('screen-title').hidden = false;
   progress.save();
+  achievements.save();
+  if (updateReady) location.reload();
   updateBank();
   enforceLandscape();
 }
@@ -294,6 +322,13 @@ function showResults() {
   const points = stars ? (rec.newStars ? pay[3 - stars] : Math.round((pay[3 - stars] * 0.25) / 50) * 50) : 100;
   progress.add(points);
   progress.save();
+  if (!r.eliminated) {
+    achievements.add('races');
+    if (r.place === 1 && r.total > 1) achievements.add('wins');
+    if (car.family === 'monster') achievements.add('monsterRaces');
+    if (car.family === 'truck') achievements.add('truckRaces');
+  }
+  achievements.max('raceStars', career.totalStars);
   const i = EVENTS.indexOf(e);
   const next = EVENTS.slice(i + 1).find((x) => career.unlocked(x)) || null;
   mode = 'results';
@@ -348,6 +383,80 @@ function openGarage() {
 function updateBank() {
   const pts = progress.points;
   $('title-bank').textContent = pts ? `★ ${pts.toLocaleString()} points earned` : '';
+  $('title-badges').textContent = badgesScreen.label;
+}
+
+// ------------------------------------------------------------------ badges
+
+const badgesScreen = new BadgesScreen({
+  achievements,
+  click: () => audio.click(),
+  onBack: () => {
+    badgesScreen.close();
+    toTitle();
+  },
+});
+achievements.onEarn = (a) => {
+  progress.add(a.reward);
+  progress.save();
+  badgesScreen.pop(a);
+  audio.onEvent({ type: 'superReady' });
+  if (mode === 'garage') garageScreen.render?.();
+};
+
+/** Garage-derived badge stats (cars owned, upgrades, style). */
+function syncGarageStats() {
+  const g = garage.state;
+  achievements.max('owned', g.owned.length);
+  let bought = 0;
+  let top = 0;
+  for (const u of Object.values(g.upgrades)) for (const lv of Object.values(u)) (bought += lv), (top = Math.max(top, lv));
+  achievements.max('upgrades', bought);
+  achievements.max('maxUpgrade', top);
+  const styled = Object.entries(g.custom).some(([id, c]) => (c.neon && c.neon !== 'none') || kitSlots(VEHICLE_BY_ID[id]).some((s) => c[s] && c[s] !== 'stock' && c[s] !== 'none'));
+  if (styled) achievements.max('styled', 1);
+}
+garage.onChange = syncGarageStats;
+
+/** Badge stats from gameplay events. */
+function trackEvent(e) {
+  if (e.type === 'super') achievements.add('supers');
+  if (e.type !== 'score') return;
+  const A = achievements;
+  switch (e.kind) {
+    case 'trick':
+      A.add('tricks');
+      if (e.spins) A.add('spins');
+      if (e.barrel) A.add('barrels');
+      if (e.spins && e.barrel) A.add('corkscrews');
+    // falls through: a trick is a jump too
+    case 'jump':
+      A.add('jumps');
+      A.max('bestAir', e.airTime);
+      break;
+    case 'drift':
+      A.add('driftTime', e.seconds);
+      break;
+    case 'knock':
+      A.add('knocks');
+      break;
+    case 'nearMiss':
+      A.add('nearMisses');
+      break;
+    case 'smash':
+      A.add('smashes');
+      break;
+    case 'star':
+      A.add('starsPicked');
+      break;
+  }
+}
+
+function openBadges() {
+  audio.unlock();
+  mode = 'badges';
+  $('screen-title').hidden = true;
+  badgesScreen.open();
 }
 
 // Phones/tablets play landscape only: portrait shows a full-screen prompt
@@ -387,6 +496,10 @@ $('title-auto').addEventListener('change', (e) => {
 $('btn-garage').addEventListener('click', () => {
   audio.click();
   openGarage();
+});
+$('btn-badges').addEventListener('click', () => {
+  audio.click();
+  openBadges();
 });
 $('map-prev').addEventListener('click', () => stepMap(-1));
 $('map-next').addEventListener('click', () => stepMap(1));
@@ -471,11 +584,17 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 
 // --------------------------------------------------------------- game loop
 
+let km = 0; // distance not yet added to the badge stat
 const loop = new GameLoop({
   update(dt) {
     if (mode !== 'driving') return;
     if (race) race.step(dt, input.read());
     else session.step(dt, input.read());
+    km += (Math.abs(session.player.speed) * SPEED_TO_KMH * dt) / 3600;
+    if (km >= 0.1) {
+      achievements.add('km', km);
+      km = 0;
+    }
   },
   render(alpha, frameDt) {
     if (mode === 'garage') {
@@ -495,26 +614,52 @@ const loop = new GameLoop({
         else if (e.type === 'score' && e.kind === 'smash') navigator.vibrate(15);
       }
       if (e.type === 'score') progress.add(e.points);
+      trackEvent(e);
       if (e.type === 'finish' || e.type === 'eliminated') resultsTimer = setTimeout(showResults, 1800);
     }
     session.events.length = 0;
     if (mode === 'driving') {
       audio.update(session.player, car.handling.maxSpeed, input.state.throttle, frameDt);
       hud.update(session);
+      const level = autoQuality?.frame(frameDt * 1000);
+      if (level) {
+        applyQuality(level);
+        settings.autoTier = level;
+        saveSettings(settings);
+        syncAutoLabel();
+      }
     }
     hud.tickFps(frameDt, loop.frameMs, settings.showFps);
   },
 });
 
 applySettings();
+syncGarageStats();
 $('title-car').textContent = car.name;
 syncMapPicker();
 updateBank();
 enforceLandscape();
 loop.start();
-window.addEventListener('pagehide', () => progress.save());
+window.addEventListener('pagehide', () => {
+  progress.save();
+  achievements.save();
+});
+
+// Offline play: the service worker caches the whole game. Skipped on the
+// local dev server (add ?sw to test it there). When an update has been
+// installed, it is picked up on the next visit to the title screen.
+let updateReady = false;
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('sw'))) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return; // first install, nothing changed
+    updateReady = true;
+    if (mode === 'title') location.reload();
+  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, startEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
+window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, startEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
