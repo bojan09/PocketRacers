@@ -1,0 +1,12 @@
+{
+  "name": "pocket-racers",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pocket Racers — a free, offline, kid-friendly mobile racing game (vanilla HTML/CSS/JS).",
+  "type": "module",
+  "scripts": {
+    "serve": "node tools/serve.mjs",
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:e2e": "node tests/e2e/smoke.mjs"
+  }
+}

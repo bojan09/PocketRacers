@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1b1f3b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Pocket Racers" />
+    <meta name="description" content="Pocket Racers — a free, colourful racing game for phones and tablets." />
+    <title>Pocket Racers</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="stylesheet" href="styles/main.css" />
+    <script type="module" src="src/main.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" aria-label="Race view"></canvas>
+
+      <!-- Gameplay HUD -->
+      <div id="hud" class="hud" hidden>
+        <div class="hud-left">
+          <div class="pill"><span class="pill-label">LAP</span> <b id="hud-lap">1</b></div>
+          <div class="pill time"><span class="pill-label">TIME</span> <b id="hud-time">0:00.00</b></div>
+          <div class="pill time"><span class="pill-label">BEST</span> <b id="hud-best">--:--.--</b></div>
+        </div>
+        <div class="hud-right">
+          <div class="speedo"><b id="hud-speed">0</b><span>km/h</span></div>
+          <button id="btn-pause" class="icon-btn" aria-label="Pause">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5" /><rect x="14" y="5" width="4" height="14" rx="1.5" /></svg>
+          </button>
+        </div>
+        <div id="toast" class="toast" aria-live="polite"></div>
+        <div id="fps" class="fps" hidden></div>
+      </div>
+
+      <!-- Touch controls -->
+      <div id="controls" class="controls" data-scheme="buttons" hidden>
+        <div class="side side-steer">
+          <div class="steer-buttons">
+            <div class="ctl ctl-steer" data-control="left" aria-label="Steer left">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 7 12l8 8" /></svg>
+            </div>
+            <div class="ctl ctl-steer" data-control="right" aria-label="Steer right">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4 8 8-8 8" /></svg>
+            </div>
+          </div>
+          <div class="wheel" data-control="wheel" aria-label="Steering wheel">
+            <div class="wheel-spin">
+              <svg viewBox="0 0 100 100" aria-hidden="true">
+                <circle cx="50" cy="50" r="44" class="wheel-rim" />
+                <circle cx="50" cy="50" r="12" class="wheel-hub" />
+                <path d="M8 50h30M62 50h30M50 62v30" class="wheel-spoke" />
+                <rect x="46" y="4" width="8" height="10" rx="2" class="wheel-mark" />
+              </svg>
+            </div>
+          </div>
+          <div class="ctl ctl-pedal ctl-brake tilt-brake" data-control="brake" aria-label="Brake">BRAKE</div>
+        </div>
+        <div class="side side-pedals">
+          <div class="ctl ctl-nitro" data-control="nitro" aria-label="Nitro">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></svg>
+            <span>NITRO</span>
+          </div>
+          <div class="pedals">
+            <div class="ctl ctl-pedal ctl-brake" data-control="brake" aria-label="Brake">BRAKE</div>
+            <div class="ctl ctl-pedal ctl-gas" data-control="gas" aria-label="Accelerate">GAS</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Title / test-drive screen -->
+      <section id="screen-title" class="screen screen-title">
+        <div class="title-card">
+          <h1 class="logo"><span>Pocket</span><span>Racers</span></h1>
+          <p class="subtitle">Driving prototype · Test Loop</p>
+          <h2 class="section-label">Choose your controls</h2>
+          <div class="scheme-picker" role="radiogroup" aria-label="Control scheme">
+            <button class="scheme" role="radio" data-scheme="buttons">
+              <svg viewBox="0 0 48 32" aria-hidden="true"><rect x="2" y="6" width="18" height="20" rx="5" /><rect x="28" y="6" width="18" height="20" rx="5" /><path d="m13 11-5 5 5 5M35 11l5 5-5 5" class="stroke" /></svg>
+              <b>Buttons</b><small>Tap left &amp; right</small>
+            </button>
+            <button class="scheme" role="radio" data-scheme="wheel">
+              <svg viewBox="0 0 48 32" aria-hidden="true"><circle cx="24" cy="16" r="13" class="stroke" /><circle cx="24" cy="16" r="3.5" /><path d="M11 16h9.5M27.5 16H37M24 19.5V29" class="stroke" /></svg>
+              <b>Wheel</b><small>Drag to turn</small>
+            </button>
+            <button class="scheme" role="radio" data-scheme="tilt">
+              <svg viewBox="0 0 48 32" aria-hidden="true"><rect x="10" y="4" width="28" height="24" rx="4" transform="rotate(-15 24 16)" class="stroke" /><path d="M4 26a22 22 0 0 0 8 4M44 26a22 22 0 0 1-8 4" class="stroke" /></svg>
+              <b>Tilt</b><small>Turn your device</small>
+            </button>
+          </div>
+          <label class="toggle-row"><input type="checkbox" id="title-auto" /> <span>Auto-accelerate</span></label>
+          <button id="btn-drive" class="big-btn">Drive!</button>
+          <p class="hint" id="title-hint"></p>
+        </div>
+      </section>
+
+      <!-- Pause + settings -->
+      <section id="screen-pause" class="screen screen-pause" hidden>
+        <div class="panel" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+          <h2 id="pause-title">Paused</h2>
+          <div class="row-buttons">
+            <button id="btn-resume" class="big-btn">Resume</button>
+            <button id="btn-restart" class="btn">Restart</button>
+            <button id="btn-menu" class="btn">Menu</button>
+          </div>
+
+          <h3>Controls</h3>
+          <div class="segmented" data-setting="controlScheme">
+            <button data-value="buttons">Buttons</button>
+            <button data-value="wheel">Wheel</button>
+            <button data-value="tilt">Tilt</button>
+          </div>
+          <label class="slider-row">
+            <span>Steering sensitivity</span>
+            <input type="range" min="0.5" max="1.5" step="0.05" data-setting="steerSensitivity" />
+          </label>
+          <div class="tilt-only row-inline">
+            <button id="btn-calibrate" class="btn">Calibrate tilt</button>
+            <small>Hold the device how you like to play, then tap.</small>
+          </div>
+          <label class="toggle-row"><input type="checkbox" data-setting="autoAccelerate" /> <span>Auto-accelerate</span></label>
+          <div class="segmented" data-setting="buttonSize" aria-label="Button size">
+            <button data-value="s">Small buttons</button>
+            <button data-value="m">Medium</button>
+            <button data-value="l">Large</button>
+          </div>
+          <label class="toggle-row"><input type="checkbox" data-setting="swapSides" /> <span>Swap control sides</span></label>
+          <label class="toggle-row" id="row-vibration"><input type="checkbox" data-setting="vibration" /> <span>Vibration</span></label>
+
+          <h3>Sound &amp; graphics</h3>
+          <label class="slider-row">
+            <span>Volume</span>
+            <input type="range" min="0" max="1" step="0.05" data-setting="volume" />
+          </label>
+          <div class="segmented" data-setting="quality" aria-label="Graphics quality">
+            <button data-value="low">Low</button>
+            <button data-value="medium">Medium</button>
+            <button data-value="high">High</button>
+          </div>
+          <label class="toggle-row"><input type="checkbox" data-setting="reduceEffects" /> <span>Reduce effects (shake, speed lines)</span></label>
+          <label class="toggle-row"><input type="checkbox" data-setting="showFps" /> <span>Show FPS</span></label>
+        </div>
+      </section>
+
+      <div id="rotate-note" class="rotate-note" hidden>Tip: turn your device sideways for the widest view.</div>
+    </div>
+  </body>
+</html>
