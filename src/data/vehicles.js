@@ -138,6 +138,29 @@ export function resolveLook(v, custom = {}) {
 }
 
 /**
+ * The car's nitro glow colour ([r, g, b] 0..1): its body colour, or the
+ * accent when the body is too dark or grey to glow, brightened so the
+ * brightest channel is full.
+ */
+export function nitroColour(look) {
+  const rgb = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  };
+  const score = (c) => {
+    const hi = Math.max(...c);
+    const lo = Math.min(...c);
+    return hi * (hi > 0 ? (hi - lo) / hi + 0.25 : 0);
+  };
+  const body = rgb(look.body);
+  const accent = rgb(look.accent);
+  const c = score(accent) > score(body) * 1.4 ? accent : body;
+  const hi = Math.max(...c);
+  if (hi < 0.05) return [1, 1, 1];
+  return c.map((v) => v / hi);
+}
+
+/**
  * A complete, drivable vehicle definition (model, handling, look, collision
  * size) for the session, renderer and audio.
  */

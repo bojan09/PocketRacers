@@ -156,18 +156,25 @@ function inOpening(w, dy, dz, Rc = w.R + WELL_EDGE) {
 /**
  * Cut the wheel openings: body vertices that fall inside an opening (on the
  * outer side of the well) move onto its edge, so the edge is an exact arc
- * rather than following the mesh. Returns which vertices sit on an edge;
- * faces with all four corners on an edge are inside the opening.
+ * rather than following the mesh. Returns per vertex 0 (outside), 1 (moved
+ * onto an edge) or 2 (inside an opening but deeper than the well, e.g. the
+ * underside); faces made only of edge points, or joining an edge to a point
+ * inside, lie in the opening and are dropped.
  */
 function carve(grid, wells) {
   return grid.map((row) =>
     row.map((p) => {
+      let state = 0;
       for (const w of wells) {
         if (Math.sign(p[0]) !== w.side) continue;
         const Rc = w.R + WELL_EDGE;
         const dy = p[1] - w.y;
         const dz = p[2] - w.z;
-        if (Math.abs(p[0]) <= w.xin(dy) || !inOpening(w, dy, dz, Rc)) continue;
+        if (!inOpening(w, dy, dz, Rc)) continue;
+        if (Math.abs(p[0]) <= w.xin(dy)) {
+          state = 2;
+          continue;
+        }
         if (dy > 0) {
           const k = Rc / (Math.hypot(dy, dz) || 1);
           p[1] = w.y + dy * k;
@@ -175,9 +182,9 @@ function carve(grid, wells) {
         } else {
           p[2] = w.z + (dz < 0 ? -Rc : Rc);
         }
-        return true;
+        return 1;
       }
-      return false;
+      return state;
     }),
   );
 }
@@ -264,7 +271,8 @@ function loft(mb, stations, colourFn, materialFn, wells = [], xOffset = 0, J = B
   const opening = (i, j) => {
     const j1 = (j + 1) % J;
     const i1 = Math.min(i + 1, I - 1);
-    return edge[i][j] && edge[i][j1] && edge[i1][j] && edge[i1][j1];
+    const c = [edge[i][j], edge[i][j1], edge[i1][j], edge[i1][j1]];
+    return c.every((v) => v === 1) || (c.includes(1) && c.includes(2));
   };
   const info = (i, j) => {
     const a = grid[i][j];

@@ -4,7 +4,7 @@
 import { GameLoop } from './core/loop.js';
 import { loadSettings, saveSettings } from './core/settings.js';
 import { TRAFFIC_MODELS, TRAFFIC_PAINTS } from './data/cars.js';
-import { makeVehicle, VEHICLE_BY_ID } from './data/vehicles.js';
+import { makeVehicle, nitroColour, VEHICLE_BY_ID } from './data/vehicles.js';
 import { Garage } from './core/garage.js';
 import { GarageScreen } from './ui/garageScreen.js';
 import { TRACK_BY_ID } from './data/tracks/index.js';
@@ -247,6 +247,8 @@ function useVehicle(id) {
   renderer.setVehicle(car);
   audio.setEngine(car.engine);
   $('title-car').textContent = car.name;
+  const nc = nitroColour(car.paint).map((v) => Math.round(v * 255));
+  controlsEl.style.setProperty('--nitro', `rgb(${nc.join(',')})`);
 }
 
 const garageScreen = new GarageScreen({
@@ -749,6 +751,7 @@ const loop = new GameLoop({
 
 applySettings();
 syncGarageStats();
+controlsEl.style.setProperty('--nitro', `rgb(${nitroColour(car.paint).map((v) => Math.round(v * 255)).join(',')})`);
 session.assist = profiles.littleDriver();
 session.fun.known = new Set(achievements.state.animals);
 $('title-car').textContent = car.name;

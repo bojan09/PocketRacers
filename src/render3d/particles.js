@@ -7,15 +7,7 @@ const MAX = 420;
 const RIBBON_MAX = 48; // trail samples
 const WEATHER_MAX = 600; // snowflakes / raindrops around the camera
 const GLOW_MAX = 96; // headlight and street-lamp light pools
-// Rainbow bands, left to right across the trail.
-const RAINBOW = [
-  [1, 0.23, 0.28],
-  [1, 0.6, 0.12],
-  [1, 0.88, 0.3],
-  [0.24, 0.86, 0.52],
-  [0.24, 0.55, 1],
-  [0.64, 0.38, 1],
-];
+const BANDS = 6; // across the nitro trail
 export const RIBBON_SAMPLES = RIBBON_MAX;
 // Two triangles per billboard: corner sign x, sign y, u, v.
 const CORNERS = [-1, -1, 0, 0, 1, -1, 1, 0, 1, 1, 1, 1, -1, -1, 0, 0, 1, 1, 1, 1, -1, 1, 0, 1];
@@ -43,7 +35,7 @@ export class Particles {
     this.addData = new Float32Array((MAX + GLOW_MAX + WEATHER_MAX) * 6 * FLOATS);
     this.alphaCount = 0;
     this.addCount = 0;
-    this.ribbonData = new Float32Array(RIBBON_MAX * RAINBOW.length * 6 * FLOATS);
+    this.ribbonData = new Float32Array(RIBBON_MAX * BANDS * 6 * FLOATS);
     this.ribbonCount = 0;
     this.quality = 1;
     this.next = 0;
@@ -168,10 +160,10 @@ export class Particles {
    * Rainbow nitro trail: a flat ribbon through recent rear-of-car samples
    * ({x, y, z, rx, ry, rz, t}), fading with age.
    */
-  buildRibbon(samples, now, life, halfWidth) {
+  buildRibbon(samples, now, life, halfWidth, colour = [1, 1, 1], hot = 0) {
     const D = this.ribbonData;
     let i = 0;
-    const bands = RAINBOW.length;
+    const bands = BANDS;
     for (let k = 0; k < samples.length - 1; k++) {
       const a = samples[k];
       const b = samples[k + 1];
@@ -181,15 +173,17 @@ export class Particles {
       for (let q = 0; q < bands; q++) {
         const u0 = -1 + (2 * q) / bands;
         const u1 = -1 + (2 * (q + 1)) / bands;
-        const c = RAINBOW[q];
         const corner = (s, u, f) => {
+          // White-hot core fading to the car's colour at the edges.
+          const e = Math.abs(u);
+          const w = Math.min(1, (1 - e) * (1 - e) * (0.3 + hot * 0.45) + f * 0.05);
           D[i++] = s.x + s.rx * u * halfWidth;
           D[i++] = s.y + s.ry * u * halfWidth;
           D[i++] = s.z + s.rz * u * halfWidth;
-          D[i++] = c[0];
-          D[i++] = c[1];
-          D[i++] = c[2];
-          D[i++] = 0.9 * f * f;
+          D[i++] = colour[0] + (1 - colour[0]) * w;
+          D[i++] = colour[1] + (1 - colour[1]) * w;
+          D[i++] = colour[2] + (1 - colour[2]) * w;
+          D[i++] = (0.92 - 0.55 * e * e) * f * f;
           D[i++] = 0.5;
           D[i++] = 0.5;
         };

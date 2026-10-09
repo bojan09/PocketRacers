@@ -449,7 +449,8 @@ button {
   position: absolute;
   inset: -7px;
   border-radius: 50%;
-  background: conic-gradient(#ff3b47 0turn, #ff9f1c calc(var(--fuel, 1) * 0.2turn), #ffe14d calc(var(--fuel, 1) * 0.4turn), #3ddc84 calc(var(--fuel, 1) * 0.6turn), #3d8bff calc(var(--fuel, 1) * 0.8turn), #a259ff calc(var(--fuel, 1) * 1turn), rgba(27, 31, 59, 0.45) calc(var(--fuel, 1) * 1turn));
+  /* The tank glows in the car's own nitro colour. */
+  background: conic-gradient(var(--nitro, #4cc9f0) calc(var(--fuel, 1) * 1turn), rgba(27, 31, 59, 0.45) calc(var(--fuel, 1) * 1turn));
   -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%);
   mask: radial-gradient(circle, transparent 62%, #000 63%);
   z-index: -1;

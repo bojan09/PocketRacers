@@ -34,6 +34,7 @@ import { windmillSails, starModel, MODEL_BUILDERS } from './models.js';
 import { MeshBuilder } from '../gl/meshBuilder.js';
 import { ANIMAL_MODELS } from './animals.js';
 import { ANIMALS } from '../data/animals.js';
+import { nitroColour } from '../data/vehicles.js';
 import { Particles, Weather, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
 
 // Draw scale of the hidden animals (small ones are drawn bigger).
@@ -45,7 +46,7 @@ const FIREWORK_COLOURS = [
   [0.65, 0.45, 1],
   [0.35, 1, 0.55],
 ];
-const TRAIL_LIFE = 0.5; // seconds a rainbow sample stays visible
+const TRAIL_LIFE = 0.5; // seconds a nitro trail sample stays visible
 const GOLD = [1, 0.82, 0.25];
 
 const QUALITY = {
@@ -276,6 +277,7 @@ export class Renderer3D {
     const gl = this.gl;
     if (this.player) for (const k of ['body', 'brake', 'wheel']) deleteMesh(gl, this.player[k]);
     this.carDef = def;
+    this.nitroCol = def.paint ? nitroColour(def.paint) : [0.4, 0.8, 1];
     const body = buildCarBody(def.model, def.paint);
     this.player = {
       body: uploadMesh(gl, body.body),
@@ -352,7 +354,7 @@ export class Renderer3D {
       if (!this.reduceEffects) this.shake = Math.max(this.shake, 0.3);
       for (let i = 0; i < 48; i++) {
         const a = (i / 48) * Math.PI * 2;
-        this.particles.spawn('sparkle', f.pos[0], f.pos[1] + 0.6, f.pos[2], Math.cos(a) * 26, 1 + r() * 2, Math.sin(a) * 26, 0.22, 0.55, 0, GOLD);
+        this.particles.spawn('sparkle', f.pos[0], f.pos[1] + 0.6, f.pos[2], Math.cos(a) * 26, 1 + r() * 2, Math.sin(a) * 26, 0.22, 0.55, 0, i % 3 ? this.nitroCol : GOLD);
       }
       this.confetti(f.pos, f.pos[1] + 1.5, 30);
       return;
@@ -1157,15 +1159,22 @@ export class Renderer3D {
     }
     this.updateTrail(p.nitro, carM, anchors);
     if (p.nitro) {
+      // Flames in the car's own colour with a white-hot core.
+      const nc = this.nitroCol;
+      const hot = p.super ? 0.55 : 0.25;
+      const core = [nc[0] + (1 - nc[0]) * 0.75, nc[1] + (1 - nc[1]) * 0.75, nc[2] + (1 - nc[2]) * 0.75];
+      const flame = [nc[0] + (1 - nc[0]) * hot, nc[1] + (1 - nc[1]) * hot, nc[2] + (1 - nc[2]) * hot];
+      const bx = -f.T[0] * 7;
+      const bz = -f.T[2] * 7;
       for (const e of anchors.exhausts) {
         transformPoint(P, carM, e);
-        // Bright white-blue core glued to each exhaust.
-        this.particles.spawn('flameCore', P[0], P[1], P[2], vx, vy, vz, 0.24, Math.max(0.07, dt * 1.5), 0);
+        this.particles.spawn('flameCore', P[0], P[1], P[2], vx, vy, vz, p.super ? 0.32 : 0.24, Math.max(0.07, dt * 1.5), 0, core);
+        if (chance(p.super ? 120 : 70)) this.particles.spawn('flame', P[0], P[1], P[2], vx + bx + (r() - 0.5), vy + 0.3, vz + bz + (r() - 0.5), p.super ? 0.5 : 0.4, 0.2 + r() * 0.1, 1.6, flame);
       }
-      // Glittering sparkles shed along the rainbow.
+      // Sparkles shed along the trail.
       if (chance(p.super ? 90 : 25)) {
         transformPoint(P, carM, [(r() - 0.5) * 1.6, 0.4, anchors.rearZ + 1.5 + r() * 4]);
-        this.particles.spawn('sparkle', P[0], P[1], P[2], (r() - 0.5) * 2, 1 + r() * 2, (r() - 0.5) * 2, p.super ? 0.13 : 0.09, 0.5, 0, p.super ? GOLD : undefined);
+        this.particles.spawn('sparkle', P[0], P[1], P[2], (r() - 0.5) * 2, 1 + r() * 2, (r() - 0.5) * 2, p.super ? 0.13 : 0.09, 0.5, 0, r() < 0.3 ? [1, 1, 1] : flame);
       }
     }
     const rear = anchors.rearWheels;
@@ -1225,7 +1234,7 @@ export class Renderer3D {
     const gl = this.gl;
     const P = this.particles;
     // While boosting, the newest trail point follows the car exactly.
-    P.buildRibbon(this.trail.slice(0, this.trailCount), this.time, TRAIL_LIFE, 0.85 + 0.55 * this.superFx);
+    P.buildRibbon(this.trail.slice(0, this.trailCount), this.time, TRAIL_LIFE, 0.85 + 0.55 * this.superFx, this.nitroCol, this.superFx);
     if (!P.alphaCount && !P.addCount && !P.ribbonCount) return;
     gl.useProgram(this.fx.program);
     this.useAttribs(3);
