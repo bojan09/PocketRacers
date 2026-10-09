@@ -245,6 +245,28 @@ export function grassTuft(rand) {
   return m;
 }
 
+/** Collectible star: a chunky glowing 5-point star, upright, centred. */
+export function starModel() {
+  const m = new MeshBuilder().material(1, 0);
+  const gold = C('#ffd23f');
+  const edge = C('#f2a50c');
+  const pts = [];
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI / 2 + (i / 10) * Math.PI * 2;
+    const r = i % 2 ? 0.2 : 0.46;
+    pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+  }
+  const t = 0.09;
+  for (let i = 0; i < 10; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[(i + 1) % 10];
+    m.tri([0, 0, t * 1.6], [x0, y0, t * 0.4], [x1, y1, t * 0.4], gold, 0.45);
+    m.tri([0, 0, -t * 1.6], [x1, y1, -t * 0.4], [x0, y0, -t * 0.4], gold, 0.45);
+    m.quad([x0, y0, t * 0.4], [x0, y0, -t * 0.4], [x1, y1, -t * 0.4], [x1, y1, t * 0.4], edge, 0.3);
+  }
+  return m;
+}
+
 export const MODEL_BUILDERS = {
   pine,
   oak,

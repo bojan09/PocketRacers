@@ -168,6 +168,7 @@ export function buildTrack3D(def) {
 
   const roadHalfWidthM = def.roadHalfWidth / UNITS_PER_METRE;
   const length = count * SL;
+  const features = buildFeatures(def, segments, step / SL, count);
 
   const track = {
     def,
@@ -180,6 +181,7 @@ export function buildTrack3D(def) {
     lanes: def.lanes,
     palette: def.palette,
     metresPerUnit: step / SL,
+    ...features,
     findSegment(z) {
       return segments[Math.floor(wrap(z, length) / SL) % count];
     },
@@ -217,6 +219,61 @@ function bankedBasis(T, flat, bank) {
 
 export function makeFrame() {
   return { pos: [0, 0, 0], T: [0, 0, -1], R: [1, 0, 0], U: [0, 1, 0] };
+}
+
+// Gameplay features --------------------------------------------------------
+// Ramps, boost pads, collectible stars and knock-over cones, authored in
+// track data by segment index (`seg`) and lateral position (`x`, road
+// half-widths). Converted here to sim units (z) for the session.
+
+export const AIR_GRAVITY = 18; // m/s^2 — floatier than real for fun airtime
+export const NOMINAL_JUMP_SPEED = 47; // m/s (about top speed) used to lay stars along jump arcs
+
+function buildFeatures(def, segments, mpu, count) {
+  const SL = def.segmentLength;
+  const f = def.features || {};
+  const ramps = (f.ramps || []).map((r) => {
+    const lenSegs = Math.round(r.length / (SL * mpu));
+    return {
+      z0: r.seg * SL,
+      z1: (r.seg + lenSegs) * SL,
+      xa: r.x - r.width / 2,
+      xb: r.x + r.width / 2,
+      x: r.x,
+      width: r.width,
+      length: r.length,
+      height: r.height,
+      seg: r.seg,
+      segEnd: r.seg + lenSegs,
+    };
+  });
+  for (const r of ramps) for (let i = r.seg; i <= r.segEnd; i++) segments[i % count].ramp = true;
+  const boosts = (f.boosts || []).map((b) => {
+    const lenSegs = Math.round((b.length || 6) / (SL * mpu));
+    return { z0: b.seg * SL, z1: (b.seg + lenSegs) * SL, xa: b.x - b.width / 2, xb: b.x + b.width / 2, x: b.x, width: b.width, seg: b.seg, segEnd: b.seg + lenSegs };
+  });
+  const stars = [];
+  for (const row of f.stars || []) {
+    for (let k = 0; k < row.count; k++) stars.push({ z: (row.seg + k * row.every) * SL, x: row.x, h: row.h ?? 0.9 });
+  }
+  // Arcs of stars along each ramp's jump at a typical speed.
+  for (const r of ramps) {
+    const vy = (NOMINAL_JUMP_SPEED * r.height) / r.length;
+    for (let k = 1; k <= 6; k++) {
+      const t = k * 0.2;
+      const h = r.height + vy * t - 0.5 * AIR_GRAVITY * t * t;
+      if (h < 0.6) break;
+      stars.push({ z: r.z1 + (NOMINAL_JUMP_SPEED * t) / mpu, x: r.x, h: h + 0.6 });
+    }
+  }
+  const cones = [];
+  for (const row of f.cones || []) {
+    for (let k = 0; k < row.count; k++) {
+      const x = Array.isArray(row.x) ? row.x[k % row.x.length] : row.x;
+      cones.push({ z: (row.seg + k * (row.every || 0)) * SL, x });
+    }
+  }
+  return { ramps, boosts, starDefs: stars, coneDefs: cones };
 }
 
 function smooth(arr, radius) {

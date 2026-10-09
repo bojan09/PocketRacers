@@ -16,6 +16,9 @@ const TYPES = {
   flameCore: [0.6, 0.85, 1, 0.95, 1, 0, 0],
   splash: [0.85, 0.93, 1, 0.8, 0, 9, 1],
   star: [1, 0.95, 0.5, 1, 1, 4, 1.5],
+  sparkle: [1, 0.86, 0.3, 1, 1, -1, 2.5],
+  confetti: [1, 1, 1, 1, 0, 6, 1.6],
+  boost: [0.45, 0.8, 1, 0.9, 1, 0, 3],
 };
 
 export class Particles {
@@ -30,7 +33,7 @@ export class Particles {
     this.next = 0;
   }
 
-  spawn(type, x, y, z, vx, vy, vz, size, life, grow = 0) {
+  spawn(type, x, y, z, vx, vy, vz, size, life, grow = 0, colour = null) {
     // Ring-buffer reuse: oldest particle is replaced when full.
     for (let n = 0; n < MAX; n++) {
       const p = this.pool[(this.next + n) % MAX];
@@ -46,6 +49,7 @@ export class Particles {
       p.size = size;
       p.grow = grow;
       p.life = p.max = life;
+      p.col = colour;
       return;
     }
   }
@@ -111,8 +115,9 @@ export class Particles {
       const ux = camUp[0] * s;
       const uy = camUp[1] * s;
       const uz = camUp[2] * s;
-      if (t[4]) di = quad(D, di, p.x, p.y, p.z, rx, ry, rz, ux, uy, uz, t[0], t[1], t[2], t[3] * k);
-      else ai = quad(A, ai, p.x, p.y, p.z, rx, ry, rz, ux, uy, uz, t[0], t[1], t[2], t[3] * k);
+      const c = p.col || t;
+      if (t[4]) di = quad(D, di, p.x, p.y, p.z, rx, ry, rz, ux, uy, uz, c[0], c[1], c[2], t[3] * k);
+      else ai = quad(A, ai, p.x, p.y, p.z, rx, ry, rz, ux, uy, uz, c[0], c[1], c[2], t[3] * k);
     }
     this.alphaCount = ai / FLOATS;
     this.addCount = di / FLOATS;

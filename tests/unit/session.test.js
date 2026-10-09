@@ -12,7 +12,7 @@ const circlePoints = Array.from({ length: 24 }, (_, i) => {
   const a = (-i / 24) * Math.PI * 2;
   return { p: [Math.cos(a) * 2500, Math.sin(a) * 2500], y: 0 };
 });
-const straight = buildTrack3D({ ...testTrack, points: circlePoints, scenery: [] });
+const straight = buildTrack3D({ ...testTrack, points: circlePoints, scenery: [], features: {} });
 const car = () => structuredClone(CARS.zippy);
 const input = (o = {}) => ({ steer: 0, analog: false, throttle: 0, brake: 0, nitro: false, ...o });
 const newSession = (opts = { trafficCount: 0 }) => new DrivingSession(track, car(), opts);

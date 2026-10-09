@@ -3,6 +3,8 @@
 // fixed timestep by core/loop.js.
 
 import { approach, clamp, loopDelta, mulberry32, wrap } from '../core/util.js';
+import { AIR_GRAVITY } from '../world/track3d.js';
+import { FunSystem } from './fun.js';
 
 export const SPEED_TO_KMH = 0.015;
 const LANES3 = [-2 / 3, 0, 2 / 3];
@@ -19,6 +21,7 @@ export class DrivingSession {
     this.steerSensitivity = 1;
     this.surfaceGrip = 1;
     this.events = [];
+    this.fun = new FunSystem(this);
     this.reset();
   }
 
@@ -48,6 +51,15 @@ export class DrivingSession {
       timing: false,
       halfway: false,
       odometer: 0,
+      // Vertical motion (metres above the road) for ramps and jumps.
+      air: 0,
+      prevAir: 0,
+      vy: 0,
+      airborne: false,
+      airTime: 0,
+      onRamp: null,
+      rampPitch: 0,
+      boostTime: 0,
     };
     this.traffic = [];
     const max = this.car.handling.maxSpeed;
@@ -64,9 +76,12 @@ export class DrivingSession {
         cruise: max * (0.38 + rand() * 0.18),
         laneTimer: 2 + rand() * 6,
         paint: i,
+        ahead: 0,
+        bumpTime: -10,
       });
     }
     this.events.length = 0;
+    this.fun.reset();
   }
 
   emit(e) {
@@ -84,8 +99,10 @@ export class DrivingSession {
     const L = T.length;
     p.prevZ = p.z;
     p.prevX = p.x;
+    p.prevAir = p.air;
     this.time += dt;
     if (p.hitCooldown > 0) p.hitCooldown -= dt;
+    if (p.boostTime > 0) p.boostTime -= dt;
 
     const seg = T.findSegment(p.z);
 
@@ -102,14 +119,16 @@ export class DrivingSession {
     // --- Longitudinal ---------------------------------------------------
     p.offroad = Math.abs(p.x) > 1;
     const brake = clamp(input.brake, 0, 1);
-    const nitro = input.nitro && brake === 0 && p.speed >= 0;
+    const nitro = (input.nitro || p.boostTime > 0) && brake === 0 && p.speed >= 0;
     p.nitro = nitro;
     const throttle = nitro ? 1 : clamp(input.throttle, 0, 1);
     let top = h.maxSpeed * (nitro ? h.nitroTop : 1);
     if (p.offroad) top = Math.min(top, h.maxSpeed * h.offroadTop * (nitro ? 1.25 : 1));
 
     p.braking = false;
-    if (brake > 0) {
+    if (p.airborne) {
+      // In the air: momentum only, no traction.
+    } else if (brake > 0) {
       if (p.speed > 1) {
         p.braking = true;
         p.speed = Math.max(0, p.speed - h.brake * brake * dt);
@@ -133,20 +152,20 @@ export class DrivingSession {
         p.speed = approach(p.speed, 0, h.coastDecel * dt);
       }
     }
-    if (p.speed > top) p.speed = Math.max(top, p.speed - (p.offroad ? h.offroadDecel : h.coastDecel * 1.5) * dt);
+    if (p.speed > top && !p.airborne) p.speed = Math.max(top, p.speed - (p.offroad ? h.offroadDecel : h.coastDecel * 1.5) * dt);
     // Gentle gravity on hills: uphill costs a little speed, downhill adds some.
-    if (seg.slope && p.speed !== 0) p.speed = Math.max(-h.reverseMax, p.speed - seg.slope * GRAVITY * dt);
+    if (seg.slope && p.speed !== 0 && !p.airborne) p.speed = Math.max(-h.reverseMax, p.speed - seg.slope * GRAVITY * dt);
 
     // --- Lateral --------------------------------------------------------
     const sp = p.speed / h.maxSpeed;
-    const authority = clamp(Math.abs(sp) * 3, 0, 1);
+    const authority = clamp(Math.abs(sp) * 3, 0, 1) * (p.airborne ? 0.35 : 1);
     const latTarget = p.steer * h.steerSpeed * authority * (nitro ? 0.9 : 1);
-    const grip = h.grip * (p.offroad ? h.offroadGrip : 1) * this.surfaceGrip;
+    const grip = p.airborne ? 2 : h.grip * (p.offroad ? h.offroadGrip : 1) * this.surfaceGrip;
     p.latVel += (latTarget - p.latVel) * (1 - Math.exp(-grip * dt));
     // Banked corners cancel part of the outward push.
-    const centrifugal = seg.curve * sp * Math.abs(sp) * h.centrifugal * (1 - (seg.bankAssist || 0));
+    const centrifugal = p.airborne ? 0 : seg.curve * sp * Math.abs(sp) * h.centrifugal * (1 - (seg.bankAssist || 0));
     p.x += (p.latVel - centrifugal) * dt;
-    p.sliding = sp > 0.5 && ((Math.abs(centrifugal) > 1.1 && Math.abs(p.steer) > 0.6) || (p.braking && sp > 0.7));
+    p.sliding = !p.airborne && sp > 0.5 && ((Math.abs(centrifugal) > 1.1 && Math.abs(p.steer) > 0.6) || (p.braking && sp > 0.7));
 
     // Guard rails and world bounds.
     p.scraping = false;
@@ -177,12 +196,67 @@ export class DrivingSession {
     p.z = z;
     p.odometer += Math.abs(p.speed) * dt;
 
+    this.updateAir(dt);
     this.collideScenery();
     this.stepTraffic(dt);
+    this.fun.step(dt);
+  }
+
+  /** Ramps launch the car; gravity brings it back down. */
+  updateAir(dt) {
+    const p = this.player;
+    const T = this.track;
+    const L = T.length;
+    const mpu = T.metresPerUnit;
+    if (p.airborne) {
+      p.vy -= AIR_GRAVITY * dt;
+      p.air += p.vy * dt;
+      p.airTime += dt;
+      if (p.air <= 0) {
+        const impact = -p.vy;
+        p.air = 0;
+        p.vy = 0;
+        p.airborne = false;
+        p.rampPitch = 0;
+        p.speed *= 0.985;
+        this.emit({ type: 'land', airTime: p.airTime, strength: Math.min(1, impact / 14) });
+        this.fun.onLand(p.airTime);
+      }
+      return;
+    }
+    let ramp = null;
+    for (const r of T.ramps || []) {
+      if (wrap(p.z - r.z0, L) < r.z1 - r.z0 && p.x >= r.xa && p.x <= r.xb) {
+        ramp = r;
+        break;
+      }
+    }
+    if (ramp && p.speed > 0) {
+      const t = wrap(p.z - ramp.z0, L) / (ramp.z1 - ramp.z0);
+      p.air = t * ramp.height;
+      p.rampPitch = Math.atan2(ramp.height, ramp.length);
+      p.onRamp = ramp;
+      return;
+    }
+    const left = p.onRamp;
+    p.onRamp = null;
+    p.rampPitch = 0;
+    if (left && p.air > 0) {
+      // Off the ramp: launch if we went over the lip, otherwise drop off the side.
+      const overLip = wrap(p.z - left.z0, L) >= left.z1 - left.z0;
+      const speedM = p.speed * mpu;
+      p.airborne = true;
+      p.airTime = 0;
+      p.vy = overLip && speedM > 6 ? (speedM * left.height) / left.length : 0;
+      if (p.vy > 0) this.emit({ type: 'takeoff' });
+      return;
+    }
+    p.air = 0;
   }
 
   completeLap() {
     const p = this.player;
+    this.fun.respawn();
     const isBest = !p.bestLap || p.lapTime < p.bestLap;
     p.lastLap = p.lapTime;
     if (isBest) p.bestLap = p.lapTime;
@@ -193,7 +267,7 @@ export class DrivingSession {
 
   collideScenery() {
     const p = this.player;
-    if (p.hitCooldown > 0 || p.speed === 0) return;
+    if (p.hitCooldown > 0 || p.speed === 0 || p.air > 0.9) return;
     const T = this.track;
     const dir = p.speed > 0 ? 1 : -1;
     const half = this.car.lengthWorld / 2;
@@ -237,7 +311,16 @@ export class DrivingSession {
 
       // Player <-> traffic collision (bump-car style, never punishing).
       const d = loopDelta(p.z, c.z, L);
+      // Near miss: the player just overtook this car with a small gap.
+      const nowAhead = d > 0 ? 1 : -1;
+      if (c.ahead === 1 && nowAhead === -1 && Math.abs(d) < len * 2 && p.speed > c.speed) {
+        const gap = Math.abs(p.x - c.x) - width;
+        if (gap >= 0 && gap < 0.16 && this.time - c.bumpTime > 1 && p.speed > this.car.handling.maxSpeed * 0.45) this.fun.onNearMiss();
+      }
+      c.ahead = nowAhead;
+      if (p.air > 1.1) continue;
       if (Math.abs(d) < len && Math.abs(p.x - c.x) < width) {
+        c.bumpTime = this.time;
         const side = Math.sign(p.x - c.x) || 1;
         if (d > 0 && p.speed > c.speed) {
           const impact = (p.speed - c.speed) / this.car.handling.maxSpeed;

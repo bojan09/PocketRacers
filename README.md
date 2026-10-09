@@ -11,8 +11,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > clouds, smooth lofted car bodies with detailed wheels. One car, the
 > "Sunny Valley" loop (hills, banked corners, tunnel hill, bridge over a
 > lake), practice traffic, three touch control schemes, infinite nitro.
-> Next: 2C garage, 6 cars & per-car sounds · 2D races, AI & interactions ·
-> 2E more maps · then offline service worker and IndexedDB saves.
+>
+> **Phase 2C — fun & scoring:** jump ramps with airtime, near-miss points,
+> collectible stars (rows + arcs over ramps), boost pads, knock-over cones,
+> drift points, a ×5 combo multiplier, pop-ups, confetti and trick sounds.
+> Points are banked (localStorage for now) for future unlocks.
+>
+> Next: 2D garage, 6 cars & per-car sounds · 2E races & AI · 2F more maps ·
+> then offline service worker and IndexedDB saves.
 
 ## Run locally
 
@@ -42,7 +48,8 @@ src/main.js            bootstrap + screen flow
 src/core/              fixed-timestep loop, settings, math utils
 src/data/              car + track definitions (data, not code paths)
 src/world/track3d.js   closed-spline 3D track → segments (curvature, banking, flags, colliders)
-src/sim/session.js     driving physics, collisions, traffic, lap timing (pure, testable)
+src/sim/session.js     driving physics, jumps, collisions, traffic, lap timing (pure, testable)
+src/sim/fun.js         stars, cones, boost pads, near misses, drifts, combo scoring
 src/input/             touch buttons / steering wheel / tilt / keyboard → one input state
 src/gl/                WebGL helpers, shaders, matrix math, mesh builder
 src/render3d/          renderer, terrain, track/scenery meshes, car models, sky, particles

@@ -120,6 +120,111 @@ export class GameAudio {
     if (!this.ctx || this.ctx.state !== 'running') return;
     if (e.type === 'hit' || e.type === 'bump') this.thump(Math.max(0.25, Math.min(1, e.strength)));
     else if (e.type === 'lap') this.chime(e.best);
+    else if (e.type === 'land') this.thump(0.25 + e.strength * 0.6);
+    else if (e.type === 'takeoff') this.whoosh(300, 1400, 0.35, 0.18);
+    else if (e.type === 'boost') this.boost();
+    else if (e.type === 'score') {
+      if (e.kind === 'star') this.blip(1320, e.combo);
+      else if (e.kind === 'nearMiss') this.whoosh(500, 2600, 0.4, 0.3);
+      else if (e.kind === 'smash') this.clack();
+      if (e.kind === 'jump' || e.kind === 'drift' || e.combo >= 3) this.comboDing(e.combo);
+    }
+  }
+
+  /** Bright two-note pickup, a little higher with each combo step. */
+  blip(freq, combo = 1) {
+    const ac = this.ctx;
+    const k = Math.pow(2, Math.min(combo - 1, 6) / 12);
+    [freq * k, freq * k * 1.335].forEach((f, i) => {
+      const t = ac.currentTime + i * 0.06;
+      const o = ac.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.18, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.connect(g).connect(this.master);
+      o.start(t);
+      o.stop(t + 0.25);
+    });
+  }
+
+  /** Filtered-noise sweep (near misses, take-offs). */
+  whoosh(f0, f1, dur, vol) {
+    const ac = this.ctx;
+    const t = ac.currentTime;
+    const n = ac.createBufferSource();
+    n.buffer = this.noiseBuf;
+    const f = ac.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 2.5;
+    f.frequency.setValueAtTime(f0, t);
+    f.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.6);
+    f.frequency.exponentialRampToValueAtTime(f0 * 0.8, t + dur);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    n.connect(f).connect(g).connect(this.master);
+    n.start(t);
+    n.stop(t + dur + 0.02);
+  }
+
+  boost() {
+    const ac = this.ctx;
+    const t = ac.currentTime;
+    const o = ac.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(900, t + 0.35);
+    const f = ac.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 2200;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    o.connect(f).connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.5);
+    this.whoosh(600, 3000, 0.45, 0.2);
+  }
+
+  /** Plastic cone knock: short bright click + low thud. */
+  clack() {
+    const ac = this.ctx;
+    const t = ac.currentTime;
+    const o = ac.createOscillator();
+    o.type = 'square';
+    o.frequency.setValueAtTime(420, t);
+    o.frequency.exponentialRampToValueAtTime(160, t + 0.08);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.13);
+    this.thump(0.3);
+  }
+
+  /** Rising arpeggio that climbs with the combo level. */
+  comboDing(combo) {
+    const ac = this.ctx;
+    const base = 523.25 * Math.pow(2, Math.min(combo - 1, 4) * (2 / 12));
+    [1, 1.26, 1.5].forEach((m, i) => {
+      const t = ac.currentTime + 0.05 + i * 0.07;
+      const o = ac.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = base * m;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.14, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      o.connect(g).connect(this.master);
+      o.start(t);
+      o.stop(t + 0.32);
+    });
   }
 
   thump(strength) {

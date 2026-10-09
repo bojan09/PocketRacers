@@ -29,7 +29,7 @@ import { buildTerrain } from './terrain.js';
 import { buildTrackChunks } from './trackMesh.js';
 import { buildMountains, buildCloudPuffs } from './environment.js';
 import { buildCarBody, buildWheel } from './carModel.js';
-import { windmillSails } from './models.js';
+import { windmillSails, starModel, MODEL_BUILDERS } from './models.js';
 import { Particles, FX_FLOATS } from './particles.js';
 
 const QUALITY = {
@@ -90,6 +90,8 @@ export class Renderer3D {
     this.chunks = chunks.map((c) => uploadMesh(gl, c.builder));
     this.animated = animated;
     this.sails = uploadMesh(gl, windmillSails());
+    this.starMesh = uploadMesh(gl, starModel());
+    this.coneMesh = uploadMesh(gl, MODEL_BUILDERS.cone());
     const b = this.terrain.bounds;
     const center = [(b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2];
     this.mountains = uploadMesh(gl, buildMountains(pal, center, Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.5 + 520));
@@ -182,6 +184,37 @@ export class Renderer3D {
   }
 
   onEvent(e, session) {
+    const p = session.player;
+    const f = this.frame2;
+    const r = this.rand;
+    if (e.type === 'land') {
+      this.track.frame(p.z, p.x, f);
+      const n = Math.round(10 + 20 * e.strength);
+      for (let i = 0; i < n; i++) {
+        const a = r() * Math.PI * 2;
+        this.particles.spawn('dust', f.pos[0] + Math.cos(a) * 1.2, f.pos[1] + 0.1, f.pos[2] + Math.sin(a) * 1.6, Math.cos(a) * 4, 1 + r() * 2, Math.sin(a) * 4, 0.3 + r() * 0.2, 0.7, 0.8, [0.75, 0.72, 0.62]);
+      }
+      if (!this.reduceEffects) this.shake = Math.max(this.shake, 0.18 * e.strength);
+      return;
+    }
+    if (e.type === 'score') {
+      this.track.frame(p.z, p.x, f);
+      const y = f.pos[1] + 1 + p.air;
+      if (e.kind === 'star') {
+        for (let i = 0; i < 14; i++) this.particles.spawn('sparkle', f.pos[0], y, f.pos[2], (r() - 0.5) * 6, r() * 4, (r() - 0.5) * 6, 0.12, 0.5);
+      }
+      if (e.combo >= 4 || e.kind === 'jump') this.confetti(f.pos, y, e.combo >= 5 ? 40 : 22);
+      return;
+    }
+    if (e.type === 'lap' && e.best && e.lap > 1) {
+      this.track.frame(p.z, p.x, f);
+      this.confetti(f.pos, f.pos[1] + 2, 60);
+      return;
+    }
+    if (e.type === 'boost') {
+      this.flash = Math.max(this.flash, 0.12);
+      return;
+    }
     if (e.type === 'hit' || e.type === 'bump') {
       const s = clamp(e.strength, 0.15, 1);
       if (!this.reduceEffects) this.shake = Math.max(this.shake, 0.35 * s);
@@ -203,6 +236,20 @@ export class Renderer3D {
           0.4 + r() * 0.3,
         );
       }
+    }
+  }
+
+  confetti(pos, y, n) {
+    const r = this.rand;
+    const colours = [
+      [1, 0.3, 0.37],
+      [1, 0.82, 0.25],
+      [0.18, 0.77, 0.71],
+      [0.3, 0.55, 1],
+      [0.62, 0.4, 1],
+    ];
+    for (let i = 0; i < n; i++) {
+      this.particles.spawn('confetti', pos[0] + (r() - 0.5) * 3, y + r() * 1.5, pos[2] + (r() - 0.5) * 3, (r() - 0.5) * 7, 3 + r() * 5, (r() - 0.5) * 7, 0.09 + r() * 0.05, 1.4 + r() * 0.6, 0, colours[i % colours.length]);
     }
   }
 
@@ -230,13 +277,22 @@ export class Renderer3D {
     const px = lerp(p.prevX, p.x, alpha);
     const f = T.frame(pz, px, this.frame);
     this.groundCar(f, px);
+    // Ground point (for the contact shadow) before lifting into the air.
+    const gp = this.groundPos || (this.groundPos = [0, 0, 0]);
+    gp[0] = f.pos[0];
+    gp[1] = f.pos[1];
+    gp[2] = f.pos[2];
+    const air = lerp(p.prevAir ?? p.air, p.air, alpha);
+    if (air > 0) for (let k = 0; k < 3; k++) f.pos[k] += f.U[k] * air;
     const speedM = p.speed * mpu;
     const sp = p.speed / h.maxSpeed;
     const seg = T.findSegment(pz);
     const latM = (p.latVel - seg.curve * sp * Math.abs(sp) * h.centrifugal * (1 - (seg.bankAssist || 0))) * T.roadHalfWidthM;
     const slip = clamp(Math.atan2(latM, Math.max(4, Math.abs(speedM))), -0.45, 0.45) * Math.sign(p.speed || 1) + p.steer * 0.05;
     const lean = clamp(p.steer * 0.05 * Math.min(1, Math.abs(sp)), -0.06, 0.06);
-    const pitch = p.braking ? -0.025 : p.nitro ? 0.02 : 0;
+    let pitch = p.braking ? -0.025 : p.nitro ? 0.02 : 0;
+    if (p.airborne) pitch = clamp(Math.atan2(p.vy, Math.max(5, Math.abs(speedM))) * 0.6, -0.3, 0.35);
+    else if (p.rampPitch) pitch = p.rampPitch;
     const carM = this.model;
     mat4.fromBasis(carM, f.R, f.U, [-f.T[0], -f.T[1], -f.T[2]], f.pos);
     if (p.offroad && Math.abs(sp) > 0.05) mat4.translate(carM, carM, 0, (this.rand() - 0.5) * 0.06, 0);
@@ -259,7 +315,8 @@ export class Renderer3D {
     const height = portrait ? 3.9 : 2.45;
     const eye = this.eye;
     eye[0] = f.pos[0] - cd[0] * dist;
-    eye[1] = f.pos[1] + height + Math.max(0, -f.T[1]) * dist * 0.5;
+    // Let the car rise in frame a little when it jumps.
+    eye[1] = f.pos[1] - air * 0.35 + height + Math.max(0, -f.T[1]) * dist * 0.5;
     eye[2] = f.pos[2] - cd[2] * dist;
     const ground = this.terrain.sampler.height(eye[0], eye[2]);
     if (!seg.tunnel && eye[1] < ground + 1.2) eye[1] = ground + 1.2;
@@ -324,7 +381,13 @@ export class Renderer3D {
     pd.steer = p.steer * 0.42;
     pd.brake = p.braking || p.speed < -10;
     // A soft contact shadow under every car, darker when real shadows are off.
-    this.addShadow(f, 1.25, 2.6, this.shadowsOn ? 0.3 : 0.55);
+    const shadowFade = 1 / (1 + air * 0.6);
+    const sf = this.shadowFrame || (this.shadowFrame = makeFrame());
+    sf.R = f.R;
+    sf.T = f.T;
+    sf.U = f.U;
+    sf.pos = gp;
+    this.addShadow(sf, 1.25, 2.6, (this.shadowsOn ? 0.3 : 0.55) * shadowFade);
 
     // --- Shadow pass -------------------------------------------------------
     this.shadowsOn = false;
@@ -414,6 +477,7 @@ export class Renderer3D {
       const d = this.carDraws[i];
       this.drawCar(d.meshes, d.m, d.spin, d.steer, d.brake);
     }
+    this.drawPickups(session, fogFar);
 
     // --- Particles, clouds & contact shadows ---------------------------------
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, inTunnel);
@@ -422,6 +486,43 @@ export class Renderer3D {
     this.drawFx();
 
     this.drawOverlay(dt);
+  }
+
+  /** Spinning stars and knock-over cones. */
+  drawPickups(session, fogFar) {
+    const T = this.track;
+    const fun = session.fun;
+    const fr = this.frame2;
+    const m = this.tmp;
+    const reach = Math.min(fogFar, 220);
+    for (let i = 0; i < fun.stars.length; i++) {
+      const st = fun.stars[i];
+      if (st.taken) continue;
+      T.frame(st.z, st.x, fr);
+      if (!this.near(fr.pos, reach)) continue;
+      const bob = Math.sin(this.time * 3 + i) * 0.12;
+      mat4.identity(m);
+      mat4.translate(m, m, fr.pos[0] + fr.U[0] * (st.h + bob), fr.pos[1] + fr.U[1] * (st.h + bob), fr.pos[2] + fr.U[2] * (st.h + bob));
+      mat4.rotateY(m, m, this.time * 2.5 + i * 0.7);
+      mat4.scale(m, m, 1.55);
+      this.drawLit(this.starMesh, m);
+    }
+    const now = session.time;
+    for (const c of fun.cones) {
+      T.frame(c.z, c.x, fr);
+      if (!this.near(fr.pos, reach)) continue;
+      mat4.fromBasis(m, fr.R, fr.U, [-fr.T[0], -fr.T[1], -fr.T[2]], fr.pos);
+      if (c.hitTime >= 0) {
+        // Flung forward and sideways, tumbling, then lying on the road.
+        const t = Math.min(now - c.hitTime, 0.62);
+        const y = Math.max(0, 5.5 * t - 9 * t * t);
+        mat4.translate(m, m, c.kickX * t * 0.6, y + (t >= 0.6 ? 0.22 : 0), -c.kickZ * t);
+        mat4.rotateX(m, m, -Math.min(Math.PI / 2, t * 9));
+        mat4.rotateZ(m, m, c.kickX * t * 1.5);
+      }
+      mat4.scale(m, m, 1.5);
+      this.drawLit(this.coneMesh, m);
+    }
   }
 
   getShadowMap(size) {
@@ -572,6 +673,12 @@ export class Renderer3D {
     const vx = f.T[0] * speedM;
     const vy = f.T[1] * speedM;
     const vz = f.T[2] * speedM;
+    if (p.boostTime > 0 && chance(40)) {
+      for (const w of anchors.wheels) {
+        transformPoint(P, carM, [w[0], 0.15, w[2]]);
+        this.particles.spawn('boost', P[0], P[1], P[2], vx * 0.6, 0.4, vz * 0.6, 0.18, 0.25, 0.8);
+      }
+    }
     if (p.nitro) {
       for (const e of anchors.exhausts) {
         transformPoint(P, carM, e);

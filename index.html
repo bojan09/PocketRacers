@@ -30,6 +30,10 @@
       <!-- Gameplay HUD -->
       <div id="hud" class="hud" hidden>
         <div class="hud-left">
+          <div class="pill score-pill">
+            <span class="star-icon" aria-hidden="true">★</span> <b id="hud-score">0</b>
+            <span id="hud-combo" class="combo" hidden>×2</span>
+          </div>
           <div class="pill"><span class="pill-label">LAP</span> <b id="hud-lap">1</b></div>
           <div class="pill time"><span class="pill-label">TIME</span> <b id="hud-time">0:00.00</b></div>
           <div class="pill time"><span class="pill-label">BEST</span> <b id="hud-best">--:--.--</b></div>
@@ -41,6 +45,7 @@
           </button>
         </div>
         <div id="toast" class="toast" aria-live="polite"></div>
+        <div id="popups" class="popups" aria-live="polite"></div>
         <div id="fps" class="fps" hidden></div>
       </div>
 
@@ -102,6 +107,7 @@
           <label class="toggle-row"><input type="checkbox" id="title-auto" /> <span>Auto-accelerate</span></label>
           <button id="btn-drive" class="big-btn">Drive!</button>
           <p class="hint" id="title-hint"></p>
+          <p class="bank" id="title-bank"></p>
         </div>
       </section>
 

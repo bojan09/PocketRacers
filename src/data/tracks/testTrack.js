@@ -63,6 +63,33 @@ export default {
     tunnelLight: '#ffe9a8',
   },
 
+  // Fun stuff. seg = segment index (~0.83 m each), x = lateral position in
+  // road half-widths (-1 left edge .. 1 right edge).
+  features: {
+    ramps: [
+      { seg: 80, x: -0.36, width: 0.62, length: 7, height: 1.5 },
+      { seg: 540, x: 0.36, width: 0.62, length: 7, height: 1.5 },
+    ],
+    boosts: [
+      { seg: 30, x: 0.4, width: 0.5 },
+      { seg: 300, x: 0, width: 0.6 },
+      { seg: 760, x: -0.36, width: 0.5 },
+      { seg: 1600, x: 0.36, width: 0.5 },
+    ],
+    stars: [
+      { seg: 190, count: 8, every: 7, x: 0.62 },
+      { seg: 620, count: 6, every: 8, x: -0.62 },
+      { seg: 1030, count: 8, every: 6, x: 0 },
+      { seg: 1420, count: 10, every: 7, x: 0.3 },
+      { seg: 1640, count: 6, every: 7, x: -0.5 },
+    ],
+    cones: [
+      { seg: 400, count: 8, every: 9, x: [-0.4, 0.4] },
+      { seg: 680, count: 5, every: 0, x: [-0.8, -0.4, 0, 0.4, 0.8] },
+      { seg: 1300, count: 6, every: 10, x: [0.5, -0.5] },
+    ],
+  },
+
   scenery: [
     { kinds: ['pine', 'oak', 'oak', 'bush', 'flowers'], every: 10, offset: [1.45, 2.9], side: 'both', chance: 0.9, skipRail: true },
     { kinds: ['pine', 'oak', 'pine'], every: 6, offset: [3.2, 9], side: 'both', chance: 0.95, solid: false },

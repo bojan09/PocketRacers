@@ -13,6 +13,7 @@ import { tiltSupported } from './input/tilt.js';
 import { GameAudio } from './audio/audio.js';
 import { Hud } from './ui/hud.js';
 import { mountTuningPanel } from './ui/tuning.js';
+import { Progress } from './core/progress.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,6 +40,7 @@ const input = new InputManager(controlsEl);
 const audio = new GameAudio();
 const hud = new Hud();
 const canVibrate = typeof navigator.vibrate === 'function';
+const progress = new Progress();
 
 let mode = 'title'; // 'title' | 'driving' | 'paused'
 
@@ -134,6 +136,7 @@ function showDriving() {
 function pause() {
   if (mode !== 'driving') return;
   mode = 'paused';
+  progress.save();
   input.releaseAll();
   input.touch.enabled = false;
   audio.quiet();
@@ -156,7 +159,14 @@ function toTitle() {
   $('hud').hidden = true;
   controlsEl.hidden = true;
   $('screen-title').hidden = false;
+  progress.save();
+  updateBank();
   updateRotateNote();
+}
+
+function updateBank() {
+  const pts = progress.points;
+  $('title-bank').textContent = pts ? `★ ${pts.toLocaleString()} points earned` : '';
 }
 
 function updateRotateNote() {
@@ -257,9 +267,11 @@ const loop = new GameLoop({
       renderer.onEvent(e, session);
       audio.onEvent(e);
       hud.onEvent(e);
-      if ((e.type === 'hit' || e.type === 'bump') && settings.vibration && canVibrate) {
-        navigator.vibrate(Math.round(20 + Math.min(1, e.strength) * 40));
+      if (settings.vibration && canVibrate) {
+        if (e.type === 'hit' || e.type === 'bump' || e.type === 'land') navigator.vibrate(Math.round(20 + Math.min(1, e.strength) * 40));
+        else if (e.type === 'score' && e.kind === 'smash') navigator.vibrate(15);
       }
+      if (e.type === 'score') progress.add(e.points);
     }
     session.events.length = 0;
     if (mode === 'driving') {
@@ -271,8 +283,10 @@ const loop = new GameLoop({
 });
 
 applySettings();
+updateBank();
 updateRotateNote();
 loop.start();
+window.addEventListener('pagehide', () => progress.save());
 
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 

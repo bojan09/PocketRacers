@@ -181,6 +181,16 @@ export function buildTrackChunks(track, terrain) {
       if (a.tunnel && !b.tunnel) addPortal(mb, b, F, RW, rockC, 1);
     }
 
+    // Jump ramps and boost pads in this chunk.
+    for (const r of track.ramps || []) {
+      if (r.seg < c0 || r.seg >= c1) continue;
+      addRamp(mb, r, at, P);
+    }
+    for (const b of track.boosts || []) {
+      if (b.seg < c0 || b.seg >= c1) continue;
+      addBoostPad(mb, b, at, P);
+    }
+
     // Start gantry.
     for (let i = c0; i < c1; i++) {
       const s = segs[i];
@@ -247,6 +257,66 @@ export function buildTrackChunks(track, terrain) {
     chunks.push({ builder: mb, from: c0, to: c1 });
   }
   return { chunks, animated };
+}
+
+function addRamp(mb, r, at, P) {
+  const n = r.segEnd - r.seg;
+  const yellow = [1, 0.8, 0.15];
+  const orange = [1, 0.55, 0.1];
+  const dark = [0.16, 0.17, 0.2];
+  mb.material(0.3, 0.4);
+  for (let k = 0; k < n; k++) {
+    const a = at(r.seg + k);
+    const b = at(r.seg + k + 1);
+    const h0 = (k / n) * r.height;
+    const h1 = ((k + 1) / n) * r.height;
+    // Striped running surface.
+    const stripes = 4;
+    for (let q = 0; q < stripes; q++) {
+      const x0 = r.xa + ((r.xb - r.xa) * q) / stripes;
+      const x1 = r.xa + ((r.xb - r.xa) * (q + 1)) / stripes;
+      const col = (q + k) % 2 ? yellow : orange;
+      mb.quad(P(a, x0, h0 + 0.04), P(a, x1, h0 + 0.04), P(b, x1, h1 + 0.04), P(b, x0, h1 + 0.04), col);
+    }
+    // Sides.
+    mb.quad(P(a, r.xa, 0), P(b, r.xa, 0), P(b, r.xa, h1 + 0.04), P(a, r.xa, h0 + 0.04), dark);
+    mb.quad(P(a, r.xb, 0), P(a, r.xb, h0 + 0.04), P(b, r.xb, h1 + 0.04), P(b, r.xb, 0), dark);
+  }
+  // Back face with hazard chevrons.
+  const e = at(r.segEnd);
+  const cols = 6;
+  for (let q = 0; q < cols; q++) {
+    const x0 = r.xa + ((r.xb - r.xa) * q) / cols;
+    const x1 = r.xa + ((r.xb - r.xa) * (q + 1)) / cols;
+    mb.quad(P(e, x0, 0), P(e, x1, 0), P(e, x1, r.height + 0.04), P(e, x0, r.height + 0.04), q % 2 ? dark : yellow);
+  }
+}
+
+function addBoostPad(mb, b, at, P) {
+  const n = b.segEnd - b.seg;
+  mb.material(0.6, 0);
+  // Glowing base.
+  for (let k = 0; k < n; k++) {
+    const a = at(b.seg + k);
+    const c = at(b.seg + k + 1);
+    mb.quad(P(a, b.xa, 0.045), P(a, b.xb, 0.045), P(c, b.xb, 0.045), P(c, b.xa, 0.045), [0.1, 0.55, 1], 0.55);
+  }
+  // Three forward-pointing chevrons.
+  const hw = (b.xb - b.xa) / 2;
+  const arrowLen = Math.max(2, Math.floor(n / 3));
+  for (let i = 0; i < 3; i++) {
+    const s0 = b.seg + i * arrowLen;
+    const tail = at(s0);
+    const tip = at(s0 + arrowLen - 1);
+    const notch = at(s0 + Math.floor(arrowLen / 2));
+    const y = 0.06;
+    const L = P(tail, b.x - hw * 0.8, y);
+    const R = P(tail, b.x + hw * 0.8, y);
+    const T = P(tip, b.x, y);
+    const N = P(notch, b.x, y);
+    mb.tri(L, N, T, [0.85, 0.97, 1], 1);
+    mb.tri(N, R, T, [0.85, 0.97, 1], 1);
+  }
 }
 
 const HULL_N = 13;

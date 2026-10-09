@@ -211,6 +211,105 @@ button {
   white-space: pre;
 }
 
+.score-pill {
+  background: linear-gradient(135deg, rgba(255, 190, 11, 0.95), rgba(255, 120, 40, 0.95));
+  color: #1b1f3b;
+  font-size: 18px;
+  padding: 4px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.score-pill b {
+  font-weight: 900;
+  min-width: 2.5em;
+}
+
+.star-icon {
+  font-size: 16px;
+}
+
+.combo {
+  background: #1b1f3b;
+  color: #ffd23f;
+  font-weight: 900;
+  font-size: 14px;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.combo.bump {
+  animation: combo-bump 0.25s ease-out;
+}
+
+@keyframes combo-bump {
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+.popups {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--safe-t) + 26%);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.popup {
+  font-weight: 900;
+  font-size: 24px;
+  color: #fff;
+  text-shadow:
+    0 2px 0 rgba(27, 31, 59, 0.6),
+    0 0 12px rgba(27, 31, 59, 0.35);
+  white-space: nowrap;
+  animation: popup 1.2s ease-out forwards;
+}
+
+.popup small {
+  font-size: 0.7em;
+  color: #ffd23f;
+  margin-left: 6px;
+}
+
+.popup.big {
+  font-size: 32px;
+  color: #ffd23f;
+}
+
+@keyframes popup {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.12);
+  }
+  25% {
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}
+
+.bank {
+  margin: 6px 0 0;
+  font-weight: 800;
+  color: #d97706;
+}
+
 /* ---------- Touch controls ---------- */
 
 .controls {
