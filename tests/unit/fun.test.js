@@ -41,7 +41,7 @@ test('missing the ramp sideways means no jump', () => {
   s.player.z = r.z0 - 4000;
   s.player.x = r.x > 0 ? r.xa - 0.3 : r.xb + 0.3;
   s.player.speed = 11000;
-  run(s, 2);
+  run(s, 1); // just past this ramp (the next one is a barrel ramp on this line)
   assert.ok(!s.events.some((e) => e.type === 'takeoff'));
 });
 
@@ -113,4 +113,91 @@ test('chained tricks build a combo multiplier that expires', () => {
   assert.equal(third, 150);
   run(s, 3.5, input({ throttle: 0 }));
   assert.equal(s.fun.combo, 1);
+});
+
+// ------------------------------------------------------------- 2E tricks
+
+/** Drive straight at a ramp; `steerInAir` holds steering while airborne. */
+function jump(ramp, { steerInAir = 0, speed = 11000, s = session() } = {}) {
+  s.player.z = ramp.z0 - 4000;
+  s.player.x = ramp.x;
+  s.player.speed = speed;
+  let maxRoll = 0;
+  for (let i = 0; i < 5 * 120; i++) {
+    s.step(FIXED_DT, input({ steer: s.player.airborne ? steerInAir : 0 }));
+    maxRoll = Math.max(maxRoll, Math.abs(s.player.roll));
+    if (s.events.some((e) => e.type === 'land')) break;
+  }
+  return { s, maxRoll, trick: scores(s, 'trick')[0], land: s.events.find((e) => e.type === 'land') };
+}
+
+test('steering in the air spins the car; a full turn scores a 360', () => {
+  const { s, trick, land } = jump(track.ramps[0], { steerInAir: 1 });
+  assert.ok(land, 'landed');
+  assert.ok(trick && /^(360|720)$/.test(trick.label), `trick ${trick?.label}`);
+  assert.ok(s.player.superCharge >= 0.3, `charge ${s.player.superCharge}`);
+  // Lands wheels-down: the leftover angle settles back to zero.
+  run(s, 1, input({ throttle: 0 }));
+  assert.ok(Math.abs(s.player.spin) < 0.01, `spin ${s.player.spin}`);
+});
+
+test('a plain jump without spinning is not a trick', () => {
+  const { trick } = jump(track.ramps[0]);
+  assert.equal(trick, undefined);
+});
+
+test('barrel ramps roll the car over and score a barrel roll', () => {
+  const ramp = track.ramps.find((r) => r.trick === 'barrel');
+  const { s, trick, maxRoll } = jump(ramp);
+  assert.ok(maxRoll > Math.PI, `roll ${maxRoll}`);
+  assert.equal(trick?.label, 'BARREL ROLL');
+  run(s, 1, input({ throttle: 0 }));
+  assert.ok(Math.abs(s.player.roll) < 0.01);
+});
+
+test('barrel roll plus a spin is a corkscrew; the mega ramp gives time for 720s', () => {
+  const barrel = track.ramps.find((r) => r.trick === 'barrel');
+  assert.match(jump(barrel, { steerInAir: 1 }).trick?.label || '', /^CORKSCREW/);
+  const mega = track.ramps.find((r) => r.trick === 'mega');
+  const { trick, land } = jump(mega, { steerInAir: -1, speed: 12500 });
+  assert.ok(land.airTime > 1.4, `air ${land.airTime}`);
+  assert.ok(['720', '1080'].includes(trick?.label), `trick ${trick?.label}`);
+});
+
+test('super nitro: ready when charged, faster than nitro, barges through traffic', () => {
+  const s = new DrivingSession(track, car(), { trafficCount: 1 });
+  s.fun.charge(0.6);
+  assert.ok(!s.events.some((e) => e.type === 'superReady'));
+  s.fun.charge(0.5);
+  assert.ok(s.events.some((e) => e.type === 'superReady'));
+  assert.equal(s.player.superCharge, 1);
+  // Normal nitro top speed for comparison.
+  const n = new DrivingSession(track, car(), { trafficCount: 0 });
+  run(n, 3, input({ nitro: true }));
+  const fuelBefore = s.player.nitroFuel;
+  const c = s.traffic[0];
+  c.cruise = c.speed = 3000;
+  c.laneTimer = 1e9;
+  c.x = c.targetX = 0;
+  s.player.z = c.z - 20000;
+  s.player.x = 0;
+  run(s, 0.05, input({ nitro: true }));
+  assert.ok(s.events.some((e) => e.type === 'super'));
+  assert.ok(s.player.super && s.player.superCharge === 0);
+  // The shockwave already pushes the car out of the lane...
+  assert.notEqual(c.targetX, 0);
+  // ...and if we still reach it, it gets bumped aside without slowing us.
+  c.x = c.targetX = 0;
+  c.knockTime = -10;
+  let minSpeed = Infinity;
+  for (let i = 0; i < 2.5 * 120; i++) {
+    s.step(FIXED_DT, input({ nitro: true }));
+    s.player.x = 0;
+    if (s.player.speed > 9000) minSpeed = Math.min(minSpeed, s.player.speed);
+  }
+  assert.ok(scores(s, 'knock').length >= 1, 'bumped a car');
+  assert.ok(s.player.speed > n.player.speed, `${s.player.speed} > ${n.player.speed}`);
+  assert.equal(s.player.nitroFuel, fuelBefore, 'super nitro is free');
+  run(s, 2, input({ nitro: false }));
+  assert.ok(!s.player.super);
 });

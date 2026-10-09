@@ -24,8 +24,13 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > garage: unlock with earned points, paint (body/accent/stripes), rims,
 > livery and ride height. All vehicle names are invented.
 >
-> Next: 2E tricks & Super Nitro · 2F races & AI · 2G maps · 2H full 50-vehicle
-> roster & deep customisation · 3 offline, achievements, performance pass.
+> **Phase 2E — tricks & Super Nitro:** steer in the air to spin (360 / 720 /
+> 1080), barrel-roll ramps, a mega ramp, corkscrews (roll + spin), always
+> wheels-down landings. Tricks fill a gold Super Nitro meter: tap the gold
+> button for a faster, free boost with a shockwave that bumps traffic aside.
+>
+> Next: 2F races & AI · 2G maps · 2H full 50-vehicle roster & deep
+> customisation · 3 offline, achievements, performance pass.
 
 ## Run locally
 

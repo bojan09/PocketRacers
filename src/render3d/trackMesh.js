@@ -6,6 +6,7 @@ import { MeshBuilder, faceNormal } from '../gl/meshBuilder.js';
 import { hexToRgb, mat4 } from '../gl/math.js';
 import { mulberry32 } from '../core/util.js';
 import { MODEL_BUILDERS, grassTuft } from './models.js';
+import { rampLift } from '../world/track3d.js';
 
 export const CHUNK = 60; // segments per chunk
 const STEP = 2; // segments per road strip
@@ -265,22 +266,25 @@ function addRamp(mb, r, at, P) {
   const orange = [1, 0.55, 0.1];
   const dark = [0.16, 0.17, 0.2];
   mb.material(0.3, 0.4);
+  // Barrel ramps slope across their width; the mega ramp is purple.
+  const H = (frac, x) => frac * r.height * rampLift(r, x) + 0.04;
+  const [c1, c2] = r.trick === 'barrel' ? [[0.2, 0.8, 1], [1, 1, 1]] : r.trick === 'mega' ? [[0.62, 0.35, 1], [1, 0.8, 0.15]] : [yellow, orange];
   for (let k = 0; k < n; k++) {
     const a = at(r.seg + k);
     const b = at(r.seg + k + 1);
-    const h0 = (k / n) * r.height;
-    const h1 = ((k + 1) / n) * r.height;
+    const f0 = k / n;
+    const f1 = (k + 1) / n;
     // Striped running surface.
     const stripes = 4;
     for (let q = 0; q < stripes; q++) {
       const x0 = r.xa + ((r.xb - r.xa) * q) / stripes;
       const x1 = r.xa + ((r.xb - r.xa) * (q + 1)) / stripes;
-      const col = (q + k) % 2 ? yellow : orange;
-      mb.quad(P(a, x0, h0 + 0.04), P(a, x1, h0 + 0.04), P(b, x1, h1 + 0.04), P(b, x0, h1 + 0.04), col);
+      const col = (q + k) % 2 ? c1 : c2;
+      mb.quad(P(a, x0, H(f0, x0)), P(a, x1, H(f0, x1)), P(b, x1, H(f1, x1)), P(b, x0, H(f1, x0)), col);
     }
     // Sides.
-    mb.quad(P(a, r.xa, 0), P(b, r.xa, 0), P(b, r.xa, h1 + 0.04), P(a, r.xa, h0 + 0.04), dark);
-    mb.quad(P(a, r.xb, 0), P(a, r.xb, h0 + 0.04), P(b, r.xb, h1 + 0.04), P(b, r.xb, 0), dark);
+    mb.quad(P(a, r.xa, 0), P(b, r.xa, 0), P(b, r.xa, H(f1, r.xa)), P(a, r.xa, H(f0, r.xa)), dark);
+    mb.quad(P(a, r.xb, 0), P(a, r.xb, H(f0, r.xb)), P(b, r.xb, H(f1, r.xb)), P(b, r.xb, 0), dark);
   }
   // Back face with hazard chevrons.
   const e = at(r.segEnd);
@@ -288,7 +292,7 @@ function addRamp(mb, r, at, P) {
   for (let q = 0; q < cols; q++) {
     const x0 = r.xa + ((r.xb - r.xa) * q) / cols;
     const x1 = r.xa + ((r.xb - r.xa) * (q + 1)) / cols;
-    mb.quad(P(e, x0, 0), P(e, x1, 0), P(e, x1, r.height + 0.04), P(e, x0, r.height + 0.04), q % 2 ? dark : yellow);
+    mb.quad(P(e, x0, 0), P(e, x1, 0), P(e, x1, H(1, x1)), P(e, x0, H(1, x0)), q % 2 ? dark : yellow);
   }
 }
 

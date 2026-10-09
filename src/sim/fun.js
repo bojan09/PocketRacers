@@ -11,7 +11,20 @@ export const POINTS = {
   jumpPerSecond: 300,
   jumpMin: 100,
   driftPerSecond: 150,
+  spin: [0, 400, 1000, 1800], // 360, 720, 1080
+  barrel: 500,
+  corkscrew: 300, // bonus for a barrel roll with a spin
+  knock: 100,
 };
+// Super Nitro charge (fraction of the gold meter) earned per trick.
+export const SUPER_CHARGE = {
+  spin: [0, 0.3, 0.6, 1],
+  barrel: 0.35,
+  corkscrew: 0.2,
+  bigAir: 0.15,
+  nearMiss: 0.06,
+};
+const SPIN_NAMES = ['', '360', '720', '1080'];
 // Nitro refills (fraction of a full tank) earned per trick.
 export const NITRO_REFILL = {
   jumpPerSecond: 0.45,
@@ -42,7 +55,7 @@ export class FunSystem {
     this.combo = 1;
     this.comboLeft = 0;
     this.driftTime = 0;
-    this.stats = { stars: 0, nearMiss: 0, smash: 0, jumps: 0, bestAir: 0 };
+    this.stats = { stars: 0, nearMiss: 0, smash: 0, jumps: 0, bestAir: 0, tricks: 0, knocks: 0, supers: 0 };
   }
 
   /** Stars and cones come back every lap. */
@@ -56,6 +69,17 @@ export class FunSystem {
     const before = p.nitroFuel;
     p.nitroFuel = Math.min(1, p.nitroFuel + amount);
     if (p.nitroFuel > before + 0.001) this.session.emit({ type: 'nitroRefill', amount: p.nitroFuel - before, fuel: p.nitroFuel });
+  }
+
+  /** Fill the Super Nitro meter; announces when it becomes ready. */
+  charge(amount) {
+    const p = this.session.player;
+    if (p.superTime > 0 || p.superCharge >= 1) return;
+    p.superCharge = Math.min(1, p.superCharge + amount);
+    if (p.superCharge >= 1) {
+      this.stats.supers++;
+      this.session.emit({ type: 'superReady' });
+    }
   }
 
   award(kind, base, label) {
@@ -137,17 +161,47 @@ export class FunSystem {
     }
   }
 
-  onLand(airTime) {
+  /**
+   * @param airTime seconds in the air
+   * @param spin  total yaw rotation (radians) — 360s and 720s
+   * @param roll  total barrel-roll rotation (radians)
+   */
+  onLand(airTime, spin = 0, roll = 0) {
     if (airTime < 0.35) return;
     this.stats.jumps++;
     this.stats.bestAir = Math.max(this.stats.bestAir, airTime);
-    this.award('jump', Math.max(POINTS.jumpMin, POINTS.jumpPerSecond * airTime), airTime > 1.1 ? 'BIG AIR' : 'JUMP');
-    this.refill(Math.max(NITRO_REFILL.jumpMin, NITRO_REFILL.jumpPerSecond * airTime));
+    const turn = Math.PI * 2;
+    const spins = Math.min(3, Math.floor((spin + 0.5) / turn)); // within ~30° counts
+    const barrel = roll > turn * 0.9;
+    if (!spins && !barrel) {
+      const big = airTime > 1.1;
+      this.award('jump', Math.max(POINTS.jumpMin, POINTS.jumpPerSecond * airTime), big ? 'BIG AIR' : 'JUMP');
+      if (big) this.charge(SUPER_CHARGE.bigAir);
+    } else {
+      this.stats.tricks++;
+      let points = POINTS.jumpPerSecond * airTime + POINTS.spin[spins] + (barrel ? POINTS.barrel : 0);
+      let charge = SUPER_CHARGE.spin[spins] + (barrel ? SUPER_CHARGE.barrel : 0);
+      let label = barrel ? 'BARREL ROLL' : SPIN_NAMES[spins];
+      if (barrel && spins) {
+        points += POINTS.corkscrew;
+        charge += SUPER_CHARGE.corkscrew;
+        label = `CORKSCREW ${SPIN_NAMES[spins]}`;
+      }
+      this.award('trick', points, label);
+      this.charge(charge);
+    }
+    this.refill(Math.max(NITRO_REFILL.jumpMin, NITRO_REFILL.jumpPerSecond * airTime) + (spins || barrel ? 0.15 : 0));
+  }
+
+  onKnock() {
+    this.stats.knocks++;
+    this.award('knock', POINTS.knock, 'BUMPED');
   }
 
   onNearMiss() {
     this.stats.nearMiss++;
     this.award('nearMiss', POINTS.nearMiss, 'CLOSE CALL');
     this.refill(NITRO_REFILL.nearMiss);
+    this.charge(SUPER_CHARGE.nearMiss);
   }
 }

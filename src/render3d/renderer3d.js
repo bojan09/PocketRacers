@@ -35,6 +35,7 @@ import { MeshBuilder } from '../gl/meshBuilder.js';
 import { Particles, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
 
 const TRAIL_LIFE = 0.5; // seconds a rainbow sample stays visible
+const GOLD = [1, 0.82, 0.25];
 
 const QUALITY = {
   high: { dprCap: 2, fogScale: 1, particles: 1, clouds: true, shadow: 2048, shadowRange: 36, shadowSoft: 1 },
@@ -148,6 +149,7 @@ export class Renderer3D {
     this.shake = 0;
     this.flash = 0;
     this.nitroFx = 0;
+    this.superFx = 0;
     this.overlayDirty = false;
     this.p3 = [0, 0, 0];
 
@@ -224,6 +226,18 @@ export class Renderer3D {
     }
     if (e.type === 'boost') {
       this.flash = Math.max(this.flash, 0.12);
+      return;
+    }
+    if (e.type === 'super') {
+      // Golden shockwave ring around the car.
+      this.track.frame(p.z, p.x, f);
+      this.flash = Math.max(this.flash, 0.4);
+      if (!this.reduceEffects) this.shake = Math.max(this.shake, 0.3);
+      for (let i = 0; i < 48; i++) {
+        const a = (i / 48) * Math.PI * 2;
+        this.particles.spawn('sparkle', f.pos[0], f.pos[1] + 0.6, f.pos[2], Math.cos(a) * 26, 1 + r() * 2, Math.sin(a) * 26, 0.22, 0.55, 0, GOLD);
+      }
+      this.confetti(f.pos, f.pos[1] + 1.5, 30);
       return;
     }
     if (e.type === 'hit' || e.type === 'bump') {
@@ -310,6 +324,15 @@ export class Renderer3D {
     mat4.rotateY(carM, carM, -slip);
     mat4.rotateZ(carM, carM, lean);
     mat4.rotateX(carM, carM, pitch);
+    // Air tricks: spin (yaw) and barrel roll about the middle of the body.
+    const roll = p.roll + p.rampRoll;
+    if (p.spin || roll) {
+      const cy = this.player.anchors.height * 0.45;
+      mat4.translate(carM, carM, 0, cy, 0);
+      mat4.rotateY(carM, carM, -p.spin);
+      mat4.rotateZ(carM, carM, -roll);
+      mat4.translate(carM, carM, 0, -cy, 0);
+    }
     this.wheelSpin -= (speedM / (this.carDef.model.wheels.radius || 0.34)) * dt;
 
     // --- Camera --------------------------------------------------------
@@ -358,7 +381,8 @@ export class Renderer3D {
     }
     const aspect = this.W / this.H;
     let vfov = portrait ? 2 * Math.atan(Math.tan(33 * DEG) / aspect) : 58 * DEG;
-    vfov = Math.min(vfov, 96 * DEG) + this.nitroFx * (fx ? 9 : 4) * DEG;
+    this.superFx += ((p.super ? 1 : 0) - this.superFx) * Math.min(1, dt * 4);
+    vfov = Math.min(vfov, 96 * DEG) + (this.nitroFx + this.superFx * 0.6) * (fx ? 9 : 4) * DEG;
     mat4.perspective(this.proj, vfov, aspect, 0.3, 4500);
     mat4.lookAt(this.view, eye, tgt, [0, 1, 0]);
     mat4.multiply(this.viewProj, this.proj, this.view);
@@ -385,6 +409,13 @@ export class Renderer3D {
       const d = this.carDraws[this.carDrawCount++];
       d.meshes = this.trafficMeshes[c.paint % this.trafficMeshes.length];
       mat4.fromBasis(d.m, tf.R, tf.U, [-tf.T[0], -tf.T[1], -tf.T[2]], tf.pos);
+      // Bumped by Super Nitro: hop and spin a full turn, then carry on.
+      const kt = session.time - (c.knockTime ?? -10);
+      if (kt < 0.9) {
+        const u = kt / 0.9;
+        mat4.translate(d.m, d.m, 0, Math.sin(Math.PI * u) * 0.7, 0);
+        mat4.rotateY(d.m, d.m, (c.knockDir || 1) * Math.PI * 2 * (1 - (1 - u) * (1 - u)));
+      }
       d.spin = (this.time * c.speed * mpu) / -0.32;
       d.steer = 0;
       d.brake = false;
@@ -847,9 +878,9 @@ export class Renderer3D {
         this.particles.spawn('flameCore', P[0], P[1], P[2], vx, vy, vz, 0.24, Math.max(0.07, dt * 1.5), 0);
       }
       // Glittering sparkles shed along the rainbow.
-      if (chance(25)) {
+      if (chance(p.super ? 90 : 25)) {
         transformPoint(P, carM, [(r() - 0.5) * 1.6, 0.4, anchors.rearZ + 1.5 + r() * 4]);
-        this.particles.spawn('sparkle', P[0], P[1], P[2], (r() - 0.5) * 2, 1 + r() * 2, (r() - 0.5) * 2, 0.09, 0.5);
+        this.particles.spawn('sparkle', P[0], P[1], P[2], (r() - 0.5) * 2, 1 + r() * 2, (r() - 0.5) * 2, p.super ? 0.13 : 0.09, 0.5, 0, p.super ? GOLD : undefined);
       }
     }
     const rear = anchors.rearWheels;
@@ -882,6 +913,11 @@ export class Renderer3D {
     if (!active) return;
     const last = this.trailCount > 0 ? tr[0] : null;
     if (last && now - last.t < 0.012) return;
+    // The car jumped (restart / respawn): don't stretch the ribbon across the map.
+    if (last) {
+      transformPoint(this.p3, carM, [0, anchors.trailY, anchors.rearZ + 0.15]);
+      if (Math.hypot(this.p3[0] - last.x, this.p3[1] - last.y, this.p3[2] - last.z) > 12) this.trailCount = 0;
+    }
     // Shift and insert the newest sample at the front.
     const n = Math.min(this.trailCount + 1, tr.length);
     const recycled = tr[n - 1];
@@ -904,7 +940,7 @@ export class Renderer3D {
     const gl = this.gl;
     const P = this.particles;
     // While boosting, the newest trail point follows the car exactly.
-    P.buildRibbon(this.trail.slice(0, this.trailCount), this.time, TRAIL_LIFE, 0.85);
+    P.buildRibbon(this.trail.slice(0, this.trailCount), this.time, TRAIL_LIFE, 0.85 + 0.55 * this.superFx);
     if (!P.alphaCount && !P.addCount && !P.ribbonCount) return;
     gl.useProgram(this.fx.program);
     this.useAttribs(3);

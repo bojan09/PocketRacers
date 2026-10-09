@@ -212,11 +212,15 @@ export class GameAudio {
     else if (e.type === 'land') this.thump(0.25 + e.strength * 0.6);
     else if (e.type === 'takeoff') this.whoosh(300, 1400, 0.35, 0.18);
     else if (e.type === 'boost') this.boost();
+    else if (e.type === 'super') this.superBoost();
+    else if (e.type === 'superReady') this.chime(true);
     else if (e.type === 'score') {
       if (e.kind === 'star') this.blip(1320, e.combo);
       else if (e.kind === 'nearMiss') this.whoosh(500, 2600, 0.4, 0.3);
       else if (e.kind === 'smash') this.clack();
-      if (e.kind === 'jump' || e.kind === 'drift' || e.combo >= 3) this.comboDing(e.combo);
+      else if (e.kind === 'knock') this.thump(0.6);
+      else if (e.kind === 'trick') this.comboDing(Math.max(3, e.combo + 2));
+      if (e.kind === 'jump' || e.kind === 'drift' || (e.combo >= 3 && e.kind !== 'trick')) this.comboDing(e.combo);
     }
   }
 
@@ -278,6 +282,41 @@ export class GameAudio {
     o.start(t);
     o.stop(t + 0.5);
     this.whoosh(600, 3000, 0.45, 0.2);
+  }
+
+  /** Super Nitro: deep boom, a rising sweep and a bright major chord. */
+  superBoost() {
+    const ac = this.ctx;
+    const t = ac.currentTime;
+    this.thump(1);
+    const o = ac.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(90, t);
+    o.frequency.exponentialRampToValueAtTime(1400, t + 0.7);
+    const f = ac.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 2600;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.16, t + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
+    o.connect(f).connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.9);
+    this.whoosh(500, 4000, 0.8, 0.25);
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      const tt = t + 0.15 + i * 0.06;
+      const n = ac.createOscillator();
+      n.type = 'triangle';
+      n.frequency.value = freq;
+      const ng = ac.createGain();
+      ng.gain.setValueAtTime(0.0001, tt);
+      ng.gain.exponentialRampToValueAtTime(0.12, tt + 0.02);
+      ng.gain.exponentialRampToValueAtTime(0.001, tt + 0.6);
+      n.connect(ng).connect(this.master);
+      n.start(tt);
+      n.stop(tt + 0.65);
+    });
   }
 
   /** Plastic cone knock: short bright click + low thud. */

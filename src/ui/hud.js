@@ -24,6 +24,7 @@ export class Hud {
       popups: document.getElementById('popups'),
       nitro: document.querySelector('.ctl-nitro'),
     };
+    this.el.nitroLabel = this.el.nitro.querySelector('span');
     this.last = {};
     this.toastTimer = 0;
     this.fpsFrames = 0;
@@ -53,7 +54,20 @@ export class Hud {
     if (this.last.fuel !== fuel) {
       this.last.fuel = fuel;
       this.el.nitro.style.setProperty('--fuel', String(fuel));
-      this.el.nitro.classList.toggle('empty', fuel <= 0);
+    }
+    const charge = Math.round(p.superCharge * 40) / 40;
+    const ready = p.superCharge >= 1 && !p.super;
+    const state = `${charge}|${ready}|${!!p.super}|${fuel <= 0}`;
+    if (this.last.superState !== state) {
+      this.last.superState = state;
+      const n = this.el.nitro;
+      n.style.setProperty('--super', String(p.super ? p.superTime / 3.5 : charge));
+      n.classList.toggle('super-ready', ready);
+      n.classList.toggle('super-on', !!p.super);
+      n.classList.toggle('empty', fuel <= 0 && !ready && !p.super);
+      this.el.nitroLabel.textContent = ready || p.super ? 'SUPER' : 'NITRO';
+    } else if (p.super) {
+      this.el.nitro.style.setProperty('--super', String(p.superTime / 3.5));
     }
     this.set('lap', String(p.lap));
     this.set('time', p.timing ? formatTime(p.lapTime) : '0:00.00');
@@ -85,8 +99,16 @@ export class Hud {
   }
 
   onEvent(e) {
+    if (e.type === 'superReady') {
+      this.toast('SUPER NITRO ready! Tap the gold button', 2200);
+      return;
+    }
+    if (e.type === 'super') {
+      this.popup('SUPER NITRO!', '', true);
+      return;
+    }
     if (e.type === 'score') {
-      const big = e.kind === 'jump' && e.label === 'BIG AIR';
+      const big = (e.kind === 'jump' && e.label === 'BIG AIR') || e.kind === 'trick';
       this.popup(`${e.label}! +${e.points}`, e.combo > 1 ? `×${e.combo}` : '', big || e.combo >= 4);
       return;
     }

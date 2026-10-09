@@ -69,6 +69,11 @@ export default {
     ramps: [
       { seg: 80, x: -0.36, width: 0.62, length: 7, height: 1.5 },
       { seg: 540, x: 0.36, width: 0.62, length: 7, height: 1.5 },
+      // Barrel-roll ramps: one side raised, the car rolls over in the air.
+      { seg: 150, x: 0.36, width: 0.62, length: 7, height: 1.6, trick: 'barrel', roll: 1 },
+      { seg: 950, x: -0.36, width: 0.62, length: 7, height: 1.6, trick: 'barrel', roll: -1 },
+      // Mega ramp: big air for 720s.
+      { seg: 1190, x: 0, width: 0.72, length: 10, height: 2.6, trick: 'mega' },
     ],
     boosts: [
       { seg: 30, x: 0.4, width: 0.5 },

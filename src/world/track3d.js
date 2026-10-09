@@ -227,6 +227,16 @@ export function makeFrame() {
 // half-widths). Converted here to sim units (z) for the session.
 
 export const AIR_GRAVITY = 18; // m/s^2 — floatier than real for fun airtime
+/**
+ * Height fraction of a ramp's surface at lateral position x. Barrel ramps
+ * slope across their width (the raised side tips the car into a roll).
+ */
+export function rampLift(r, x) {
+  if (r.trick !== 'barrel') return 1;
+  const u = Math.min(1, Math.max(0, (x - r.xa) / (r.xb - r.xa)));
+  return 0.45 + 0.55 * (r.roll > 0 ? 1 - u : u);
+}
+
 export const NOMINAL_JUMP_SPEED = 47; // m/s (about top speed) used to lay stars along jump arcs
 
 function buildFeatures(def, segments, mpu, count) {
@@ -245,6 +255,8 @@ function buildFeatures(def, segments, mpu, count) {
       height: r.height,
       seg: r.seg,
       segEnd: r.seg + lenSegs,
+      trick: r.trick || null,
+      roll: r.roll || 0, // barrel ramps: +1 rolls to the right, -1 to the left
     };
   });
   for (const r of ramps) for (let i = r.seg; i <= r.segEnd; i++) segments[i % count].ramp = true;

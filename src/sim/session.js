@@ -3,7 +3,7 @@
 // fixed timestep by core/loop.js.
 
 import { approach, clamp, loopDelta, mulberry32, wrap } from '../core/util.js';
-import { AIR_GRAVITY } from '../world/track3d.js';
+import { AIR_GRAVITY, rampLift } from '../world/track3d.js';
 import { FunSystem } from './fun.js';
 
 export const SPEED_TO_KMH = 0.015;
@@ -12,6 +12,10 @@ const MAX_EVENTS = 32;
 const GRAVITY = 2600; // sim units / s^2 per unit of slope (arcade-scaled)
 export const NITRO_DRAIN = 0.22; // a full tank lasts ~4.5 s of boosting
 const TRAFFIC_SPEED = 12000; // traffic pace is the same whatever the player drives
+export const SPIN_RATE = 8.5; // rad/s of air spin at full steering lock (~0.75 s per 360)
+export const SUPER_TIME = 3.5; // seconds of Super Nitro
+const SUPER_TOP = 1.12; // Super Nitro top speed on top of normal nitro
+const SHOCKWAVE_RANGE = 24000; // sim units ahead that the activation shockwave clears
 
 export class DrivingSession {
   constructor(track, car, { trafficCount = track.def.trafficCount ?? 0, seed = 7 } = {}) {
@@ -70,6 +74,15 @@ export class DrivingSession {
       boostTime: 0,
       // Nitro tank (0..1): starts full, drains while boosting, refilled by tricks.
       nitroFuel: 1,
+      // Tricks: yaw spin and barrel roll (radians), visual and scored on landing.
+      spin: 0,
+      spinVel: 0,
+      roll: 0,
+      rollVel: 0,
+      rampRoll: 0,
+      // Super Nitro: charge (0..1) filled by tricks; superTime > 0 while active.
+      superCharge: 0,
+      superTime: 0,
     };
     this.traffic = [];
     const max = TRAFFIC_SPEED;
@@ -130,12 +143,16 @@ export class DrivingSession {
     p.offroad = Math.abs(p.x) > 1;
     const brake = clamp(input.brake, 0, 1);
     const padBoost = p.boostTime > 0;
-    const nitro = ((input.nitro && p.nitroFuel > 0) || padBoost) && brake === 0 && p.speed >= 0;
+    if (p.superTime > 0) p.superTime = Math.max(0, p.superTime - dt);
+    else if (input.nitro && p.superCharge >= 1 && brake === 0) this.startSuper();
+    const superOn = p.superTime > 0;
+    const nitro = ((input.nitro && p.nitroFuel > 0) || padBoost || superOn) && brake === 0 && p.speed >= 0;
     p.nitro = nitro;
-    p.nitroEmpty = input.nitro && p.nitroFuel <= 0 && !padBoost;
-    if (nitro && !padBoost) p.nitroFuel = Math.max(0, p.nitroFuel - NITRO_DRAIN * dt);
+    p.super = superOn;
+    p.nitroEmpty = input.nitro && p.nitroFuel <= 0 && !padBoost && !superOn;
+    if (nitro && !padBoost && !superOn) p.nitroFuel = Math.max(0, p.nitroFuel - NITRO_DRAIN * dt);
     const throttle = nitro ? 1 : clamp(input.throttle, 0, 1);
-    let top = h.maxSpeed * (nitro ? h.nitroTop : 1);
+    let top = h.maxSpeed * (nitro ? h.nitroTop * (superOn ? SUPER_TOP : 1) : 1);
     if (p.offroad) top = Math.min(top, h.maxSpeed * h.offroadTop * (nitro ? 1.25 : 1));
 
     p.braking = false;
@@ -158,7 +175,7 @@ export class DrivingSession {
         if (p.speed < 0) {
           p.speed = Math.min(0, p.speed + h.brake * dt);
         } else {
-          const acc = h.accel * (nitro ? h.nitroAccel : 1) * throttle * (1 - 0.55 * Math.min(1, p.speed / top));
+          const acc = h.accel * (nitro ? h.nitroAccel * (superOn ? 1.35 : 1) : 1) * throttle * (1 - 0.55 * Math.min(1, p.speed / top));
           if (p.speed < top) p.speed = Math.min(top, p.speed + acc * dt);
         }
       } else {
@@ -225,6 +242,10 @@ export class DrivingSession {
       p.vy -= AIR_GRAVITY * dt;
       p.air += p.vy * dt;
       p.airTime += dt;
+      // Steering in the air spins the car; a barrel roll turns on its own.
+      p.spinVel = approach(p.spinVel, p.steer * SPIN_RATE, SPIN_RATE * 4 * dt);
+      p.spin += p.spinVel * dt;
+      p.roll += p.rollVel * dt;
       if (p.air <= 0) {
         const impact = -p.vy;
         p.air = 0;
@@ -233,9 +254,22 @@ export class DrivingSession {
         p.rampPitch = 0;
         p.speed *= 0.985;
         this.emit({ type: 'land', airTime: p.airTime, strength: Math.min(1, impact / 14) });
-        this.fun.onLand(p.airTime);
+        this.fun.onLand(p.airTime, Math.abs(p.spin), Math.abs(p.roll));
+        // Always land wheels-down: keep only the leftover angle and settle it.
+        const turn = Math.PI * 2;
+        p.spin -= Math.round(p.spin / turn) * turn;
+        p.roll -= Math.round(p.roll / turn) * turn;
+        if (Math.abs(p.spin) > 0.6) p.speed *= 0.93; // landed sideways: a little scrub
+        p.spinVel = 0;
+        p.rollVel = 0;
       }
       return;
+    }
+    // On the ground: unwind what is left of a spin or roll.
+    if (p.spin || p.roll) {
+      const k = Math.exp(-12 * dt);
+      p.spin = Math.abs(p.spin) < 0.002 ? 0 : p.spin * k;
+      p.roll = Math.abs(p.roll) < 0.002 ? 0 : p.roll * k;
     }
     let ramp = null;
     for (const r of T.ramps || []) {
@@ -246,25 +280,62 @@ export class DrivingSession {
     }
     if (ramp && p.speed > 0) {
       const t = wrap(p.z - ramp.z0, L) / (ramp.z1 - ramp.z0);
-      p.air = t * ramp.height;
-      p.rampPitch = Math.atan2(ramp.height, ramp.length);
+      p.air = t * ramp.height * rampLift(ramp, p.x);
+      p.rampPitch = Math.atan2(ramp.height * rampLift(ramp, p.x), ramp.length);
+      // Barrel ramps tip the car sideways as it climbs.
+      p.rampRoll = ramp.trick === 'barrel' ? ramp.roll * Math.atan2(ramp.height * 0.55 * t, ramp.width * T.roadHalfWidthM) : 0;
       p.onRamp = ramp;
       return;
     }
     const left = p.onRamp;
     p.onRamp = null;
     p.rampPitch = 0;
+    const tipped = p.rampRoll;
+    p.rampRoll = 0;
     if (left && p.air > 0) {
       // Off the ramp: launch if we went over the lip, otherwise drop off the side.
       const overLip = wrap(p.z - left.z0, L) >= left.z1 - left.z0;
       const speedM = p.speed * mpu;
       p.airborne = true;
       p.airTime = 0;
-      p.vy = overLip && speedM > 6 ? ((speedM * left.height) / left.length) * (this.car.handling.jumpBoost ?? 1) : 0;
-      if (p.vy > 0) this.emit({ type: 'takeoff' });
+      p.vy = overLip && speedM > 6 ? ((speedM * left.height * rampLift(left, p.x)) / left.length) * (this.car.handling.jumpBoost ?? 1) : 0;
+      if (p.vy > 0) {
+        this.emit({ type: 'takeoff', trick: left.trick });
+        if (left.trick === 'barrel') {
+          // Time the roll to finish exactly as the car lands.
+          const flight = (p.vy + Math.sqrt(p.vy * p.vy + 2 * AIR_GRAVITY * p.air)) / AIR_GRAVITY;
+          p.roll = tipped;
+          p.rollVel = (left.roll * Math.PI * 2 - tipped) / flight;
+        }
+      }
       return;
     }
     p.air = 0;
+  }
+
+  /** Super Nitro: big boost plus a shockwave that clears traffic ahead. */
+  startSuper() {
+    const p = this.player;
+    p.superCharge = 0;
+    p.superTime = SUPER_TIME;
+    this.emit({ type: 'super' });
+    for (const c of this.traffic) {
+      const ahead = loopDelta(p.z, c.z, this.track.length);
+      if (ahead > -2000 && ahead < SHOCKWAVE_RANGE) this.knock(c, Math.sign(c.x - p.x) || 1, false);
+    }
+  }
+
+  /** Bump a traffic car out of the way (Super Nitro); it spins and recovers. */
+  knock(c, dir, hit) {
+    c.knockTime = this.time;
+    c.knockDir = dir;
+    c.targetX = clamp(c.x + dir * 0.75, -0.95, 0.95);
+    c.laneTimer = 4;
+    if (hit) {
+      c.x = clamp(c.x + dir * 0.12, -0.95, 0.95);
+      c.speed *= 0.6;
+      this.fun.onKnock();
+    }
   }
 
   completeLap() {
@@ -319,7 +390,7 @@ export class DrivingSession {
       const ahead = loopDelta(c.z, p.z, L);
       const blocked = ahead > 0 && ahead < 2500 && Math.abs(p.x - c.x) < width && p.speed < c.speed;
       c.speed = approach(c.speed, blocked ? Math.max(0, p.speed * 0.9) : c.cruise, 3000 * dt);
-      c.x = approach(c.x, c.targetX, 0.45 * dt);
+      c.x = approach(c.x, c.targetX, (this.time - (c.knockTime ?? -10) < 1 ? 1.6 : 0.45) * dt);
       c.z = wrap(c.z + c.speed * dt, L);
 
       // Player <-> traffic collision (bump-car style, never punishing).
@@ -334,6 +405,11 @@ export class DrivingSession {
       if (p.air > 1.1) continue;
       if (Math.abs(d) < len && Math.abs(p.x - c.x) < width) {
         c.bumpTime = this.time;
+        if (p.superTime > 0) {
+          // Super Nitro barges through: the other car is knocked aside.
+          if (this.time - (c.knockTime ?? -10) > 0.5) this.knock(c, Math.sign(c.x - p.x) || 1, true);
+          continue;
+        }
         const side = Math.sign(p.x - c.x) || 1;
         if (d > 0 && p.speed > c.speed) {
           const impact = (p.speed - c.speed) / this.car.handling.maxSpeed;
