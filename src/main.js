@@ -3,11 +3,11 @@
 
 import { GameLoop } from './core/loop.js';
 import { loadSettings, saveSettings } from './core/settings.js';
-import { CARS, TRAFFIC_PAINTS } from './data/cars.js';
+import { CARS, TRAFFIC_MODELS, TRAFFIC_PAINTS } from './data/cars.js';
 import testTrack from './data/tracks/testTrack.js';
-import { buildTrack } from './world/track.js';
+import { buildTrack3D } from './world/track3d.js';
 import { DrivingSession } from './sim/session.js';
-import { Renderer } from './render/renderer.js';
+import { Renderer3D } from './render3d/renderer3d.js';
 import { InputManager } from './input/inputManager.js';
 import { tiltSupported } from './input/tilt.js';
 import { GameAudio } from './audio/audio.js';
@@ -17,10 +17,23 @@ import { mountTuningPanel } from './ui/tuning.js';
 const $ = (id) => document.getElementById(id);
 
 const settings = loadSettings();
-const track = buildTrack(testTrack);
+const track = buildTrack3D(testTrack);
 const car = structuredClone(CARS.zippy);
 const session = new DrivingSession(track, car);
-const renderer = new Renderer($('game'), track, car, TRAFFIC_PAINTS);
+let renderer;
+try {
+  renderer = new Renderer3D(
+    $('game'),
+    $('fx-overlay'),
+    track,
+    car,
+    TRAFFIC_PAINTS.map((paint) => ({ model: TRAFFIC_MODELS[paint.model], paint })),
+  );
+} catch (err) {
+  $('no-webgl').hidden = false;
+  $('screen-title').hidden = true;
+  throw err;
+}
 const controlsEl = $('controls');
 const input = new InputManager(controlsEl);
 const audio = new GameAudio();
@@ -241,7 +254,7 @@ const loop = new GameLoop({
   render(alpha, frameDt) {
     renderer.render(session, mode === 'driving' ? alpha : 1, frameDt);
     for (const e of session.events) {
-      renderer.onEvent(e);
+      renderer.onEvent(e, session);
       audio.onEvent(e);
       hud.onEvent(e);
       if ((e.type === 'hit' || e.type === 'bump') && settings.vibration && canVibrate) {

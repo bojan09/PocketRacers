@@ -1,14 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTrack } from '../../src/world/track.js';
+import { buildTrack3D } from '../../src/world/track3d.js';
 import testTrack from '../../src/data/tracks/testTrack.js';
 import { CARS } from '../../src/data/cars.js';
 import { DrivingSession } from '../../src/sim/session.js';
 import { advance, FIXED_DT } from '../../src/core/loop.js';
 
-const track = buildTrack(testTrack);
-// Flat straight loop for longitudinal physics tests (no curves to drift on).
-const straight = buildTrack({ ...testTrack, layout: [{ enter: 0, hold: 3000, leave: 0, curve: 0, hill: 0 }], scenery: [] });
+const track = buildTrack3D(testTrack);
+// A huge flat circle: effectively straight for longitudinal physics tests.
+const circlePoints = Array.from({ length: 24 }, (_, i) => {
+  const a = (-i / 24) * Math.PI * 2;
+  return { p: [Math.cos(a) * 2500, Math.sin(a) * 2500], y: 0 };
+});
+const straight = buildTrack3D({ ...testTrack, points: circlePoints, scenery: [] });
 const car = () => structuredClone(CARS.zippy);
 const input = (o = {}) => ({ steer: 0, analog: false, throttle: 0, brake: 0, nitro: false, ...o });
 const newSession = (opts = { trafficCount: 0 }) => new DrivingSession(track, car(), opts);
@@ -18,17 +22,8 @@ function run(session, seconds, inp) {
   for (let i = 0; i < steps; i++) session.step(FIXED_DT, typeof inp === 'function' ? inp(i * FIXED_DT) : inp);
 }
 
-test('track builds a closed loop that returns to height 0', () => {
-  assert.ok(track.count > 1000);
-  assert.equal(track.length, track.count * track.segmentLength);
-  assert.ok(Math.abs(track.segments[track.count - 1].p2.world.y) < 1e-6);
-  for (let i = 1; i < track.count; i++) {
-    assert.equal(track.segments[i].p1.world.y, track.segments[i - 1].p2.world.y);
-  }
-});
-
 test('throttle accelerates to (but not beyond) top speed', () => {
-  const s = newSession();
+  const s = new DrivingSession(straight, car(), { trafficCount: 0 });
   run(s, 2, input({ throttle: 1 }));
   assert.ok(s.player.speed > 0.6 * s.car.handling.maxSpeed, `speed ${s.player.speed}`);
   run(s, 6, input({ throttle: 1 }));
@@ -81,7 +76,7 @@ test('digital steering ramps instead of snapping', () => {
 });
 
 test('driving off-road limits speed', () => {
-  const s = newSession();
+  const s = new DrivingSession(straight, car(), { trafficCount: 0 });
   run(s, 3, input({ throttle: 1 }));
   s.player.x = 1.9;
   run(s, 3, input({ throttle: 1 }));
@@ -129,10 +124,10 @@ test('a full lap is counted and timed; reversing over the line is not', () => {
 
 test('hitting roadside scenery slows the car and emits a hit event', () => {
   const s = newSession();
-  const seg = track.segments.find((sg, i) => i > 50 && sg.sprites.some((sp) => sp.solid > 0));
-  const sprite = seg.sprites.find((sp) => sp.solid > 0);
+  const seg = track.segments.find((sg, i) => i > 50 && sg.sprites.some((sp) => sp.solid > 0 && Math.abs(sp.offset) < 2.5));
+  const sprite = seg.sprites.find((sp) => sp.solid > 0 && Math.abs(sp.offset) < 2.5);
   s.player.x = sprite.offset;
-  s.player.z = seg.p1.world.z - 3000;
+  s.player.z = seg.z - 3000;
   s.player.speed = 8000;
   run(s, 1, input({ throttle: 1, steer: 0 }));
   assert.ok(s.events.some((e) => e.type === 'hit'));

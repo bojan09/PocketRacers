@@ -19,6 +19,13 @@
   <body>
     <div id="app">
       <canvas id="game" aria-label="Race view"></canvas>
+      <canvas id="fx-overlay" aria-hidden="true"></canvas>
+      <div id="no-webgl" class="screen" hidden>
+        <div class="panel">
+          <h2>3D graphics unavailable</h2>
+          <p>Pocket Racers needs WebGL, which this browser has turned off or doesn't support. Try updating your browser, or open the game in Chrome or Safari.</p>
+        </div>
+      </div>
 
       <!-- Gameplay HUD -->
       <div id="hud" class="hud" hidden>
@@ -76,7 +83,7 @@
       <section id="screen-title" class="screen screen-title">
         <div class="title-card">
           <h1 class="logo"><span>Pocket</span><span>Racers</span></h1>
-          <p class="subtitle">Driving prototype · Test Loop</p>
+          <p class="subtitle">3D preview · Sunny Valley</p>
           <h2 class="section-label">Choose your controls</h2>
           <div class="scheme-picker" role="radiogroup" aria-label="Control scheme">
             <button class="scheme" role="radio" data-scheme="buttons">

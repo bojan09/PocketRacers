@@ -1,69 +1,90 @@
-// Prototype test track: a single loop that exercises every handling case —
-// gentle and hard curves, hills, crests, bumps, guard-rail sections and a
-// long nitro straight with slow practice traffic.
-
-const CURVE = { easy: 2, medium: 4, hard: 6 };
-const HILL = { low: 20, medium: 40, high: 60 }; // in segment lengths
-
-// enter/hold/leave are segment counts; curve > 0 bends right; hill is the
-// height change across the section in segment lengths.
-const section = (enter, hold, leave, curve = 0, hill = 0, opts = {}) => ({ enter, hold, leave, curve, hill, ...opts });
+// Prototype test track ("Sunny Valley"): one loop exercising every handling
+// case plus the 3D showcase pieces — a crest, banked sweepers, an S-section,
+// a rock tunnel, a guard-railed hairpin and a bridge over a lake.
+//
+// Control points are map coordinates in metres: p = [east, north], y = height.
+// Flags on a point apply to the span from that point to the next one.
 
 export default {
-  id: 'test-loop',
-  name: 'Sunny Test Loop',
+  id: 'sunny-valley',
+  name: 'Sunny Valley',
   seed: 1234,
-  segmentLength: 200,
+  segmentLength: 200, // sim units (240 units = 1 m)
   roadHalfWidth: 2000,
   lanes: 3,
-  rumbleLength: 3,
-  cameraHeight: 1000,
-  trafficCount: 8,
+  trafficCount: 7,
+  gantryAt: 4,
+  waterLevel: -7,
 
-  palette: {
-    skyTop: '#3fa7f5',
-    skyBottom: '#bfe9ff',
-    fog: '#cdeeff',
-    sun: '#fff4c2',
-    hillsFar: '#8fc7d9',
-    hillsNear: '#5fb36a',
-    grassLight: '#7dd35b',
-    grassDark: '#6cc24c',
-    rumbleLight: '#ffffff',
-    rumbleDark: '#ff4d5e',
-    roadLight: '#6f7787',
-    roadDark: '#68707f',
-    lane: '#ffffff',
-    rail: '#e9eef5',
-    railPost: '#8a96a8',
-  },
-
-  layout: [
-    section(0, 50, 0),
-    section(25, 50, 25, CURVE.easy, 0),
-    section(25, 25, 25, 0, HILL.medium),
-    section(25, 25, 25, -CURVE.medium, -HILL.medium),
-    section(20, 20, 20, CURVE.medium, 0),
-    section(20, 20, 20, -CURVE.medium, 0),
-    section(30, 40, 30, -CURVE.hard, 0, { rail: true }),
-    section(0, 40, 0),
-    section(50, 50, 50, 0, HILL.low, { traffic: true }),
-    section(50, 50, 50, 0, -HILL.low, { traffic: true }),
-    section(10, 10, 10, 0, 6),
-    section(10, 10, 10, 0, -6),
-    section(10, 10, 10, 0, 6),
-    section(10, 10, 10, 0, -6),
-    section(30, 60, 30, CURVE.hard, HILL.low, { rail: true }),
-    section(25, 50, 25, -CURVE.easy, -HILL.low),
-    section(20, 40, 20, CURVE.medium, HILL.low),
-    // the builder appends a closing section that returns to height 0
+  points: [
+    { p: [0, 0], y: 0, noBank: true },
+    { p: [0, 150], y: 0 },
+    { p: [25, 262], y: 6 },
+    { p: [112, 334], y: 14 },
+    { p: [232, 344], y: 12 },
+    { p: [332, 300], y: 8, tunnel: true },
+    { p: [370, 226], y: 4 },
+    { p: [378, 150], y: 3 },
+    { p: [398, 82], y: 3 },
+    { p: [392, -22], y: 5, rail: true },
+    { p: [338, -92], y: 8, rail: true },
+    { p: [232, -122], y: 10, bridge: true },
+    { p: [104, -122], y: 10 },
+    { p: [23, -99], y: 5 },
+    { p: [0, -44], y: 1, noBank: true },
   ],
 
-  // Roadside scenery rules. Offsets are in road half-widths from the centre.
+  palette: {
+    skyTop: '#2f8fe8',
+    skyHorizon: '#bfe6ff',
+    fog: '#cfe9fb',
+    fogNear: 120,
+    fogFar: 520,
+    sunColor: '#fff3d6',
+    skyAmbient: '#b9dcff',
+    groundAmbient: '#8a9a6a',
+    sunDir: [0.45, 0.8, 0.35],
+    grass: '#74c95a',
+    grassAlt: '#68bb4f',
+    hills: '#5aab52',
+    rockFace: '#b3a698',
+    mountains: '#7fa6c9',
+    snow: '#f4f8ff',
+    water: '#3f9fd8',
+    road: '#5f6675',
+    roadAlt: '#646b7b',
+    shoulder: '#b5b08a',
+    lane: '#ffffff',
+    rumbleA: '#ffffff',
+    rumbleB: '#ff4d5e',
+    rail: '#e9eef5',
+    railPost: '#8a96a8',
+    tunnel: '#8c8f99',
+    tunnelLight: '#ffe9a8',
+  },
+
   scenery: [
-    { kinds: ['pine', 'oak', 'oak', 'bush'], every: 4, offset: [1.45, 3.2], side: 'both', chance: 0.85 },
-    { kinds: ['pine', 'oak'], every: 9, offset: [3.2, 6], side: 'both', chance: 0.9, solid: false },
-    { kinds: ['rock', 'bush'], every: 23, offset: [1.35, 1.9], side: 'both', chance: 0.5 },
-    { kinds: ['billboard'], at: [70, 420, 760, 1010], offset: [1.7, 1.9], side: 'alternate' },
+    { kinds: ['pine', 'oak', 'oak', 'bush', 'flowers'], every: 10, offset: [1.45, 2.9], side: 'both', chance: 0.9, skipRail: true },
+    { kinds: ['pine', 'oak', 'pine'], every: 6, offset: [3.2, 9], side: 'both', chance: 0.95, solid: false },
+    { kinds: ['rock', 'bush'], every: 40, offset: [1.4, 2.2], side: 'both', chance: 0.6, skipRail: true },
+    {
+      at: [
+        { seg: 60, kind: 'lamp', offset: -1.38 },
+        { seg: 60, kind: 'lamp', offset: 1.38 },
+        { seg: 120, kind: 'lamp', offset: -1.38 },
+        { seg: 120, kind: 'lamp', offset: 1.38 },
+        { seg: 180, kind: 'lamp', offset: -1.38 },
+        { seg: 180, kind: 'lamp', offset: 1.38 },
+        { seg: 90, kind: 'billboard', offset: 1.9, yaw: -0.3 },
+        { seg: 700, kind: 'billboard', offset: -1.9, yaw: 0.3 },
+        { seg: 250, kind: 'house', offset: -5.2, yaw: 0.4 },
+        { seg: 290, kind: 'barn', offset: -6.5, yaw: -0.2 },
+        { seg: 330, kind: 'windmill', offset: -8.5 },
+        { seg: 900, kind: 'house', offset: 5.5, yaw: 2.6 },
+        { seg: 960, kind: 'house', offset: 6, yaw: 2.9 },
+        { seg: 1500, kind: 'windmill', offset: 7.5 },
+        { seg: 1560, kind: 'barn', offset: 6.2, yaw: 1.4 },
+      ],
+    },
   ],
 };

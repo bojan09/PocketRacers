@@ -7,6 +7,7 @@ import { approach, clamp, loopDelta, mulberry32, wrap } from '../core/util.js';
 export const SPEED_TO_KMH = 0.015;
 const LANES3 = [-2 / 3, 0, 2 / 3];
 const MAX_EVENTS = 32;
+const GRAVITY = 2600; // sim units / s^2 per unit of slope (arcade-scaled)
 
 export class DrivingSession {
   constructor(track, car, { trafficCount = track.def.trafficCount ?? 0, seed = 7 } = {}) {
@@ -133,6 +134,8 @@ export class DrivingSession {
       }
     }
     if (p.speed > top) p.speed = Math.max(top, p.speed - (p.offroad ? h.offroadDecel : h.coastDecel * 1.5) * dt);
+    // Gentle gravity on hills: uphill costs a little speed, downhill adds some.
+    if (seg.slope && p.speed !== 0) p.speed = Math.max(-h.reverseMax, p.speed - seg.slope * GRAVITY * dt);
 
     // --- Lateral --------------------------------------------------------
     const sp = p.speed / h.maxSpeed;
@@ -140,7 +143,8 @@ export class DrivingSession {
     const latTarget = p.steer * h.steerSpeed * authority * (nitro ? 0.9 : 1);
     const grip = h.grip * (p.offroad ? h.offroadGrip : 1) * this.surfaceGrip;
     p.latVel += (latTarget - p.latVel) * (1 - Math.exp(-grip * dt));
-    const centrifugal = seg.curve * sp * Math.abs(sp) * h.centrifugal;
+    // Banked corners cancel part of the outward push.
+    const centrifugal = seg.curve * sp * Math.abs(sp) * h.centrifugal * (1 - (seg.bankAssist || 0));
     p.x += (p.latVel - centrifugal) * dt;
     p.sliding = sp > 0.5 && ((Math.abs(centrifugal) > 1.1 && Math.abs(p.steer) > 0.6) || (p.braking && sp > 0.7));
 
@@ -201,7 +205,7 @@ export class DrivingSession {
       if (Math.abs(dx) >= this.carHalf + sHalf) continue;
       const impact = Math.abs(p.speed) / this.car.handling.maxSpeed;
       // Back the car out of the obstacle's segment and give a small rebound.
-      const edge = dir > 0 ? seg.p1.world.z - half - 1 : seg.p2.world.z + half + 1;
+      const edge = dir > 0 ? seg.z - half - 1 : seg.z + T.segmentLength + half + 1;
       p.z = wrap(edge, T.length);
       p.speed = -dir * Math.min(Math.abs(p.speed) * 0.15, 900);
       p.latVel = Math.sign(dx || 1) * 0.8;
