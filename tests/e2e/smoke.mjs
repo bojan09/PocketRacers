@@ -182,28 +182,33 @@ async function drive(page) {
 
 // -------------------------------------------------------------- portrait
 {
+  // Phones play landscape only: portrait shows a blocking prompt and pauses.
   const { context, page, errors } = await open({ width: 390, height: 844 });
-  await drive(page);
-  await check('portrait: controls fit on screen without overlapping', async () => {
-    const rects = await page.$$eval('#controls [data-control]', (els) =>
-      els
-        .map((el) => el.getBoundingClientRect())
-        .filter((r) => r.width > 0)
-        .map((r) => ({ l: r.left, r: r.right, t: r.top, b: r.bottom })),
-    );
-    assert.ok(rects.length >= 4);
-    for (const r of rects) assert.ok(r.l >= 0 && r.r <= 390 && r.b <= 844 && r.t >= 0, JSON.stringify(r));
-    for (let i = 0; i < rects.length; i++)
-      for (let j = i + 1; j < rects.length; j++) {
-        const a = rects[i];
-        const b = rects[j];
-        const overlap = a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
-        assert.ok(!overlap, `overlap ${JSON.stringify(a)} ${JSON.stringify(b)}`);
-      }
-    await page.waitForTimeout(1500);
-    if (shots) await page.screenshot({ path: `${shots}/portrait-drive.png` });
+  await check('portrait phone: rotate prompt covers the game', async () => {
+    assert.ok(await page.isVisible('#rotate-screen'));
+    assert.match(await page.textContent('#rotate-screen'), /sideways/);
+    const top = await page.evaluate(() => document.elementFromPoint(195, 600)?.closest('#rotate-screen') !== null);
+    assert.ok(top, 'prompt is on top of everything');
+  });
+  await check('turning to landscape hides the prompt; back to portrait pauses', async () => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    assert.ok(await page.isHidden('#rotate-screen'));
+    await drive(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'paused');
+    assert.ok(await page.isVisible('#rotate-screen'));
+    if (shots) await page.screenshot({ path: `${shots}/portrait-blocked.png` });
   });
   await check('no console errors (portrait)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+{
+  // Desktop browsers (mouse) are never blocked, whatever the window shape.
+  const context = await browser.newContext({ viewport: { width: 500, height: 800 } });
+  const page = await context.newPage();
+  await page.goto(base);
+  await page.waitForFunction(() => window.__pocketRacers);
+  await check('desktop narrow window: no rotate prompt', async () => assert.ok(await page.isHidden('#rotate-screen')));
   await context.close();
 }
 

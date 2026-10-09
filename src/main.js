@@ -143,7 +143,6 @@ async function chooseScheme(scheme, hintEl) {
 function showDriving() {
   $('screen-title').hidden = true;
   $('screen-pause').hidden = true;
-  $('rotate-note').hidden = true;
   $('hud').hidden = false;
   controlsEl.hidden = false;
   input.touch.enabled = true;
@@ -223,7 +222,7 @@ function toTitle() {
   $('screen-title').hidden = false;
   progress.save();
   updateBank();
-  updateRotateNote();
+  enforceLandscape();
 }
 
 /** Make `id` the player's vehicle (session, renderer, engine sound). */
@@ -314,7 +313,6 @@ function openEvents() {
   $('screen-title').hidden = true;
   $('hud').hidden = true;
   controlsEl.hidden = true;
-  $('rotate-note').hidden = true;
   eventsScreen.open();
 }
 
@@ -344,7 +342,6 @@ function openGarage() {
   audio.unlock();
   mode = 'garage';
   $('screen-title').hidden = true;
-  $('rotate-note').hidden = true;
   garageScreen.open();
 }
 
@@ -353,8 +350,24 @@ function updateBank() {
   $('title-bank').textContent = pts ? `★ ${pts.toLocaleString()} points earned` : '';
 }
 
-function updateRotateNote() {
-  $('rotate-note').hidden = !(mode === 'title' && window.innerHeight > window.innerWidth);
+// Phones/tablets play landscape only: portrait shows a full-screen prompt
+// (CSS) and pauses the race.
+const portraitBlocked = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+function enforceLandscape() {
+  if (portraitBlocked.matches && mode === 'driving') pause();
+}
+
+/**
+ * On Android the orientation can only be locked in fullscreen, which needs a
+ * user gesture: done on the first Drive/Race tap. iOS ignores this and relies
+ * on the rotate prompt; the installed app is landscape via the manifest.
+ */
+function lockLandscape() {
+  if (!window.matchMedia('(pointer: coarse)').matches || !screen.orientation?.lock) return;
+  if (window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const enter = document.fullscreenElement || !el.requestFullscreen ? Promise.resolve() : el.requestFullscreen({ navigationUI: 'hide' });
+  enter.then(() => screen.orientation.lock('landscape')).catch(() => {});
 }
 
 // Title screen
@@ -379,11 +392,13 @@ $('map-prev').addEventListener('click', () => stepMap(-1));
 $('map-next').addEventListener('click', () => stepMap(1));
 $('btn-races').addEventListener('click', () => {
   audio.click();
+  lockLandscape();
   openEvents();
 });
 $('btn-drive').addEventListener('click', async () => {
   audio.unlock();
   audio.click();
+  lockLandscape();
   const scheme = settings.controlScheme;
   await chooseScheme(scheme, $('title-hint'));
   if (scheme === 'tilt' && settings.controlScheme !== 'tilt') return; // stay to show the hint
@@ -435,10 +450,11 @@ for (const el of document.querySelectorAll('[data-setting]')) {
 
 function onResize() {
   renderer.resize();
-  updateRotateNote();
+  enforceLandscape();
   requestAnimationFrame(() => input.touch.measure());
 }
 window.addEventListener('resize', onResize);
+portraitBlocked.addEventListener?.('change', enforceLandscape);
 window.addEventListener('orientationchange', () => setTimeout(onResize, 150));
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -494,7 +510,7 @@ applySettings();
 $('title-car').textContent = car.name;
 syncMapPicker();
 updateBank();
-updateRotateNote();
+enforceLandscape();
 loop.start();
 window.addEventListener('pagehide', () => progress.save());
 

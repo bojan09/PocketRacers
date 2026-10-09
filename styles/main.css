@@ -863,20 +863,73 @@ button {
   display: none;
 }
 
-.rotate-note {
-  position: absolute;
-  z-index: 6;
-  left: 50%;
-  bottom: calc(var(--safe-b) + 12px);
-  transform: translateX(-50%);
-  background: rgba(27, 31, 59, 0.75);
+/* Landscape only on touch devices: portrait shows a full-screen prompt. */
+.rotate-screen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: linear-gradient(180deg, #2a2f5a, #1b1f3b);
   color: #fff;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.rotate-screen svg {
+  width: 120px;
+  height: 120px;
+  animation: rotate-hint 2.4s ease-in-out infinite;
+}
+
+.rotate-screen .phone {
+  fill: none;
+  stroke: var(--sun);
+  stroke-width: 3;
+}
+
+.rotate-screen .arrow {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rotate-screen b {
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.rotate-screen span {
   font-weight: 700;
-  font-size: 14px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  white-space: nowrap;
-  pointer-events: none;
+  opacity: 0.8;
+}
+
+@keyframes rotate-hint {
+  0%,
+  30% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-screen {
+    display: flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-screen svg {
+    animation: none;
+  }
 }
 
 /* ---------- Title: garage button ---------- */

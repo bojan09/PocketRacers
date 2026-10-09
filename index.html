@@ -248,7 +248,16 @@
         </div>
       </section>
 
-      <div id="rotate-note" class="rotate-note" hidden>Tip: turn your device sideways for the widest view.</div>
+      <!-- Phones and tablets play in landscape only. -->
+      <div id="rotate-screen" class="rotate-screen" role="alert" aria-live="assertive">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="22" y="8" width="20" height="36" rx="4" class="phone" />
+          <path d="M14 46a22 22 0 0 0 30 8" class="arrow" />
+          <path d="m40 50 5 4-6 3" class="arrow" />
+        </svg>
+        <b>Turn your phone sideways</b>
+        <span>Pocket Racers is played in landscape.</span>
+      </div>
     </div>
   </body>
 </html>
