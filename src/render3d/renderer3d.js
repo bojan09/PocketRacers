@@ -425,7 +425,9 @@ export class Renderer3D {
         // Steady blue-white core glued to the exhaust, every frame.
         this.particles.spawn('flameCore', P[0], P[1], P[2], vx, vy, vz, 0.26, Math.max(0.07, dt * 1.5), 0);
         for (let n = 0; n < 2; n++) {
-          if (chance(90)) this.particles.spawn('flame', P[0], P[1], P[2], vx * 0.78 + (r() - 0.5), vy * 0.78 + r() * 0.5, vz * 0.78 + (r() - 0.5), 0.2 + r() * 0.12, 0.2 + r() * 0.1, 1.6);
+          // Flames keep most of the car's speed so the trail stays short
+          // (about a metre) instead of streaming back toward the camera.
+          if (chance(90)) this.particles.spawn('flame', P[0], P[1], P[2], vx * 0.94 + (r() - 0.5) * 0.6, vy * 0.94 + r() * 0.3, vz * 0.94 + (r() - 0.5) * 0.6, 0.16 + r() * 0.08, 0.1 + r() * 0.06, 0.5);
         }
       }
     }
