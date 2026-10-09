@@ -12,6 +12,16 @@ export const POINTS = {
   jumpMin: 100,
   driftPerSecond: 150,
 };
+// Nitro refills (fraction of a full tank) earned per trick.
+export const NITRO_REFILL = {
+  jumpPerSecond: 0.45,
+  jumpMin: 0.25,
+  star: 0.06,
+  nearMiss: 0.15,
+  smash: 0.05,
+  driftPerSecond: 0.08,
+  boost: 0.2,
+};
 const COMBO_WINDOW = 3; // seconds to chain the next trick
 const MAX_COMBO = 5;
 const PICKUP_DZ_M = 1.8;
@@ -41,6 +51,13 @@ export class FunSystem {
     for (const c of this.cones) c.hitTime = -1;
   }
 
+  refill(amount) {
+    const p = this.session.player;
+    const before = p.nitroFuel;
+    p.nitroFuel = Math.min(1, p.nitroFuel + amount);
+    if (p.nitroFuel > before + 0.001) this.session.emit({ type: 'nitroRefill', amount: p.nitroFuel - before, fuel: p.nitroFuel });
+  }
+
   award(kind, base, label) {
     this.combo = this.comboLeft > 0 ? Math.min(MAX_COMBO, this.combo + 1) : 1;
     this.comboLeft = COMBO_WINDOW;
@@ -66,7 +83,10 @@ export class FunSystem {
     if (!p.airborne && p.speed > 0) {
       for (const b of T.boosts || []) {
         if (wrap(p.z - b.z0, L) < b.z1 - b.z0 && p.x >= b.xa && p.x <= b.xb) {
-          if (p.boostTime < 0.2) S.emit({ type: 'boost' });
+          if (p.boostTime < 0.2) {
+            S.emit({ type: 'boost' });
+            this.refill(NITRO_REFILL.boost);
+          }
           p.boostTime = 1.6;
         }
       }
@@ -81,6 +101,7 @@ export class FunSystem {
       s.taken = true;
       this.stats.stars++;
       this.award('star', POINTS.star, 'STAR');
+      this.refill(NITRO_REFILL.star);
     }
 
     // Cones: knocked flying, a tiny speed loss, points.
@@ -95,6 +116,7 @@ export class FunSystem {
         p.speed *= 0.97;
         this.stats.smash++;
         this.award('smash', POINTS.smash, 'SMASH');
+        this.refill(NITRO_REFILL.smash);
       }
     }
 
@@ -103,10 +125,14 @@ export class FunSystem {
       this.driftTime += dt;
       if (this.driftTime > 3) {
         this.award('drift', POINTS.driftPerSecond * this.driftTime, 'DRIFT');
+        this.refill(NITRO_REFILL.driftPerSecond * this.driftTime);
         this.driftTime = 0;
       }
     } else if (this.driftTime > 0) {
-      if (this.driftTime > 0.6) this.award('drift', POINTS.driftPerSecond * this.driftTime, 'DRIFT');
+      if (this.driftTime > 0.6) {
+        this.award('drift', POINTS.driftPerSecond * this.driftTime, 'DRIFT');
+        this.refill(NITRO_REFILL.driftPerSecond * this.driftTime);
+      }
       this.driftTime = 0;
     }
   }
@@ -116,10 +142,12 @@ export class FunSystem {
     this.stats.jumps++;
     this.stats.bestAir = Math.max(this.stats.bestAir, airTime);
     this.award('jump', Math.max(POINTS.jumpMin, POINTS.jumpPerSecond * airTime), airTime > 1.1 ? 'BIG AIR' : 'JUMP');
+    this.refill(Math.max(NITRO_REFILL.jumpMin, NITRO_REFILL.jumpPerSecond * airTime));
   }
 
   onNearMiss() {
     this.stats.nearMiss++;
     this.award('nearMiss', POINTS.nearMiss, 'CLOSE CALL');
+    this.refill(NITRO_REFILL.nearMiss);
   }
 }

@@ -22,6 +22,7 @@ export class Hud {
       score: document.getElementById('hud-score'),
       combo: document.getElementById('hud-combo'),
       popups: document.getElementById('popups'),
+      nitro: document.querySelector('.ctl-nitro'),
     };
     this.last = {};
     this.toastTimer = 0;
@@ -47,6 +48,12 @@ export class Hud {
       this.el.combo.classList.remove('bump');
       void this.el.combo.offsetWidth;
       this.el.combo.classList.add('bump');
+    }
+    const fuel = Math.round(p.nitroFuel * 50) / 50;
+    if (this.last.fuel !== fuel) {
+      this.last.fuel = fuel;
+      this.el.nitro.style.setProperty('--fuel', String(fuel));
+      this.el.nitro.classList.toggle('empty', fuel <= 0);
     }
     this.set('lap', String(p.lap));
     this.set('time', p.timing ? formatTime(p.lapTime) : '0:00.00');
@@ -85,6 +92,13 @@ export class Hud {
     }
     if (e.type === 'boost') {
       this.popup('BOOST!');
+      return;
+    }
+    if (e.type === 'nitroRefill') {
+      const n = this.el.nitro;
+      n.classList.remove('refill');
+      void n.offsetWidth;
+      n.classList.add('refill');
       return;
     }
     if (e.type === 'lap') {

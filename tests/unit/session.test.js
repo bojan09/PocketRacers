@@ -41,10 +41,19 @@ test('nitro raises top speed and returns smoothly when released', () => {
   assert.ok(boosted - s.player.speed < 100, 'no abrupt drop after nitro ends');
 });
 
-test('nitro is unlimited', () => {
-  const s = newSession();
-  run(s, 60, input({ nitro: true, steer: 0 }));
-  assert.ok(s.player.nitro);
+test('nitro drains while used, stops when empty and refills from tricks', () => {
+  const s = new DrivingSession(straight, car(), { trafficCount: 0 });
+  assert.equal(s.player.nitroFuel, 1, 'starts full');
+  run(s, 2, input({ throttle: 1, nitro: true }));
+  assert.ok(s.player.nitroFuel < 0.7 && s.player.nitroFuel > 0.4, `fuel ${s.player.nitroFuel}`);
+  run(s, 4, input({ throttle: 1, nitro: true }));
+  assert.equal(s.player.nitroFuel, 0);
+  assert.equal(s.player.nitro, false, 'no boost when empty');
+  assert.equal(s.player.nitroEmpty, true);
+  s.fun.onLand(1.2);
+  assert.ok(s.player.nitroFuel > 0.5, `refilled to ${s.player.nitroFuel}`);
+  s.fun.onNearMiss();
+  assert.ok(s.events.some((e) => e.type === 'nitroRefill'));
 });
 
 test('brake stops the car, then holding brake reverses', () => {

@@ -10,6 +10,7 @@ export const SPEED_TO_KMH = 0.015;
 const LANES3 = [-2 / 3, 0, 2 / 3];
 const MAX_EVENTS = 32;
 const GRAVITY = 2600; // sim units / s^2 per unit of slope (arcade-scaled)
+export const NITRO_DRAIN = 0.22; // a full tank lasts ~4.5 s of boosting
 
 export class DrivingSession {
   constructor(track, car, { trafficCount = track.def.trafficCount ?? 0, seed = 7 } = {}) {
@@ -60,6 +61,8 @@ export class DrivingSession {
       onRamp: null,
       rampPitch: 0,
       boostTime: 0,
+      // Nitro tank (0..1): starts full, drains while boosting, refilled by tricks.
+      nitroFuel: 1,
     };
     this.traffic = [];
     const max = this.car.handling.maxSpeed;
@@ -119,8 +122,11 @@ export class DrivingSession {
     // --- Longitudinal ---------------------------------------------------
     p.offroad = Math.abs(p.x) > 1;
     const brake = clamp(input.brake, 0, 1);
-    const nitro = (input.nitro || p.boostTime > 0) && brake === 0 && p.speed >= 0;
+    const padBoost = p.boostTime > 0;
+    const nitro = ((input.nitro && p.nitroFuel > 0) || padBoost) && brake === 0 && p.speed >= 0;
     p.nitro = nitro;
+    p.nitroEmpty = input.nitro && p.nitroFuel <= 0 && !padBoost;
+    if (nitro && !padBoost) p.nitroFuel = Math.max(0, p.nitroFuel - NITRO_DRAIN * dt);
     const throttle = nitro ? 1 : clamp(input.throttle, 0, 1);
     let top = h.maxSpeed * (nitro ? h.nitroTop : 1);
     if (p.offroad) top = Math.min(top, h.maxSpeed * h.offroadTop * (nitro ? 1.25 : 1));

@@ -4,6 +4,17 @@
 
 const FLOATS = 9; // pos3, rgba4, uv2
 const MAX = 420;
+const RIBBON_MAX = 48; // trail samples
+// Rainbow bands, left to right across the trail.
+const RAINBOW = [
+  [1, 0.23, 0.28],
+  [1, 0.6, 0.12],
+  [1, 0.88, 0.3],
+  [0.24, 0.86, 0.52],
+  [0.24, 0.55, 1],
+  [0.64, 0.38, 1],
+];
+export const RIBBON_SAMPLES = RIBBON_MAX;
 // Two triangles per billboard: corner sign x, sign y, u, v.
 const CORNERS = [-1, -1, 0, 0, 1, -1, 1, 0, 1, 1, 1, 1, -1, -1, 0, 0, 1, 1, 1, 1, -1, 1, 0, 1];
 
@@ -29,6 +40,8 @@ export class Particles {
     this.addData = new Float32Array(MAX * 6 * FLOATS);
     this.alphaCount = 0;
     this.addCount = 0;
+    this.ribbonData = new Float32Array(RIBBON_MAX * RAINBOW.length * 6 * FLOATS);
+    this.ribbonCount = 0;
     this.quality = 1;
     this.next = 0;
   }
@@ -121,6 +134,46 @@ export class Particles {
     }
     this.alphaCount = ai / FLOATS;
     this.addCount = di / FLOATS;
+  }
+
+  /**
+   * Rainbow nitro trail: a flat ribbon through recent rear-of-car samples
+   * ({x, y, z, rx, ry, rz, t}), fading with age.
+   */
+  buildRibbon(samples, now, life, halfWidth) {
+    const D = this.ribbonData;
+    let i = 0;
+    const bands = RAINBOW.length;
+    for (let k = 0; k < samples.length - 1; k++) {
+      const a = samples[k];
+      const b = samples[k + 1];
+      const fa = Math.max(0, 1 - (now - a.t) / life);
+      const fb = Math.max(0, 1 - (now - b.t) / life);
+      if (fa <= 0 && fb <= 0) continue;
+      for (let q = 0; q < bands; q++) {
+        const u0 = -1 + (2 * q) / bands;
+        const u1 = -1 + (2 * (q + 1)) / bands;
+        const c = RAINBOW[q];
+        const corner = (s, u, f) => {
+          D[i++] = s.x + s.rx * u * halfWidth;
+          D[i++] = s.y + s.ry * u * halfWidth;
+          D[i++] = s.z + s.rz * u * halfWidth;
+          D[i++] = c[0];
+          D[i++] = c[1];
+          D[i++] = c[2];
+          D[i++] = 0.9 * f * f;
+          D[i++] = 0.5;
+          D[i++] = 0.5;
+        };
+        corner(a, u0, fa);
+        corner(b, u0, fb);
+        corner(b, u1, fb);
+        corner(a, u0, fa);
+        corner(b, u1, fb);
+        corner(a, u1, fa);
+      }
+    }
+    this.ribbonCount = i / FLOATS;
   }
 
   clear() {

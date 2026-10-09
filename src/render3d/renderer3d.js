@@ -30,7 +30,9 @@ import { buildTrackChunks } from './trackMesh.js';
 import { buildMountains, buildCloudPuffs } from './environment.js';
 import { buildCarBody, buildWheel } from './carModel.js';
 import { windmillSails, starModel, MODEL_BUILDERS } from './models.js';
-import { Particles, FX_FLOATS } from './particles.js';
+import { Particles, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
+
+const TRAIL_LIFE = 0.5; // seconds a rainbow sample stays visible
 
 const QUALITY = {
   high: { dprCap: 2, fogScale: 1, particles: 1, clouds: true, shadow: 2048, shadowRange: 36, shadowSoft: 1 },
@@ -112,6 +114,11 @@ export class Renderer3D {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.fxBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.particles.alphaData.byteLength, gl.DYNAMIC_DRAW);
     this.shadows = [];
+    this.trail = Array.from({ length: RIBBON_SAMPLES }, () => ({ x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, t: -1 }));
+    this.trailCount = 0;
+    this.ribbonBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.ribbonBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.particles.ribbonData.byteLength, gl.DYNAMIC_DRAW);
 
     // --- Scratch ------------------------------------------------------------
     this.view = mat4.create();
@@ -679,16 +686,17 @@ export class Renderer3D {
         this.particles.spawn('boost', P[0], P[1], P[2], vx * 0.6, 0.4, vz * 0.6, 0.18, 0.25, 0.8);
       }
     }
+    this.updateTrail(p.nitro, carM, anchors);
     if (p.nitro) {
       for (const e of anchors.exhausts) {
         transformPoint(P, carM, e);
-        // Steady blue-white core glued to the exhaust, every frame.
-        this.particles.spawn('flameCore', P[0], P[1], P[2], vx, vy, vz, 0.26, Math.max(0.07, dt * 1.5), 0);
-        for (let n = 0; n < 2; n++) {
-          // Flames keep most of the car's speed so the trail stays short
-          // (about a metre) instead of streaming back toward the camera.
-          if (chance(90)) this.particles.spawn('flame', P[0], P[1], P[2], vx * 0.94 + (r() - 0.5) * 0.6, vy * 0.94 + r() * 0.3, vz * 0.94 + (r() - 0.5) * 0.6, 0.16 + r() * 0.08, 0.1 + r() * 0.06, 0.5);
-        }
+        // Bright white-blue core glued to each exhaust.
+        this.particles.spawn('flameCore', P[0], P[1], P[2], vx, vy, vz, 0.24, Math.max(0.07, dt * 1.5), 0);
+      }
+      // Glittering sparkles shed along the rainbow.
+      if (chance(25)) {
+        transformPoint(P, carM, [(r() - 0.5) * 1.6, 0.4, anchors.rearZ + 1.5 + r() * 4]);
+        this.particles.spawn('sparkle', P[0], P[1], P[2], (r() - 0.5) * 2, 1 + r() * 2, (r() - 0.5) * 2, 0.09, 0.5);
       }
     }
     const rear = anchors.wheels.slice(2);
@@ -712,10 +720,39 @@ export class Renderer3D {
     void inTunnel;
   }
 
+  /** Record rear-of-car samples while boosting; old ones fade out. */
+  updateTrail(active, carM, anchors) {
+    const now = this.time;
+    const tr = this.trail;
+    // Drop expired samples from the tail.
+    while (this.trailCount > 0 && now - tr[this.trailCount - 1].t > TRAIL_LIFE) this.trailCount--;
+    if (!active) return;
+    const last = this.trailCount > 0 ? tr[0] : null;
+    if (last && now - last.t < 0.012) return;
+    // Shift and insert the newest sample at the front.
+    const n = Math.min(this.trailCount + 1, tr.length);
+    const recycled = tr[n - 1];
+    for (let k = n - 1; k > 0; k--) tr[k] = tr[k - 1];
+    tr[0] = recycled;
+    const P = this.p3;
+    transformPoint(P, carM, [0, 0.42, anchors.rearZ + 0.15]);
+    recycled.x = P[0];
+    recycled.y = P[1];
+    recycled.z = P[2];
+    const l = Math.hypot(carM[0], carM[1], carM[2]) || 1;
+    recycled.rx = carM[0] / l;
+    recycled.ry = carM[1] / l;
+    recycled.rz = carM[2] / l;
+    recycled.t = now;
+    this.trailCount = n;
+  }
+
   drawFx() {
     const gl = this.gl;
     const P = this.particles;
-    if (!P.alphaCount && !P.addCount) return;
+    // While boosting, the newest trail point follows the car exactly.
+    P.buildRibbon(this.trail.slice(0, this.trailCount), this.time, TRAIL_LIFE, 0.85);
+    if (!P.alphaCount && !P.addCount && !P.ribbonCount) return;
     gl.useProgram(this.fx.program);
     this.useAttribs(3);
     gl.uniformMatrix4fv(this.fx.uniforms.uViewProj, false, this.viewProj);
@@ -736,6 +773,14 @@ export class Renderer3D {
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, P.alphaData.subarray(0, P.alphaCount * FX_FLOATS));
       bindFx();
       gl.drawArrays(gl.TRIANGLES, 0, P.alphaCount);
+    }
+    if (P.ribbonCount) {
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.ribbonBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, P.ribbonData.subarray(0, P.ribbonCount * FX_FLOATS));
+      bindFx();
+      gl.drawArrays(gl.TRIANGLES, 0, P.ribbonCount);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.fxBuffer);
     }
     if (P.addCount) {
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
