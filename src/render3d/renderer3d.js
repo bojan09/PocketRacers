@@ -394,7 +394,7 @@ export class Renderer3D {
     pd.meshes = this.player;
     pd.m.set(carM);
     pd.spin = this.wheelSpin;
-    pd.steer = p.steer * 0.42;
+    pd.steer = p.steer * this.player.anchors.maxSteer;
     pd.brake = p.braking || p.speed < -10;
     // A soft contact shadow under every car, darker when real shadows are off.
     const shadowFade = 1 / (1 + air * 0.6);
@@ -564,7 +564,7 @@ export class Renderer3D {
     pd.meshes = this.player;
     pd.m.set(carM);
     pd.spin = 0;
-    pd.steer = 0.25;
+    pd.steer = Math.min(0.25, this.player.anchors.maxSteer);
     pd.brake = false;
     this.carDrawCount = 1;
 

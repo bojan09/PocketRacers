@@ -6,6 +6,8 @@ import { ENGINE_PROFILES, Gearbox } from '../../src/audio/engine.js';
 import { buildCarBody, buildWheel } from '../../src/render3d/carModel.js';
 import { Garage, sanitizeGarage, freshGarage } from '../../src/core/garage.js';
 import { Progress } from '../../src/core/progress.js';
+import { TRAFFIC_MODELS, TRAFFIC_PAINTS } from '../../src/data/cars.js';
+import { tyreIntersections } from './wheelClearance.js';
 import { buildTrack3D } from '../../src/world/track3d.js';
 import testTrack from '../../src/data/tracks/testTrack.js';
 import { DrivingSession } from '../../src/sim/session.js';
@@ -33,7 +35,7 @@ test('every vehicle builds a sane model with every livery and rim', () => {
       const def = makeVehicle(v.id, { livery, rimStyle: 'steel', ride: 'max' });
       const { body, anchors } = buildCarBody(def.model, def.paint);
       const wheel = buildWheel(def.model, def.paint);
-      assert.ok(body.vertexCount > 300 && body.vertexCount < 9000, `${v.id} tris ${body.vertexCount / 3}`);
+      assert.ok(body.vertexCount > 300 && body.vertexCount < 30000, `${v.id} tris ${body.vertexCount / 3}`);
       assert.ok(wheel.vertexCount > 100);
       assert.ok(!body.array().some(Number.isNaN), `${v.id} NaN`);
       const b = body.bounds();
@@ -45,7 +47,22 @@ test('every vehicle builds a sane model with every livery and rim', () => {
     }
     // Fits on the road with room to overtake.
     const def = makeVehicle(v.id);
-    assert.ok(def.widthWorld / 2 / track.roadHalfWidth < 0.22, `${v.id} too wide`);
+    assert.ok(def.widthWorld / 2 / track.roadHalfWidth < 0.24, `${v.id} too wide`);
+  }
+});
+
+test('tyres never intersect the body, parts or wheel arches (any ride height, full steering)', () => {
+  for (const v of VEHICLES) {
+    for (const ride of ['low', 'stock', 'lifted', 'max']) {
+      const def = makeVehicle(v.id, { ride, livery: 'racing' });
+      const { body, anchors } = buildCarBody(def.model, def.paint);
+      const hits = tyreIntersections(def.model, body, anchors);
+      assert.equal(hits.length, 0, `${v.id} (${ride}): ${JSON.stringify(hits.slice(0, 2))}`);
+    }
+  }
+  for (const [id, model] of Object.entries(TRAFFIC_MODELS)) {
+    const { body, anchors } = buildCarBody(model, TRAFFIC_PAINTS[0]);
+    assert.equal(tyreIntersections(model, body, anchors).length, 0, `traffic ${id}`);
   }
 });
 

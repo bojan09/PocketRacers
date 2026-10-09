@@ -92,7 +92,7 @@ export const FAMILIES = {
         // Shark fin, front splitter and side intakes.
         { box: [0, 0.92, 1.55, 0.012, 0.16, 0.6], paint: 'body', top: 0.6 },
         { box: [0, 0.11, -2.3, 0.96, 0.015, 0.14], paint: 'dark' },
-        { box: [0.97, 0.42, 0.75, 0.035, 0.12, 0.35], paint: 'dark', mirror: true },
+        { box: [0.97, 0.42, 0.55, 0.035, 0.12, 0.3], paint: 'dark', mirror: true },
       ],
       wheels: wheels4(0.86, -1.55, 1.45, 0.36, 0.32, { rimStyle: 'star' }),
     }),
@@ -232,8 +232,6 @@ export const FAMILIES = {
         { cyl: [0, 1.0, 2.2, 0.38, 0.12, 'z'], paint: 'tire', cap: 'rim', sides: 16 },
         { box: [0, 0.72, -2.16, 0.72, 0.05, 0.04], paint: 'dark' },
         { box: [0.42, 0.86, -2.15, 0.04, 0.2, 0.04], paint: 'dark', mirror: true },
-        { box: [0.97, 0.95, -1.35, 0.08, 0.035, 0.5], paint: 'dark', mirror: true },
-        { box: [0.97, 0.95, 1.3, 0.08, 0.035, 0.5], paint: 'dark', mirror: true },
         { box: [0.95, 0.5, 0, 0.07, 0.025, 0.8], paint: 'dark', mirror: true },
         ...(o.lightBar
           ? lightBar(2.04, -0.35, 0.62)
@@ -316,7 +314,6 @@ export const FAMILIES = {
         ...pickupBed(0.72, 2.52, 1.14, 0.97),
         { box: [0, 0.52, -2.58, 0.9, 0.08, 0.06], paint: 'chrome' },
         ...(o.lightBar ? lightBar(1.83, -0.35, 0.7) : []),
-        ...(o.lifted ? [{ box: [0.99, 1.0, -1.65, 0.07, 0.04, 0.55], paint: 'dark', mirror: true }, { box: [0.99, 1.0, 1.55, 0.07, 0.04, 0.55], paint: 'dark', mirror: true }] : []),
       ],
       trailY: 0.85,
       wheels: o.lifted
@@ -338,8 +335,8 @@ export const FAMILIES = {
       const parts = [
         // Chassis rails, axles, springs and shocks.
         { box: [0.5, 1.05, 0, 0.07, 0.09, 2.0], paint: 'dark', mirror: true },
-        { cyl: [0, 0.85, -1.45, 0.1, 1.22, 'x'], paint: 'dark' },
-        { cyl: [0, 0.85, 1.5, 0.1, 1.22, 'x'], paint: 'dark' },
+        { cyl: [0, 0.85, -1.45, 0.1, 1.05, 'x'], paint: 'dark' },
+        { cyl: [0, 0.85, 1.5, 0.1, 1.05, 'x'], paint: 'dark' },
         ...pickupBed(0.62, 2.17, 1.14 + lift, 0.93),
         ...lightBar(1.8 + lift, -0.3, 0.65),
         { box: [0, 1.5, -2.25, 0.85, 0.08, 0.06], paint: 'chrome' },
@@ -364,7 +361,7 @@ export const FAMILIES = {
           [0.45, 1.5, 2.3],
         ],
         trailY: 1.6,
-        wheels: wheels4(1.3, -1.45, 1.5, 0.85, 0.7, { rimStyle: 'steel', tread: 'offroad' }),
+        wheels: wheels4(1.45, -1.45, 1.5, 0.85, 0.7, { rimStyle: 'steel', tread: 'offroad', maxSteer: 0.25 }),
       };
     },
   },
