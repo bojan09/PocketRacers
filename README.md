@@ -41,8 +41,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > Tropical Coast (islands, sea to the horizon, palms). Map picker for free
 > drive; 12 career events spread across all maps.
 >
-> Next: 2H full 50-vehicle roster & deep customisation · 3 offline,
-> achievements, performance pass.
+> **Phase 2H — full roster & deep customisation:** 53 vehicles (formula
+> racers, prototypes, wedge supercars, muscle, hot hatches, open-top jeeps,
+> luxury SUVs, lifted pickups, monster trucks with car/SUV/hatch bodies, box,
+> tanker, tipper and flatbed trucks). Body kits (spoilers, GT wings,
+> splitters, skirts, scoops/blowers, light bars, bull bars), 7 liveries,
+> window tints, neon underglow, and 4 performance upgrades × 5 levels.
+>
+> Next: 3 offline install, achievements, performance pass.
 
 ## Run locally
 

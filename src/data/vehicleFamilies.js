@@ -57,6 +57,187 @@ function lightBar(y, z, hw) {
   return parts;
 }
 
+/** Open-wheel formula racer: narrow body, sidepods, exposed wheels, two wings. */
+function formulaCar() {
+  const pod = (x) => ({
+    x,
+    stations: [
+      [-0.45, 0.14, 0.16, 0.46, 3],
+      [-0.1, 0.22, 0.14, 0.56, 5],
+      [0.7, 0.21, 0.15, 0.54, 5],
+      [1.05, 0.12, 0.18, 0.42, 3],
+    ],
+  });
+  return {
+    body: [
+      [-2.55, 0.16, 0.13, 0.28, 3],
+      [-2.25, 0.24, 0.12, 0.35, 3.5],
+      [-1.4, 0.32, 0.12, 0.45, 4],
+      [-0.6, 0.4, 0.12, 0.6, 4],
+      [0.3, 0.44, 0.12, 0.66, 4],
+      [1.2, 0.38, 0.14, 0.62, 4],
+      [2.0, 0.28, 0.16, 0.5, 3.5],
+      [2.35, 0.2, 0.2, 0.42, 3],
+    ],
+    lofts: [pod(0.52), pod(-0.52)],
+    cabin: [
+      [-0.55, 0.3, 0.26, 0.58, 0.6],
+      [-0.25, 0.3, 0.24, 0.6, 0.82],
+      [0.25, 0.3, 0.22, 0.62, 0.88],
+      [0.4, 0.3, 0.22, 0.62, 0.88],
+      [0.75, 0.3, 0.22, 0.62, 0.82],
+      [1.15, 0.28, 0.2, 0.6, 0.66],
+    ],
+    cabinStrips: ['wind', 'side', 'solid', 'solid', 'solid'],
+    mirrors: false,
+    stripeHalf: 0.12,
+    arches: false,
+    grille: false,
+    rearKit: false,
+    lights: { fy: 0.24, fx: 0.12, fw: 0.05, ry: 0.4, rx: 0.12, rearBar: false },
+    spoiler: { z: 2.2, y: 0.98, w: 0.72, d: 0.3, post: 0.2, plate: 0.16 },
+    parts: [
+      // Front wing with end plates, suspension arms.
+      { box: [0, 0.13, -2.45, 0.96, 0.02, 0.18], paint: 'accent' },
+      { box: [0.95, 0.19, -2.45, 0.015, 0.08, 0.2], paint: 'accent', mirror: true },
+      { box: [0.43, 0.36, -1.75, 0.15, 0.015, 0.03], paint: 'dark', mirror: true },
+      { box: [0.43, 0.36, 1.55, 0.15, 0.015, 0.03], paint: 'dark', mirror: true },
+    ],
+    exhausts: [[0, 0.36, 2.4]],
+    trailY: 0.4,
+    wheels: wheels4(0.84, -1.75, 1.55, 0.36, 0.36, { rimStyle: 'star' }),
+  };
+}
+
+/** Low wedge supercar: sharp nose, cab-forward glasshouse, big wing. */
+function wedgeCar() {
+  return {
+    body: [
+      [-2.3, 0.74, 0.24, 0.42, 3],
+      [-2.18, 0.9, 0.2, 0.5, 4],
+      [-1.6, 0.96, 0.2, 0.62, 5],
+      [-0.8, 0.98, 0.2, 0.72, 5],
+      [0.3, 0.99, 0.2, 0.8, 5],
+      [1.2, 1.0, 0.22, 0.84, 5],
+      [1.9, 0.98, 0.24, 0.84, 5],
+      [2.25, 0.88, 0.3, 0.8, 4],
+    ],
+    cabin: [
+      [-1.0, 0.76, 0.7, 0.7, 0.72],
+      [-0.2, 0.76, 0.56, 0.74, 1.12],
+      [0.35, 0.77, 0.58, 0.78, 1.14],
+      [0.47, 0.77, 0.58, 0.78, 1.14],
+      [1.0, 0.77, 0.56, 0.8, 1.06],
+      [1.8, 0.78, 0.66, 0.84, 0.86],
+    ],
+    bPillar: 2,
+    stripeHalf: 0.18,
+    spoiler: { z: 2.0, y: 1.0, w: 0.88, d: 0.2 },
+    wheels: wheels4(0.86, -1.4, 1.36, 0.34, 0.29, { rimStyle: 'spokes' }),
+  };
+}
+
+/**
+ * Monster truck: any family's body (pickup, muscle car, SUV, hatch, jeep)
+ * lifted onto a monster chassis with giant wheels.
+ */
+function monsterTruck(bodyFamily) {
+  const src = FAMILIES[bodyFamily].build();
+  const zMax = Math.max(...src.body.map((st) => Math.abs(st[0])));
+  const sz = 2.25 / zMax;
+  const hwMax = Math.max(...src.body.map((st) => st[1]));
+  const sx = Math.min(0.96, 0.95 / hwMax);
+  const yb = Math.min(...src.body.map((st) => st[2]));
+  const lift = 1.38 - yb;
+  const up = (st) => st.map(([z, hw, b, t, n]) => [z * sz, hw * sx, b + lift, t + lift, n]);
+  const upC = (st) => st.map(([z, a, b, y0, y1]) => [z * sz, a * sx, b * sx, y0 + lift, y1 + lift]);
+  const cabin = src.cabin && upC(src.cabin);
+  const roof = cabin ? Math.max(...cabin.map((c) => c[4])) : Math.max(...src.body.map((st) => st[3])) + lift;
+  const roofZ = cabin ? cabin[1][0] + 0.15 : 0;
+  const parts = [
+    // Chassis rails, axles, springs and shocks.
+    { box: [0.5, 1.05, 0, 0.07, 0.09, 2.0], paint: 'dark', mirror: true },
+    { cyl: [0, 0.85, -1.45, 0.1, 1.05, 'x'], paint: 'dark' },
+    { cyl: [0, 0.85, 1.5, 0.1, 1.05, 'x'], paint: 'dark' },
+    ...lightBar(roof + 0.05, roofZ, 0.6),
+    { box: [0, 1.5, -2.3, 0.85, 0.08, 0.06], paint: 'chrome' },
+  ];
+  if (bodyFamily === 'pickup') parts.push(...pickupBed(0.62, 2.17, 1.14 + lift - 0.45 + 0.45, 0.93));
+  for (const z of [-1.45, 1.5]) {
+    for (const dz of [-0.32, 0.32]) {
+      parts.push({ cyl: [0.62, 1.2, z + dz, 0.09, 0.32, 'y'], paint: 'accent', mirror: true, sides: 10 });
+      parts.push({ cyl: [0.62, 1.2, z + dz, 0.04, 0.4, 'y'], paint: 'chrome', mirror: true, sides: 8 });
+    }
+  }
+  return {
+    body: up(src.body),
+    cabin,
+    cabinShape: src.cabinShape,
+    cabinStrips: src.cabinStrips,
+    bPillar: src.bPillar,
+    stripeHalf: 0.22,
+    arches: false,
+    parts,
+    spoiler: src.spoiler && src.spoiler.type === 'lip' ? { ...src.spoiler, z: src.spoiler.z * sz, y: src.spoiler.y + lift, w: src.spoiler.w * sx } : undefined,
+    exhausts: [
+      [-0.45, 1.5, 2.3],
+      [0.45, 1.5, 2.3],
+    ],
+    trailY: 1.6,
+    height: roof + 0.1,
+    wheels: wheels4(1.45, -1.45, 1.5, 0.85, 0.7, { rimStyle: 'steel', tread: 'offroad', maxSteer: 0.25 }),
+  };
+}
+
+/** What a cab-over truck carries: box, tanker, tipper or flatbed. */
+function truckCargo(kind) {
+  if (kind === 'tanker') {
+    return [
+      { cyl: [0, 2.35, 1.15, 1.15, 2.95, 'z'], paint: 'accent', mat: 'chrome', sides: 18 },
+      { cyl: [0, 2.35, 1.15, 1.17, 0.18, 'z'], paint: 'stripe', sides: 18 },
+      { cyl: [0, 2.35, -0.9, 1.17, 0.06, 'z'], paint: 'stripe', sides: 18 },
+      { cyl: [0, 2.35, 3.2, 1.17, 0.06, 'z'], paint: 'stripe', sides: 18 },
+      ...[-0.8, 1.15, 3.1].map((z) => ({ box: [0, 1.3, z, 0.95, 0.12, 0.22], paint: 'dark' })),
+      { box: [0.45, 2.2, 4.12, 0.03, 0.9, 0.03], paint: 'chrome' },
+    ];
+  }
+  if (kind === 'tipper') {
+    return [
+      { box: [0, 1.32, 1.15, 1.25, 0.08, 3.0], paint: 'trim' },
+      { box: [1.2, 2.0, 1.15, 0.06, 0.62, 3.0], paint: 'accent', mirror: true },
+      { box: [0, 2.15, -1.85, 1.26, 0.78, 0.07], paint: 'accent' },
+      { box: [0, 2.0, 4.12, 1.26, 0.62, 0.06], paint: 'accent' },
+      { box: [0, 1.42, 1.15, 1.13, 0.02, 2.93], paint: 'dark' },
+      { sphere: [0, 2.0, 1.25, 1.02, 0.55, 2.5], paint: [0.62, 0.5, 0.38] },
+      { box: [0, 2.0, 1.15, 1.262, 0.06, 2.9], paint: 'stripe' },
+    ];
+  }
+  if (kind === 'flatbed') {
+    const crates = [
+      [-0.55, -1.0, '#ff8c42'],
+      [0.55, -0.9, '#4cc9f0'],
+      [0, 0.6, '#ffd23f'],
+      [-0.5, 2.0, '#8ac926'],
+      [0.55, 2.2, '#c77dff'],
+      [0, 3.3, '#ff4d5e'],
+    ];
+    return [
+      { box: [0, 1.35, 1.15, 1.25, 0.1, 3.0], paint: 'trim' },
+      { box: [1.2, 1.38, 1.15, 0.05, 0.12, 3.0], paint: 'accent', mirror: true },
+      ...[-1.6, 0, 1.6, 3.2].map((z) => ({ box: [1.2, 1.75, z + 0.3, 0.04, 0.32, 0.04], paint: 'dark', mirror: true })),
+      ...crates.map(([x, z, c]) => ({ box: [x, 1.9, z, 0.5, 0.45, 0.55], paint: hexRgb(c), mat: 'paint' })),
+    ];
+  }
+  return [
+    { box: [0, 2.43, 1.15, 1.27, 1.27, 3.1], paint: 'accent', mat: 'paint' },
+    { box: [0, 1.72, 1.15, 1.278, 0.13, 3.06], paint: 'stripe' },
+    { box: [0, 2.43, 4.256, 0.012, 1.2, 0.004], paint: 'dark' },
+    { box: [0.3, 2.2, 4.26, 0.02, 0.5, 0.01], paint: 'chrome', mirror: true },
+  ];
+}
+
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+
 export const FAMILIES = {
   // ------------------------------------------------------------------ race
   race: {
@@ -64,7 +245,7 @@ export const FAMILIES = {
     engine: 'v10',
     camera: 1,
     handling: { maxSpeed: 14000, accel: 6200, grip: 12, steerSpeed: 2.5, centrifugal: 0.3, nitroTop: 1.4, offroadTop: 0.35, offroadGrip: 0.45 },
-    build: (o = {}) => ({
+    build: (o = {}) => (o.formula ? formulaCar(o) : {
       body: [
         [-2.4, 0.74, 0.12, 0.3, 2.5],
         [-2.25, 0.93, 0.1, 0.4, 3],
@@ -104,7 +285,7 @@ export const FAMILIES = {
     engine: 'flat6',
     camera: 1,
     handling: { maxSpeed: 13000, accel: 5600 },
-    build: (o = {}) => ({
+    build: (o = {}) => (o.wedge ? wedgeCar(o) : {
       body: [
         [-2.22, 0.7, 0.3, 0.56, 3],
         [-2.12, 0.86, 0.24, 0.64, 4],
@@ -216,15 +397,21 @@ export const FAMILIES = {
         [1.92, 0.93, 0.55, 1.24, 8],
         [2.05, 0.88, 0.58, 1.2, 7],
       ],
-      cabin: [
-        [-0.75, 0.86, 0.84, 1.22, 1.24],
-        [-0.48, 0.86, 0.8, 1.24, 1.95],
-        [0.35, 0.87, 0.8, 1.24, 1.97],
-        [0.47, 0.87, 0.8, 1.24, 1.97],
-        [1.86, 0.88, 0.8, 1.24, 1.97],
-        [2.0, 0.88, 0.82, 1.24, 1.93],
-      ],
+      cabin: o.open
+        ? [
+            [-0.75, 0.86, 0.84, 1.22, 1.24],
+            [-0.55, 0.86, 0.82, 1.24, 1.72],
+          ]
+        : [
+            [-0.75, 0.86, 0.84, 1.22, 1.24],
+            [-0.48, 0.86, 0.8, 1.24, 1.95],
+            [0.35, 0.87, 0.8, 1.24, 1.97],
+            [0.47, 0.87, 0.8, 1.24, 1.97],
+            [1.86, 0.88, 0.8, 1.24, 1.97],
+            [2.0, 0.88, 0.82, 1.24, 1.93],
+          ],
       cabinShape: [0.35, 0.3],
+      cabinStrips: o.open ? ['wind'] : undefined,
       bPillar: 2,
       stripeHalf: 0.2,
       parts: [
@@ -233,12 +420,23 @@ export const FAMILIES = {
         { box: [0, 0.72, -2.16, 0.72, 0.05, 0.04], paint: 'dark' },
         { box: [0.42, 0.86, -2.15, 0.04, 0.2, 0.04], paint: 'dark', mirror: true },
         { box: [0.95, 0.5, 0, 0.07, 0.025, 0.8], paint: 'dark', mirror: true },
-        ...(o.lightBar
-          ? lightBar(2.04, -0.35, 0.62)
-          : [
-              { box: [0, 2.04, 0.7, 0.66, 0.02, 0.85], paint: 'dark' },
-              { box: [0.62, 2.0, 0.7, 0.03, 0.04, 0.8], paint: 'dark', mirror: true },
-            ]),
+        ...(o.open
+          ? [
+              // Roll bar and two seats in the open tub.
+              { box: [0.76, 1.62, 0.55, 0.045, 0.38, 0.045], paint: 'dark', mirror: true },
+              { box: [0, 1.98, 0.55, 0.8, 0.045, 0.045], paint: 'dark' },
+              { box: [0.76, 1.62, 1.5, 0.045, 0.38, 0.045], paint: 'dark', mirror: true },
+              { box: [0.76, 1.98, 1.02, 0.045, 0.045, 0.5], paint: 'dark', mirror: true },
+              { box: [0.38, 1.42, 0.1, 0.26, 0.18, 0.24], paint: 'trim', mirror: true },
+              { box: [0.38, 1.7, 0.3, 0.26, 0.28, 0.06], paint: 'trim', mirror: true },
+              ...(o.lightBar ? lightBar(2.06, 0.55, 0.62) : []),
+            ]
+          : o.lightBar
+            ? lightBar(2.04, -0.35, 0.62)
+            : [
+                { box: [0, 2.04, 0.7, 0.66, 0.02, 0.85], paint: 'dark' },
+                { box: [0.62, 2.0, 0.7, 0.03, 0.04, 0.8], paint: 'dark', mirror: true },
+              ]),
       ],
       exhausts: [[0.5, 0.55, 2.1]],
       trailY: 0.9,
@@ -252,7 +450,7 @@ export const FAMILIES = {
     engine: 'v6',
     camera: 1.1,
     handling: { maxSpeed: 11400, accel: 4800, grip: 9, steerSpeed: 2.15, centrifugal: 0.3, offroadTop: 0.7, offroadGrip: 0.8, offroadDecel: 6000 },
-    build: () => ({
+    build: (o = {}) => ({
       body: [
         [-2.35, 0.82, 0.45, 0.8, 3.5],
         [-2.25, 0.95, 0.42, 0.95, 5],
@@ -278,6 +476,13 @@ export const FAMILIES = {
         { box: [0.6, 1.7, -0.4, 0.035, 0.03, 0.06], paint: 'dark', mirror: true },
         { box: [0.6, 1.7, 1.5, 0.035, 0.03, 0.06], paint: 'dark', mirror: true },
         { box: [0, 0.5, -2.32, 0.6, 0.06, 0.05], paint: 'chrome' },
+        ...(o.lux
+          ? [
+              // Big chrome grille and chrome side strips.
+              { box: [0, 0.74, -2.36, 0.5, 0.13, 0.02], paint: 'chrome' },
+              { box: [0.985, 0.72, 0, 0.012, 0.03, 0.45], paint: 'chrome', mirror: true },
+            ]
+          : []),
       ],
       trailY: 0.7,
       wheels: wheels4(0.86, -1.45, 1.45, 0.4, 0.3, { rimStyle: 'spokes' }),
@@ -328,42 +533,7 @@ export const FAMILIES = {
     engine: 'monster',
     camera: 1.3,
     handling: { maxSpeed: 10800, accel: 5400, grip: 7.5, steerSpeed: 2.05, centrifugal: 0.3, offroadTop: 0.92, offroadGrip: 1, offroadDecel: 3500, jumpBoost: 1.3 },
-    build: () => {
-      const lift = 0.95;
-      const up = (s) => s.map(([z, hw, yb, yt, n]) => [z * 0.86, hw * 0.96, yb + lift, yt + lift, n]);
-      const upC = (s) => s.map(([z, a, b, yb, yt]) => [z * 0.86, a * 0.96, b * 0.96, yb + lift, yt + lift]);
-      const parts = [
-        // Chassis rails, axles, springs and shocks.
-        { box: [0.5, 1.05, 0, 0.07, 0.09, 2.0], paint: 'dark', mirror: true },
-        { cyl: [0, 0.85, -1.45, 0.1, 1.05, 'x'], paint: 'dark' },
-        { cyl: [0, 0.85, 1.5, 0.1, 1.05, 'x'], paint: 'dark' },
-        ...pickupBed(0.62, 2.17, 1.14 + lift, 0.93),
-        ...lightBar(1.8 + lift, -0.3, 0.65),
-        { box: [0, 1.5, -2.25, 0.85, 0.08, 0.06], paint: 'chrome' },
-      ];
-      for (const z of [-1.45, 1.5]) {
-        for (const dz of [-0.32, 0.32]) {
-          parts.push({ cyl: [0.62, 1.2, z + dz, 0.09, 0.32, 'y'], paint: 'accent', mirror: true, sides: 10 });
-          parts.push({ cyl: [0.62, 1.2, z + dz, 0.04, 0.4, 'y'], paint: 'chrome', mirror: true, sides: 8 });
-        }
-      }
-      const pickup = FAMILIES.pickup.build();
-      return {
-        body: up(pickup.body),
-        cabin: upC(pickup.cabin),
-        cabinShape: pickup.cabinShape,
-        cabinStrips: pickup.cabinStrips,
-        stripeHalf: 0.22,
-        arches: false,
-        parts,
-        exhausts: [
-          [-0.45, 1.5, 2.3],
-          [0.45, 1.5, 2.3],
-        ],
-        trailY: 1.6,
-        wheels: wheels4(1.45, -1.45, 1.5, 0.85, 0.7, { rimStyle: 'steel', tread: 'offroad', maxSteer: 0.25 }),
-      };
-    },
+    build: (o = {}) => monsterTruck(o.body || 'pickup'),
   },
 
   // ----------------------------------------------------------------- truck
@@ -372,18 +542,14 @@ export const FAMILIES = {
     engine: 'diesel',
     camera: 1.55,
     handling: { maxSpeed: 10000, accel: 3400, brake: 11000, grip: 7, steerSpeed: 1.75, steerRamp: 3.8, centrifugal: 0.24, nitroAccel: 2.3, nitroTop: 1.35, offroadTop: 0.5 },
-    build: () => {
+    build: (o = {}) => {
       const parts = [
         // Bumper, grille bars, sun visor, roof deflector.
         { box: [0, 0.68, -4.18, 1.22, 0.27, 0.12], paint: 'trim' },
         { box: [0, 1.5, -4.27, 0.82, 0.36, 0.02], paint: 'dark' },
         { box: [0, 2.99, -4.1, 1.15, 0.04, 0.14], paint: 'body' },
         { box: [0, 3.32, -2.85, 1.15, 0.32, 0.62], paint: 'body', top: 0.85 },
-        // Cargo box with a stripe band, rear doors and bumper.
-        { box: [0, 2.43, 1.15, 1.27, 1.27, 3.1], paint: 'accent', mat: 'paint' },
-        { box: [0, 1.72, 1.15, 1.278, 0.13, 3.06], paint: 'stripe' },
-        { box: [0, 2.43, 4.256, 0.012, 1.2, 0.004], paint: 'dark' },
-        { box: [0.3, 2.2, 4.26, 0.02, 0.5, 0.01], paint: 'chrome', mirror: true },
+        ...truckCargo(o.cargo || 'box'),
         { box: [0, 0.75, 4.2, 1.15, 0.12, 0.08], paint: 'trim' },
         { box: [0, 0.75, 4.285, 0.25, 0.08, 0.005], paint: [0.96, 0.96, 0.92] },
         // Side skirts between the axles.
@@ -430,7 +596,7 @@ export const FAMILIES = {
         lights: { fy: 0.78, fz: -4.31, fx: 0.85, fw: 0.2, ry: 0.78, rz: 4.29, rx: 0.9, rearBar: false },
         exhausts: [[1.02, 3.5, -2.02]],
         trailY: 1.6,
-        height: 3.7,
+        height: o.cargo === 'flatbed' || o.cargo === 'tipper' ? 3.2 : 3.7,
         wheels: {
           radius: 0.5,
           width: 0.42,
@@ -464,6 +630,10 @@ export function scaleModel(m, [sx, sy, sz]) {
     if (p.box) {
       const [x, y, z, hx, hy, hz] = p.box;
       return { ...p, box: [x * sx, y * sy, z * sz, hx * sx, hy * sy, hz * sz] };
+    }
+    if (p.sphere) {
+      const [x, y, z, rx, ry, rz] = p.sphere;
+      return { ...p, sphere: [x * sx, y * sy, z * sz, rx * sx, ry * sy, rz * sz] };
     }
     const [x, y, z, r, h, axis] = p.cyl;
     return { ...p, cyl: [x * sx, y * sy, z * sz, r, axis === 'x' ? h * sx : axis === 'y' ? h * sy : h * sz, axis] };

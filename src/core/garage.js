@@ -2,14 +2,15 @@
 // vehicle's customisation. Versioned and validated on load so a corrupted or
 // older save never breaks the game.
 
-import { VEHICLE_BY_ID, VEHICLES, DEFAULT_VEHICLE, LIVERIES, RIM_STYLES, RIDE_HEIGHTS } from '../data/vehicles.js';
+import { VEHICLE_BY_ID, VEHICLES, DEFAULT_VEHICLE, LIVERIES, RIM_STYLES, RIDE_HEIGHTS, KIT_OPTIONS, NEON_COLOURS, TINTS, UPGRADES, UPGRADE_MAX, upgradeCost } from '../data/vehicles.js';
+import { kitSlots } from '../data/kits.js';
 
 const KEY = 'pocketracers.garage';
 const VERSION = 1;
 const HEX = /^#[0-9a-f]{6}$/i;
 
 export function freshGarage() {
-  return { v: VERSION, selected: DEFAULT_VEHICLE, owned: VEHICLES.filter((v) => v.price === 0).map((v) => v.id), custom: {} };
+  return { v: VERSION, selected: DEFAULT_VEHICLE, owned: VEHICLES.filter((v) => v.price === 0).map((v) => v.id), custom: {}, upgrades: {} };
 }
 
 /** Clean an untrusted save object into a valid garage state. */
@@ -25,7 +26,18 @@ export function sanitizeGarage(raw) {
       if (LIVERIES.includes(c.livery)) clean.livery = c.livery;
       if (RIM_STYLES.includes(c.rimStyle)) clean.rimStyle = c.rimStyle;
       if (c.ride in RIDE_HEIGHTS) clean.ride = c.ride;
+      for (const slot of kitSlots(VEHICLE_BY_ID[id])) if (KIT_OPTIONS[slot].includes(c[slot])) clean[slot] = c[slot];
+      if (NEON_COLOURS.includes(c.neon)) clean.neon = c.neon;
+      if (c.tint in TINTS) clean.tint = c.tint;
       g.custom[id] = clean;
+    }
+  }
+  if (raw.upgrades && typeof raw.upgrades === 'object') {
+    for (const [id, u] of Object.entries(raw.upgrades)) {
+      if (!VEHICLE_BY_ID[id] || !u || typeof u !== 'object') continue;
+      const clean = {};
+      for (const k of UPGRADES) if (Number.isInteger(u[k]) && u[k] > 0) clean[k] = Math.min(UPGRADE_MAX, u[k]);
+      g.upgrades[id] = clean;
     }
   }
   if (g.owned.includes(raw.selected)) g.selected = raw.selected;
@@ -72,6 +84,22 @@ export class Garage {
     if (!this.owns(id)) return false;
     this.state.selected = id;
     this.save();
+    return true;
+  }
+
+  upgrades(id) {
+    return this.state.upgrades[id] || {};
+  }
+
+  /** Buy the next level of an upgrade for an owned vehicle. */
+  buyUpgrade(id, stat, progress) {
+    if (!this.owns(id) || !UPGRADES.includes(stat)) return false;
+    const level = this.upgrades(id)[stat] || 0;
+    if (level >= UPGRADE_MAX) return false;
+    if (!progress.spend(upgradeCost(id, level))) return false;
+    this.state.upgrades[id] = { ...this.upgrades(id), [stat]: level + 1 };
+    this.save();
+    progress.save();
     return true;
   }
 

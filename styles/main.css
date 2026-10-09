@@ -1140,7 +1140,7 @@ button {
   border-radius: 999px;
   padding: 8px 2px;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
   min-height: 38px;
 }
 
@@ -1304,6 +1304,81 @@ button {
   border-color: var(--coral);
   background: #fff1f2;
   color: var(--coral);
+}
+
+.swatches button.none {
+  background: #fff;
+  position: relative;
+}
+
+.swatches button.none::after {
+  content: '';
+  position: absolute;
+  inset: 45% 10%;
+  background: var(--stop);
+  transform: rotate(-45deg);
+  border-radius: 2px;
+}
+
+.tune-note {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.tune-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 2px solid #f0f2f8;
+}
+
+.tune-row b {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.tune-row small {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.pips {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pips i {
+  width: 18px;
+  height: 8px;
+  border-radius: 4px;
+  background: #e4e7f2;
+}
+
+.pips i.on {
+  background: linear-gradient(90deg, var(--teal), var(--sun));
+}
+
+.tune-buy {
+  border: 0;
+  border-radius: 999px;
+  background: var(--grape);
+  color: #fff;
+  font-weight: 900;
+  font-size: 14px;
+  padding: 8px 12px;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.tune-buy:disabled {
+  background: #b9bdd3;
 }
 
 #garage-reset {

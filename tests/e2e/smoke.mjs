@@ -275,7 +275,7 @@ async function drive(page) {
   });
   await check('arrows and cards preview other vehicles', async () => {
     await page.click('#garage-next');
-    assert.equal(await page.textContent('#garage-name'), 'Pip');
+    assert.equal(await page.textContent('#garage-name'), 'Comet S');
     await page.click('.car-card:has-text("Trailhound")');
     assert.equal(await page.textContent('#garage-name'), 'Trailhound');
     assert.match(await page.textContent('#garage-action'), /Unlock/);
@@ -299,6 +299,22 @@ async function drive(page) {
     await page.click('.car-card:has-text("Bolt R")');
     assert.ok(await page.isDisabled('#garage-action'));
     await page.click('.car-card:has-text("Trailhound")');
+  });
+  await check('kit, neon and a performance upgrade', async () => {
+    await page.click('[data-tab=kit]');
+    await page.click('#garage-kit button:has-text("Bull bar")');
+    await page.click('[data-tab=style]');
+    await page.click('.swatches[data-key=neon] button[data-value="#8ac926"]');
+    const custom = await page.evaluate(() => window.__pocketRacers.garage.custom('trailhound'));
+    assert.equal(custom.bullbar, 'bullbar');
+    assert.equal(custom.neon, '#8ac926');
+    await page.click('[data-tab=tune]');
+    const before = await page.evaluate(() => window.__pocketRacers.progress.points);
+    await page.click('.tune-buy[data-upgrade=tyres]');
+    const st = await page.evaluate(() => ({ up: window.__pocketRacers.garage.upgrades('trailhound'), pts: window.__pocketRacers.progress.points }));
+    assert.equal(st.up.tyres, 1);
+    assert.ok(st.pts < before);
+    await page.click('[data-tab=cars]');
   });
   await check('drive the unlocked vehicle', async () => {
     await page.click('#garage-action');

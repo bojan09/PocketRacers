@@ -142,6 +142,8 @@
             <button role="tab" data-tab="paint" aria-selected="false">Paint</button>
             <button role="tab" data-tab="wheels" aria-selected="false">Wheels</button>
             <button role="tab" data-tab="style" aria-selected="false">Style</button>
+            <button role="tab" data-tab="kit" aria-selected="false">Kit</button>
+            <button role="tab" data-tab="tune" aria-selected="false">Tune</button>
           </div>
           <div class="tab-body" data-body="cars">
             <div class="chips" id="garage-filters"></div>
@@ -161,11 +163,22 @@
             <h3>Rim colour</h3>
             <div class="swatches" data-key="rim"></div>
           </div>
+          <div class="tab-body" data-body="kit" hidden>
+            <div id="garage-kit"></div>
+          </div>
+          <div class="tab-body" data-body="tune" hidden>
+            <p class="tune-note">Upgrades make this vehicle faster for good. Paid with points.</p>
+            <div id="garage-tune"></div>
+          </div>
           <div class="tab-body" data-body="style" hidden>
             <h3>Livery</h3>
             <div class="choices" data-key="livery"></div>
             <h3>Ride height</h3>
             <div class="choices" data-key="ride"></div>
+            <h3>Window tint</h3>
+            <div class="choices" data-key="tint"></div>
+            <h3>Neon underglow</h3>
+            <div class="swatches" data-key="neon"></div>
             <button class="btn" id="garage-reset">Reset to factory look</button>
           </div>
           <button id="garage-action" class="big-btn garage-action"></button>

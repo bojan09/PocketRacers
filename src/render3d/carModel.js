@@ -32,7 +32,7 @@ const WELL_STEP = 0.05;
 const ARCH_WIDTH = 0.13; // width of the trim band around each well // extra loft stations around each wheel (metres)
 const CABIN_J = 10; // points over a cabin section
 
-export const LIVERIES = ['clean', 'racing', 'side', 'twotone'];
+export const LIVERIES = ['clean', 'racing', 'tri', 'side', 'twotone', 'lower', 'split'];
 export const RIM_STYLES = ['spokes', 'star', 'disc', 'steel'];
 
 export function resolvePaint(paint) {
@@ -267,14 +267,15 @@ function loft(mb, stations, colourFn, materialFn, wells = [], wellColour = null,
   const info = (i, j) => {
     const a = grid[i][j];
     const b = grid[i][(j + 1) % J];
-    return [Math.sin(-Math.PI / 2 + ((j + 0.5) / J) * Math.PI * 2), (a[0] + b[0]) / 2 - xOffset];
+    const c = grid[Math.min(i + 1, grid.length - 1)][j];
+    return [Math.sin(-Math.PI / 2 + ((j + 0.5) / J) * Math.PI * 2), (a[0] + b[0]) / 2 - xOffset, (a[2] + c[2]) / 2];
   };
   mb.grid(
     grid,
     (i, j) => {
       if (inWell(i, j) && nearTyre(i, j)) return wellColour;
-      const [ny, x] = info(i, j);
-      return colourFn(ny, x, i, j);
+      const [ny, x, z] = info(i, j);
+      return colourFn(ny, x, z);
     },
     { wrapJ: true, materialFn: (i, j) => (inWell(i, j) && nearTyre(i, j) ? MAT.plastic : materialFn(info(i, j)[0])) },
   );
@@ -295,9 +296,12 @@ export function buildCarBody(spec, paintHex) {
   const st = spec.body;
   const colourOf = (key) => P[key] || P.body;
 
-  const paintFace = (ny, x) => {
+  const midZ = (st[0][0] + st[st.length - 1][0]) / 2;
+  const paintFace = (ny, x, z = 0) => {
     if (ny < -0.45) return P.dark;
     if (ny < -0.2) return P.trim; // rocker / sill
+    if (livery === 'lower' && ny < 0.05) return P.accent;
+    if (livery === 'split' && z < midZ) return P.accent;
     if (livery === 'side' && ny > 0 && ny < 0.3) return P.stripe;
     if (livery === 'twotone' && ny > 0.5) return P.accent;
     return P.body;
@@ -316,6 +320,11 @@ export function buildCarBody(spec, paintHex) {
   if (livery === 'racing') {
     mb.material(...MAT.paint);
     for (const sx of [-1, 1]) topStrip(mb, st, sx * stripeHalf * 0.22, sx * stripeHalf, P.stripe);
+  } else if (livery === 'tri') {
+    // Three thin stripes: white-ish centre, accent either side.
+    mb.material(...MAT.paint);
+    topStrip(mb, st, -stripeHalf * 0.18, stripeHalf * 0.18, P.stripe);
+    for (const sx of [-1, 1]) topStrip(mb, st, sx * stripeHalf * 0.38, sx * stripeHalf * 0.62, P.accent);
   }
 
   // Extra closed panels (truck cab, monster-truck body, ...) and fender pods.
@@ -323,7 +332,7 @@ export function buildCarBody(spec, paintHex) {
   const surfaces = [{ stations: st, x: 0 }];
   for (const l of [...(spec.lofts || []), ...pods]) {
     const base = colourOf(l.paint || 'body');
-    const g = loft(mb, l.stations, (ny, x) => (l.paint && l.paint !== 'body' ? (ny < -0.45 ? P.dark : base) : paintFace(ny, x)), paintMat, l.wells || wells, P.dark, l.x || 0, l.J);
+    const g = loft(mb, l.stations, (ny, x, z) => (l.paint && l.paint !== 'body' ? (ny < -0.45 ? P.dark : base) : paintFace(ny, x, z)), paintMat, l.wells || wells, P.dark, l.x || 0, l.J);
     mb.material(...MAT.paint);
     mb.poly(g[0].slice().reverse(), shade(base, 0.9));
     mb.poly(g[g.length - 1], shade(base, 0.9));
@@ -346,7 +355,7 @@ export function buildCarBody(spec, paintHex) {
     const shape = spec.cabinShape || [0.75, 0.6];
     const cs = spec.cabin.map((c) => cabinSection(c, shape));
     const strips = cabinStrips(spec, cs.length - 1);
-    const roofPaint = livery === 'twotone' ? P.accent : P.body;
+    const roofPaint = livery === 'twotone' || livery === 'tri' ? P.accent : P.body;
     const isGlass = (i, j) => {
       const kind = strips[i];
       const outer = j === 0 || j === CABIN_J - 2;
@@ -530,6 +539,7 @@ export function buildCarBody(spec, paintHex) {
       halfWidth: Math.max(...st.map((s) => s[1]), ...spec.wheels.positions.map((p) => Math.abs(p[0]) + spec.wheels.width / 2)),
       length: rz - front[0],
       height: bodyTop + ride,
+      neon: spec.neon || null,
     },
   };
 }
@@ -573,6 +583,9 @@ function addPart(mb, part, P) {
     if (part.box) {
       const [x, y, z, hx, hy, hz] = part.box;
       mb.box(x * sx, y, z, hx, hy, hz, colour, part.emissive || 0, part.top ?? 1);
+    } else if (part.sphere) {
+      const [x, y, z, rx, ry, rz] = part.sphere;
+      mb.sphere(x * sx, y, z, rx, ry, rz, colour, { segs: 12, rings: 7 });
     } else if (part.cyl) {
       const [x, y, z, rad, half, axis] = part.cyl;
       const cap = part.cap ? (Array.isArray(part.cap) ? part.cap : P[part.cap]) : colour;

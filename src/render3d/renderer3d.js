@@ -604,7 +604,7 @@ export class Renderer3D {
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, inTunnel);
     this.particles.update(dt);
     if (this.weather && !inTunnel) this.weather.update(dt, eye);
-    this.particles.build(this.camRight, this.camUp, this.shadows, this.quality.clouds ? this.cloudBillboards() : null, this.weather && !inTunnel ? this.weather : null, this.env.night ? this.nightGlows(session, f) : null);
+    this.particles.build(this.camRight, this.camUp, this.shadows, this.quality.clouds ? this.cloudBillboards() : null, this.weather && !inTunnel ? this.weather : null, this.collectGlows(session, f));
     this.drawFx();
 
     this.drawOverlay(dt);
@@ -757,7 +757,11 @@ export class Renderer3D {
     });
     this.trailCount = 0;
     this.particles.update(dt);
-    this.particles.build(this.camRight, this.camUp, this.shadows, null);
+    const nc = a.neon;
+    const glow = nc
+      ? [{ x: 0, y: 0.03, z: 0, rx: [c * a.halfWidth * 1.7, 0, -sn * a.halfWidth * 1.7], rz: [-sn * a.length * 0.62, 0, -c * a.length * 0.62], r: nc[0], g: nc[1], b: nc[2], a: 0.85 }]
+      : null;
+    this.particles.build(this.camRight, this.camUp, this.shadows, null, null, glow);
     this.drawFx();
     this.flash = 0;
     this.nitroFx = 0;
@@ -904,6 +908,26 @@ export class Renderer3D {
     const gl = this.gl;
     while (this.enabledAttribs < n) gl.enableVertexAttribArray(this.enabledAttribs++);
     while (this.enabledAttribs > n) gl.disableVertexAttribArray(--this.enabledAttribs);
+  }
+
+  /** Light pools: neon underglow (any time) plus night headlights and lamps. */
+  collectGlows(session, f) {
+    const out = this.env.night ? this.nightGlows(session, f) : (this.glowList ||= []);
+    if (!this.env.night) out.length = 0;
+    const fr = this.frame2;
+    const neon = (p, anchors) => {
+      if (!anchors.neon) return;
+      this.track.frame(p.z, p.x, fr);
+      if (!this.near(fr.pos, 120)) return;
+      const c = anchors.neon;
+      const k = this.env.night ? 0.9 : 0.55;
+      out.push({ x: fr.pos[0], y: fr.pos[1] + 0.05, z: fr.pos[2], rx: [fr.R[0] * anchors.halfWidth * 1.7, fr.R[1] * anchors.halfWidth * 1.7, fr.R[2] * anchors.halfWidth * 1.7], rz: [fr.T[0] * anchors.length * 0.62, fr.T[1] * anchors.length * 0.62, fr.T[2] * anchors.length * 0.62], r: c[0], g: c[1], b: c[2], a: k });
+    };
+    if (!session.player.airborne) neon(session.player, this.player.anchors);
+    session.racers.forEach((r, i) => {
+      if (this.racerMeshes?.[i] && !r.p.airborne) neon(r.p, this.racerMeshes[i].anchors);
+    });
+    return out.length ? out : null;
   }
 
   /** Night light pools: headlights ahead of every car plus nearby street lamps. */

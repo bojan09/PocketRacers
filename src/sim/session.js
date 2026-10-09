@@ -197,7 +197,7 @@ export class DrivingSession {
     p.nitro = nitro;
     p.super = superOn;
     p.nitroEmpty = input.nitro && p.nitroFuel <= 0 && !padBoost && !superOn;
-    if (nitro && !padBoost && !superOn) p.nitroFuel = Math.max(0, p.nitroFuel - NITRO_DRAIN * dt);
+    if (nitro && !padBoost && !superOn) p.nitroFuel = Math.max(0, p.nitroFuel - NITRO_DRAIN * (h.nitroDrain ?? 1) * dt);
     const throttle = nitro ? 1 : clamp(input.throttle, 0, 1);
     let top = h.maxSpeed * (nitro ? h.nitroTop * (superOn ? SUPER_TOP : 1) : 1);
     if (p.offroad) top = Math.min(top, h.maxSpeed * h.offroadTop * (nitro ? 1.25 : 1));

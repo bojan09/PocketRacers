@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { VEHICLES, makeVehicle, vehicleStats, resolveLook, VEHICLE_BY_ID } from '../../src/data/vehicles.js';
+import { VEHICLES, makeVehicle, vehicleStats, resolveLook, VEHICLE_BY_ID, LIVERIES, upgradeCost, UPGRADES } from '../../src/data/vehicles.js';
+import { kitSlots, KIT_OPTIONS } from '../../src/data/kits.js';
 import { FAMILIES } from '../../src/data/vehicleFamilies.js';
 import { ENGINE_PROFILES, Gearbox } from '../../src/audio/engine.js';
 import { buildCarBody, buildWheel } from '../../src/render3d/carModel.js';
@@ -31,7 +32,7 @@ test('roster: unique ids and names, every family covered, free starters exist', 
 
 test('every vehicle builds a sane model with every livery and rim', () => {
   for (const v of VEHICLES) {
-    for (const livery of ['clean', 'racing', 'side', 'twotone']) {
+    for (const livery of LIVERIES) {
       const def = makeVehicle(v.id, { livery, rimStyle: 'steel', ride: 'max' });
       const { body, anchors } = buildCarBody(def.model, def.paint);
       const wheel = buildWheel(def.model, def.paint);
@@ -171,5 +172,68 @@ test('garage: unlocking spends points, only when affordable; selection persists'
   assert.equal(again.selected, 'trailhound');
   assert.equal(again.custom('trailhound').body, '#ff006e');
   assert.equal(JSON.parse(store.data['pocketracers.progress']).points, 500);
+  delete globalThis.localStorage;
+});
+
+// --------------------------------------------------------------- 2H roster
+
+test('roster: about 50 vehicles, every family has at least 4', () => {
+  assert.ok(VEHICLES.length >= 50, `${VEHICLES.length}`);
+  for (const f of Object.keys(FAMILIES)) assert.ok(VEHICLES.filter((v) => v.family === f).length >= 4, f);
+  // Prices spread from free starters to late-game unlocks.
+  assert.ok(VEHICLES.filter((v) => v.price === 0).length >= 3);
+  assert.ok(Math.max(...VEHICLES.map((v) => v.price)) >= 20000);
+});
+
+test('body kits never touch the tyres (every option, every vehicle)', () => {
+  for (const v of VEHICLES) {
+    const slots = kitSlots(v);
+    const kits = [Object.fromEntries(slots.map((s) => [s, KIT_OPTIONS[s].at(-1)]))];
+    for (const s of slots) for (const o of KIT_OPTIONS[s]) kits.push({ [s]: o });
+    for (const kit of kits) {
+      const d = makeVehicle(v.id, { ...kit, ride: 'low', neon: '#ff2e88' });
+      const { body, anchors } = buildCarBody(d.model, d.paint);
+      assert.equal(tyreIntersections(d.model, body, anchors).length, 0, `${v.id} ${JSON.stringify(kit)}`);
+      assert.ok(anchors.neon, `${v.id} neon anchor`);
+    }
+  }
+});
+
+test('upgrades: each level helps, costs rise, nitro lasts longer', () => {
+  const base = makeVehicle('zippy').handling;
+  const full = makeVehicle('zippy', {}, { engine: 5, turbo: 5, tyres: 5, nitro: 5 }).handling;
+  assert.ok(full.maxSpeed > base.maxSpeed * 1.08 && full.accel > base.accel * 1.2 && full.grip > base.grip);
+  assert.ok(full.nitroDrain < 1 && base.nitroDrain === 1);
+  assert.ok(vehicleStats('zippy', { engine: 5 }).speed > vehicleStats('zippy').speed);
+  for (let l = 1; l < 5; l++) assert.ok(upgradeCost('zippy', l) > upgradeCost('zippy', l - 1));
+  assert.ok(upgradeCost('nova', 0) > upgradeCost('zippy', 0), 'pricier cars cost more to tune');
+  // Out-of-range levels are clamped.
+  assert.deepEqual(makeVehicle('zippy', {}, { engine: 99 }).handling.maxSpeed, makeVehicle('zippy', {}, { engine: 5 }).handling.maxSpeed);
+});
+
+test('garage: buying upgrades spends points, caps at 5, survives reload; bad saves cleaned', () => {
+  const data = { 'pocketracers.progress': JSON.stringify({ v: 1, points: 100000 }) };
+  const store = { getItem: (k) => data[k] ?? null, setItem: (k, v) => (data[k] = String(v)) };
+  globalThis.localStorage = store;
+  const progress = new Progress();
+  const g = new Garage(store);
+  assert.equal(g.buyUpgrade('bolt', 'engine', progress), false, 'not owned');
+  for (let i = 0; i < 5; i++) assert.ok(g.buyUpgrade('zippy', 'engine', progress));
+  assert.equal(g.buyUpgrade('zippy', 'engine', progress), false, 'maxed');
+  const spent = [0, 1, 2, 3, 4].reduce((n, l) => n + upgradeCost('zippy', l), 0);
+  assert.equal(progress.points, 100000 - spent);
+  g.setCustom('zippy', 'spoiler', 'gt');
+  g.resetCustom('zippy');
+  const again = new Garage(store);
+  assert.equal(again.upgrades('zippy').engine, 5, 'upgrades survive a look reset and reload');
+  const clean = sanitizeGarage({
+    v: 1,
+    owned: ['zippy'],
+    custom: { zippy: { spoiler: 'rocket', splitter: 'splitter', bullbar: 'bullbar', neon: 'red', tint: 'gold' } },
+    upgrades: { zippy: { engine: 9, turbo: -1, wings: 3, nitro: 2.5 }, fake: { engine: 1 } },
+  });
+  assert.deepEqual(clean.custom.zippy, { splitter: 'splitter', tint: 'gold' });
+  assert.deepEqual(clean.upgrades, { zippy: { engine: 5 } });
+  assert.ok(UPGRADES.length === 4);
   delete globalThis.localStorage;
 });

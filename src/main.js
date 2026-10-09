@@ -31,7 +31,7 @@ const getTrack = (id) => (builtTracks[id] ||= buildTrack3D(TRACK_BY_ID[id]));
 let trackId = settings.track;
 const track = getTrack(trackId);
 const garage = new Garage();
-let car = makeVehicle(garage.selected, garage.custom(garage.selected));
+let car = makeVehicle(garage.selected, garage.custom(garage.selected), garage.upgrades(garage.selected));
 const session = new DrivingSession(track, car);
 let renderer;
 try {
@@ -227,7 +227,7 @@ function toTitle() {
 
 /** Make `id` the player's vehicle (session, renderer, engine sound). */
 function useVehicle(id) {
-  car = makeVehicle(id, garage.custom(id));
+  car = makeVehicle(id, garage.custom(id), garage.upgrades(id));
   session.setCar(car);
   renderer.setVehicle(car);
   audio.setEngine(car.engine);
@@ -238,7 +238,7 @@ const garageScreen = new GarageScreen({
   garage,
   progress,
   click: () => audio.click(),
-  onPreview: (id) => renderer.setVehicle(makeVehicle(id, garage.custom(id))),
+  onPreview: (id) => renderer.setVehicle(makeVehicle(id, garage.custom(id), garage.upgrades(id))),
   onUnlock: () => hud.toast('Unlocked!'),
   onDrive: (id) => {
     garageScreen.close();
@@ -264,7 +264,7 @@ async function startEvent(e) {
   $('screen-pause').hidden = true;
   loadTrack(e.track);
   const v = vehicleFor(e, garage);
-  car = makeVehicle(v.id, garage.custom(v.id));
+  car = makeVehicle(v.id, garage.custom(v.id), garage.upgrades(v.id));
   session.setCar(car, false);
   renderer.setVehicle(car);
   audio.setEngine(car.engine);

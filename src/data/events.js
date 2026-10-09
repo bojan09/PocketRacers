@@ -3,7 +3,7 @@
 // player's selected vehicle isn't allowed, they drive an owned one that is,
 // or the event's loaner, so no event is ever blocked by the garage.
 
-import { VEHICLES, VEHICLE_BY_ID, PAINT_SWATCHES, makeVehicle } from './vehicles.js';
+import { VEHICLES, VEHICLE_BY_ID, PAINT_SWATCHES, NEON_COLOURS, UPGRADES, UPGRADE_MAX, makeVehicle } from './vehicles.js';
 import { mulberry32 } from '../core/util.js';
 
 export const EVENTS = [
@@ -30,7 +30,7 @@ export function rewards(event) {
 }
 
 const NAMES = ['Rocket Rosa', 'Turbo Tom', 'Zoom Zara', 'Dash Dani', 'Blaze Billie', 'Max Motor', 'Sunny Sam', 'Lightning Lu', 'Captain Kit', 'Nova Noor', 'Speedy Sid', 'Whizz Wren'];
-const LIVERY_POOL = ['clean', 'racing', 'side', 'twotone'];
+const LIVERY_POOL = ['clean', 'racing', 'tri', 'side', 'twotone', 'lower', 'split'];
 
 export function allowed(event, vehicleId) {
   return !event.families || event.families.includes(VEHICLE_BY_ID[vehicleId]?.family);
@@ -57,8 +57,11 @@ export function pickOpponents(event, playerCar, count = 5, seed = 1) {
   const pick = (a) => a[Math.floor(rand() * a.length)];
   return Array.from({ length: count }, (_, i) => {
     const { v } = pick(near);
-    const custom = { body: pick(PAINT_SWATCHES), accent: pick(PAINT_SWATCHES), stripe: pick(['#ffffff', '#ffd23f', '#1b1f3b']), livery: pick(LIVERY_POOL) };
-    return { car: makeVehicle(v.id, custom), name: names[i % names.length] };
+    const custom = { body: pick(PAINT_SWATCHES), accent: pick(PAINT_SWATCHES), stripe: pick(['#ffffff', '#ffd23f', '#1b1f3b']), livery: pick(LIVERY_POOL), neon: rand() < 0.25 ? pick(NEON_COLOURS.slice(1)) : 'none' };
+    // Later events bring upgraded rivals, keeping pace with an upgraded player.
+    const lvl = Math.min(UPGRADE_MAX, Math.round(event.need / 4));
+    const up = Object.fromEntries(UPGRADES.map((k) => [k, lvl]));
+    return { car: makeVehicle(v.id, custom, up), name: names[i % names.length] };
   });
 }
 
