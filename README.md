@@ -62,6 +62,12 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > and results are icon-only. Settings, the full race list and player
 > management sit behind a grown-up lock (a two-digit sum). "Not yet" and
 > "bought" sounds replace text-only feedback.
+>
+> **Phase 4B — Little Driver:** per-player driving help, on by default and
+> switchable by grown-ups. Corners push the car outward less, the road edge
+> gently steers it back, and a car stuck off the road or going nowhere is
+> rescued (🛟) after 2.5 s. ▶ Play skips knockout races and AI rivals drop
+> one difficulty level.
 
 ## Run locally
 

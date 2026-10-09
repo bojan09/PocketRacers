@@ -16,6 +16,14 @@ export const SPIN_RATE = 8.5; // rad/s of air spin at full steering lock (~0.75 
 export const SUPER_TIME = 3.5; // seconds of Super Nitro
 const SUPER_TOP = 1.12; // Super Nitro top speed on top of normal nitro
 const SHOCKWAVE_RANGE = 24000; // sim units ahead that the activation shockwave clears
+// Little Driver (young children): corners push the car outward less, the
+// road edge pulls it back, and a stuck car is put back on the road.
+export const ASSIST = {
+  centrifugal: 0.45, // share of the outward push left in corners
+  edge: 0.8, // where the edge pull starts (road half-width = 1)
+  pull: 1.6, // strength of the pull back toward the road
+  stuckTime: 2.5, // seconds slow, off-road or backwards before a rescue
+};
 
 /** Fresh per-car driving state (player and AI racers share this shape). */
 export function newCarState(z = 0, x = 0) {
@@ -76,6 +84,7 @@ export class DrivingSession {
     this.trafficCount = trafficCount;
     this.seed = seed;
     this.steerSensitivity = 1;
+    this.assist = false; // Little Driver for the player
     this.surfaceGrip = track.def.env?.grip ?? 1; // < 1 on snow
     this.events = [];
     this.fun = new FunSystem(this);
@@ -106,6 +115,7 @@ export class DrivingSession {
     const rand = mulberry32(this.seed);
     this.rand = rand;
     this.time = 0;
+    this.stuck = 0;
     this.player = newCarState();
     this.body = { p: this.player, car: this.car, carHalf: this.carHalf, isPlayer: true };
     this.racers = [];
@@ -143,10 +153,32 @@ export class DrivingSession {
   step(dt, input) {
     this.time += dt;
     this.stepBody(this.body, input, dt);
+    if (this.assist) this.watchStuck(input, dt);
     for (const r of this.racers) this.stepBody(r, r.ai ? r.ai.input(dt) : IDLE, dt);
     if (this.racers.length) this.collideRacers();
     this.stepTraffic(dt);
     this.fun.step(dt);
+  }
+
+  /**
+   * Little Driver rescue: a car that is trying to go but stays slow, sits
+   * off the road or rolls backwards for a while is put back on the road,
+   * pointing the right way, with a little speed.
+   */
+  watchStuck(input, dt) {
+    const p = this.player;
+    const trying = input.throttle > 0 || input.nitro;
+    const bad = !p.airborne && trying && (p.speed < this.car.handling.maxSpeed * 0.08 || Math.abs(p.x) > 1.05);
+    this.stuck = bad ? this.stuck + dt : 0;
+    if (this.stuck < ASSIST.stuckTime) return;
+    this.stuck = 0;
+    p.x = p.prevX = clamp(p.x, -0.5, 0.5);
+    p.latVel = 0;
+    p.steer = 0;
+    p.speed = Math.max(p.speed, this.car.handling.maxSpeed * 0.35);
+    p.reverseHold = 0;
+    p.hitCooldown = 1;
+    this.emit({ type: 'rescue' });
   }
 
   /** Add AI racers: [{car, z, x, ai?, name}] — `ai` is a controller with input(dt). */
@@ -236,11 +268,17 @@ export class DrivingSession {
     // --- Lateral --------------------------------------------------------
     const sp = p.speed / h.maxSpeed;
     const authority = clamp(Math.abs(sp) * 3, 0, 1) * (p.airborne ? 0.35 : 1);
-    const latTarget = p.steer * h.steerSpeed * authority * (nitro ? 0.9 : 1);
+    let latTarget = p.steer * h.steerSpeed * authority * (nitro ? 0.9 : 1);
+    const assist = b.isPlayer && this.assist;
+    if (assist && !p.airborne) {
+      // Near the edge, steer back toward the road (stronger the further out).
+      const out = Math.abs(p.x) - (ASSIST.edge - b.carHalf);
+      if (out > 0) latTarget -= Math.sign(p.x) * Math.min(1, out * 5) * h.steerSpeed * ASSIST.pull * authority;
+    }
     const grip = p.airborne ? 2 : h.grip * (p.offroad ? h.offroadGrip : 1) * this.surfaceGrip;
     p.latVel += (latTarget - p.latVel) * (1 - Math.exp(-grip * dt));
     // Banked corners cancel part of the outward push.
-    const centrifugal = p.airborne ? 0 : seg.curve * sp * Math.abs(sp) * h.centrifugal * (1 - (seg.bankAssist || 0));
+    const centrifugal = p.airborne ? 0 : seg.curve * sp * Math.abs(sp) * h.centrifugal * (1 - (seg.bankAssist || 0)) * (assist ? ASSIST.centrifugal : 1);
     p.x += (p.latVel - centrifugal) * dt;
     p.sliding = !p.airborne && sp > 0.5 && ((Math.abs(centrifugal) > 1.1 && Math.abs(p.steer) > 0.6) || (p.braking && sp > 0.7));
 

@@ -6,10 +6,14 @@
 import { clamp, loopDelta, mulberry32 } from '../core/util.js';
 
 export const DIFFICULTY = {
+  // Little Driver races: one step below the event's own level.
+  kid: { skill: 0.8, corner: 0.72, nitro: 0.2 },
   easy: { skill: 0.86, corner: 0.8, nitro: 0.4 },
   normal: { skill: 0.93, corner: 0.9, nitro: 0.7 },
   hard: { skill: 0.985, corner: 0.97, nitro: 1 },
 };
+/** The next easier AI level (for Little Driver races). */
+export const EASIER = { kid: 'kid', easy: 'kid', normal: 'easy', hard: 'normal' };
 const NITRO_REGEN = 0.05; // AI tanks refill slowly (they don't score tricks)
 const RUBBER_BAND = 9000; // sim units of gap before catch-up/slow-down kicks in
 

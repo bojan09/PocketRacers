@@ -172,8 +172,8 @@ export class Gate {
 
 /** Grown-up settings: players, the full race list and every setting. */
 export class GrownupScreen {
-  constructor({ profiles, onRemove, onAdd, onRaces, onDone, sound }) {
-    Object.assign(this, { profiles, onRemove, onAdd, onRaces, sound });
+  constructor({ profiles, onRemove, onAdd, onRaces, onDone, onLittleDriver, sound }) {
+    Object.assign(this, { profiles, onRemove, onAdd, onRaces, onLittleDriver, sound });
     this.root = $('screen-grownup');
     $('grownup-done').addEventListener('click', () => {
       sound('back');
@@ -201,6 +201,18 @@ export class GrownupScreen {
       const row = document.createElement('div');
       row.className = 'gu-player';
       row.append(avatarEl(id));
+      const ld = document.createElement('button');
+      ld.className = 'btn ld';
+      ld.dataset.littleDriver = id;
+      const on = this.profiles.littleDriver(id);
+      ld.setAttribute('aria-pressed', String(on));
+      ld.textContent = on ? '🛟 Little Driver: on' : '🛟 Little Driver: off';
+      ld.addEventListener('click', () => {
+        this.sound('tap');
+        this.onLittleDriver(id, !on);
+        this.render();
+      });
+      row.append(ld);
       const del = document.createElement('button');
       del.className = 'btn';
       del.textContent = 'Remove';

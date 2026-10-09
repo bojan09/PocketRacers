@@ -2274,3 +2274,8 @@ button {
     font-size: 40px;
   }
 }
+
+.gu-player .btn.ld[aria-pressed='true'] {
+  border-color: #3fbf6f;
+  background: #e6f8ec;
+}

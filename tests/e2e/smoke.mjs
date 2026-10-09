@@ -371,6 +371,29 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
   await context.close();
 }
 
+// --------------------------------------------------------- Little Driver
+{
+  const { context, page, errors } = await open({ width: 844, height: 390 });
+  const next = () => page.evaluate(() => window.__pocketRacers.nextEvent().id);
+  await check('Little Driver is on by default and skips knockout races in ▶ Play', async () => {
+    await page.evaluate(() => {
+      for (const id of ['rookie', 'trial', 'islands', 'mud']) window.__pocketRacers.career.record(id, 3, 60);
+    });
+    assert.equal(await page.evaluate(() => window.__pocketRacers.session.assist), true);
+    assert.equal(await next(), 'frosty');
+  });
+  await check('grown-ups can turn Little Driver off per player', async () => {
+    await grownup(page);
+    await page.click('[data-little-driver=fox]');
+    assert.equal(await page.getAttribute('[data-little-driver=fox]', 'aria-pressed'), 'false');
+    await page.click('#grownup-done');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.session.assist), false);
+    assert.equal(await next(), 'knockout');
+  });
+  await check('no console errors (Little Driver)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+
 // ------------------------------------------------------- badges + offline
 {
   const { context, page, errors } = await open({ width: 844, height: 390 });

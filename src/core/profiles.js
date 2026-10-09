@@ -31,10 +31,12 @@ export function scopedStorage(base, id) {
 }
 
 export function sanitizeProfiles(raw) {
-  const p = { v: VERSION, list: [], current: null };
+  const p = { v: VERSION, list: [], current: null, pro: [] };
   if (!raw || typeof raw !== 'object' || raw.v !== VERSION || !Array.isArray(raw.list)) return p;
   for (const id of raw.list) if (AVATARS[id] && !p.list.includes(id) && p.list.length < MAX_PROFILES) p.list.push(id);
   p.current = p.list.includes(raw.current) ? raw.current : p.list[0] || null;
+  // Players with Little Driver switched off (it is on by default).
+  if (Array.isArray(raw.pro)) p.pro = p.list.filter((id) => raw.pro.includes(id));
   return p;
 }
 
@@ -88,6 +90,18 @@ export class Profiles {
     return id ? scopedStorage(this.storage, id) : null;
   }
 
+  /** Little Driver: driving help for young children, on unless turned off. */
+  littleDriver(id = this.current) {
+    return !this.state.pro.includes(id);
+  }
+
+  setLittleDriver(id, on) {
+    if (!this.list.includes(id)) return;
+    this.state.pro = this.state.pro.filter((x) => x !== id);
+    if (!on) this.state.pro.push(id);
+    this.save();
+  }
+
   available() {
     return Object.keys(AVATARS).filter((id) => !this.list.includes(id));
   }
@@ -116,6 +130,7 @@ export class Profiles {
     const s = scopedStorage(this.storage, id);
     for (const k of PLAYER_KEYS) s.removeItem(k);
     this.state.list = this.list.filter((x) => x !== id);
+    this.state.pro = this.state.pro.filter((x) => x !== id);
     if (this.state.current === id) this.state.current = this.list[0] || null;
     this.save();
     return true;

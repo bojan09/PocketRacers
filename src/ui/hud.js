@@ -149,6 +149,10 @@ export class Hud {
       this.popup(`${e.label}! +${e.points}`, e.combo > 1 ? `×${e.combo}` : '', big || e.combo >= 4);
       return;
     }
+    if (e.type === 'rescue') {
+      this.popup('🛟', '', true);
+      return;
+    }
     if (e.type === 'boost') {
       this.popup('BOOST!');
       return;

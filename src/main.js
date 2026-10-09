@@ -26,6 +26,7 @@ import { BadgesScreen } from './ui/badgesScreen.js';
 import { AutoQuality } from './core/autoQuality.js';
 import { SPEED_TO_KMH } from './sim/session.js';
 import { kitSlots } from './data/kits.js';
+import { EASIER } from './sim/ai.js';
 import { Profiles, AVATARS } from './core/profiles.js';
 import { ProfilesScreen, MapsScreen, Gate, GrownupScreen } from './ui/homeScreens.js';
 
@@ -288,7 +289,7 @@ async function startEvent(e) {
   race = new Race(session, {
     mode: e.mode,
     laps: e.laps,
-    difficulty: e.difficulty,
+    difficulty: profiles.littleDriver() ? EASIER[e.difficulty] : e.difficulty,
     opponents: pickOpponents(e, car, 5, raceAttempt),
     gridSlot: 3,
   });
@@ -334,7 +335,9 @@ function showResults() {
  * the unlocked race with the fewest stars.
  */
 function nextEvent() {
-  const open = EVENTS.filter((e) => career.unlocked(e));
+  // Little Drivers skip knockout races (still in the grown-ups' race list).
+  const kind = (e) => !profiles.littleDriver() || e.mode !== 'elimination';
+  const open = EVENTS.filter((e) => career.unlocked(e) && kind(e));
   return open.find((e) => !career.stars(e.id)) || open.reduce((a, b) => (career.stars(b.id) < career.stars(a.id) ? b : a));
 }
 
@@ -465,6 +468,7 @@ function rebindPlayer() {
   useVehicle(garage.selected);
   syncGarageStats();
   updateBank();
+  session.assist = profiles.littleDriver();
 }
 
 function usePlayer(id) {
@@ -521,6 +525,10 @@ function openMaps() {
 const grownupScreen = new GrownupScreen({
   profiles,
   sound: (k) => audio.ui(k),
+  onLittleDriver: (id, on) => {
+    profiles.setLittleDriver(id, on);
+    session.assist = profiles.littleDriver();
+  },
   onRemove: (id) => {
     const wasCurrent = id === profiles.current;
     profiles.remove(id);
@@ -702,6 +710,7 @@ const loop = new GameLoop({
         else if (e.type === 'score' && e.kind === 'smash') navigator.vibrate(15);
       }
       if (e.type === 'score') progress.add(e.points);
+      if (e.type === 'rescue') audio.ui('open');
       trackEvent(e);
       if (e.type === 'finish' || e.type === 'eliminated') resultsTimer = setTimeout(showResults, 1800);
     }
@@ -723,6 +732,7 @@ const loop = new GameLoop({
 
 applySettings();
 syncGarageStats();
+session.assist = profiles.littleDriver();
 $('title-car').textContent = car.name;
 updateBank();
 enforceLandscape();
