@@ -7,7 +7,7 @@ import { TRAFFIC_MODELS, TRAFFIC_PAINTS } from './data/cars.js';
 import { makeVehicle, VEHICLE_BY_ID } from './data/vehicles.js';
 import { Garage } from './core/garage.js';
 import { GarageScreen } from './ui/garageScreen.js';
-import { TRACKS, TRACK_BY_ID, TRACK_MOOD } from './data/tracks/index.js';
+import { TRACK_BY_ID } from './data/tracks/index.js';
 import { buildTrack3D } from './world/track3d.js';
 import { DrivingSession } from './sim/session.js';
 import { Renderer3D } from './render3d/renderer3d.js';
@@ -26,6 +26,8 @@ import { BadgesScreen } from './ui/badgesScreen.js';
 import { AutoQuality } from './core/autoQuality.js';
 import { SPEED_TO_KMH } from './sim/session.js';
 import { kitSlots } from './data/kits.js';
+import { Profiles, AVATARS } from './core/profiles.js';
+import { ProfilesScreen, MapsScreen, Gate, GrownupScreen } from './ui/homeScreens.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,7 +37,10 @@ const builtTracks = {};
 const getTrack = (id) => (builtTracks[id] ||= buildTrack3D(TRACK_BY_ID[id]));
 let trackId = settings.track;
 const track = getTrack(trackId);
-const garage = new Garage();
+// Each child has their own saves; the stores below are re-pointed when the
+// player changes.
+const profiles = new Profiles();
+const garage = new Garage(profiles.storageFor());
 let car = makeVehicle(garage.selected, garage.custom(garage.selected), garage.upgrades(garage.selected));
 const session = new DrivingSession(track, car);
 let renderer;
@@ -57,11 +62,11 @@ const input = new InputManager(controlsEl);
 const audio = new GameAudio();
 const hud = new Hud();
 const canVibrate = typeof navigator.vibrate === 'function';
-const progress = new Progress();
-const achievements = new Achievements();
+const progress = new Progress(profiles.storageFor());
+const achievements = new Achievements(profiles.storageFor());
 
-let mode = 'title'; // 'title' | 'garage' | 'events' | 'badges' | 'driving' | 'paused' | 'results'
-const career = new Career();
+let mode = 'title'; // 'title' | 'profiles' | 'maps' | 'garage' | 'events' | 'badges' | 'grownup' | 'driving' | 'paused' | 'results'
+const career = new Career(profiles.storageFor());
 let FREE_TRAFFIC = session.trafficCount;
 let race = null; // active Race (null in free drive)
 let raceEvent = null;
@@ -102,10 +107,9 @@ function applySettings() {
   controlsEl.dataset.swap = String(settings.swapSides);
   document.documentElement.style.setProperty('--size', { s: 0.82, m: 1, l: 1.18 }[settings.buttonSize]);
   $('fps').hidden = !settings.showFps;
-  $('screen-pause').querySelector('.panel').dataset.scheme = settings.controlScheme;
+  $('screen-grownup').querySelector('.panel').dataset.scheme = settings.controlScheme;
   if (!settings.triedSchemes.includes(settings.controlScheme)) settings.triedSchemes.push(settings.controlScheme);
   syncSettingsForm();
-  syncTitle();
   saveSettings(settings);
   requestAnimationFrame(() => input.touch.measure());
 }
@@ -121,12 +125,6 @@ function syncSettingsForm() {
   }
 }
 
-function syncTitle() {
-  for (const b of document.querySelectorAll('.scheme')) {
-    b.setAttribute('aria-checked', String(b.dataset.scheme === settings.controlScheme));
-  }
-  $('title-auto').checked = settings.autoAccelerate;
-}
 
 /** Turn on tilt steering. Must run inside a user gesture for iOS. */
 async function enableTilt() {
@@ -203,21 +201,6 @@ function loadTrack(id) {
   FREE_TRAFFIC = session.trafficCount;
 }
 
-function syncMapPicker() {
-  const def = TRACK_BY_ID[settings.track];
-  $('map-name').textContent = def.name;
-  $('map-mood').textContent = TRACK_MOOD[def.id] || '';
-}
-
-function stepMap(dir) {
-  audio.click();
-  const i = TRACKS.findIndex((t) => t.id === settings.track);
-  settings.track = TRACKS[(i + dir + TRACKS.length) % TRACKS.length].id;
-  saveSettings(settings);
-  syncMapPicker();
-  loadTrack(settings.track);
-}
-
 /** Leave race mode: back to free drive with the player's own vehicle. */
 function endRace() {
   clearTimeout(resultsTimer);
@@ -235,8 +218,11 @@ function endRace() {
 function toTitle() {
   endRace();
   $('screen-events').hidden = true;
-  $('screen-results').hidden = true;
+  resultsScreen.close();
   $('screen-badges').hidden = true;
+  $('screen-maps').hidden = true;
+  $('screen-grownup').hidden = true;
+  $('screen-profiles').hidden = true;
   mode = 'title';
   input.releaseAll();
   input.touch.enabled = false;
@@ -266,13 +252,13 @@ const garageScreen = new GarageScreen({
   garage,
   progress,
   click: () => audio.click(),
+  sound: (k) => audio.ui(k),
   onPreview: (id) => renderer.setVehicle(makeVehicle(id, garage.custom(id), garage.upgrades(id))),
   onUnlock: () => hud.toast('Unlocked!'),
   onDrive: (id) => {
     garageScreen.close();
     useVehicle(id);
     toTitle();
-    $('btn-drive').click(); // same path as the title's Drive button (tilt permission etc.)
   },
   onBack: () => {
     garageScreen.close();
@@ -314,6 +300,9 @@ async function startEvent(e) {
 }
 
 function showResults() {
+  // Badges earned now show as chips in the results panel.
+  badgesScreen.inline = $('results-badges');
+  badgesScreen.inline.textContent = '';
   const r = race.results;
   const e = raceEvent;
   const stars = starsFor(e, { ...r, car });
@@ -329,8 +318,8 @@ function showResults() {
     if (car.family === 'truck') achievements.add('truckRaces');
   }
   achievements.max('raceStars', career.totalStars);
-  const i = EVENTS.indexOf(e);
-  const next = EVENTS.slice(i + 1).find((x) => career.unlocked(x)) || null;
+  const upNext = nextEvent();
+  const next = upNext === e ? null : upNext;
   mode = 'results';
   input.releaseAll();
   input.touch.enabled = false;
@@ -338,6 +327,15 @@ function showResults() {
   $('hud').hidden = true;
   controlsEl.hidden = true;
   resultsScreen.show(r, { event: e, stars, points, next, medals: e.mode === 'timetrial' ? medalTimes(e, car) : null });
+}
+
+/**
+ * The race ▶ Play starts: the first unlocked race without stars, otherwise
+ * the unlocked race with the fewest stars.
+ */
+function nextEvent() {
+  const open = EVENTS.filter((e) => career.unlocked(e));
+  return open.find((e) => !career.stars(e.id)) || open.reduce((a, b) => (career.stars(b.id) < career.stars(a.id) ? b : a));
 }
 
 function openEvents() {
@@ -355,8 +353,10 @@ const eventsScreen = new EventsScreen({
   career,
   garage,
   click: () => audio.click(),
+  sound: (k) => audio.ui(k),
   onPick: (e) => startEvent(e),
   onBack: () => {
+    audio.ui('back');
     eventsScreen.close();
     toTitle();
   },
@@ -365,13 +365,10 @@ const eventsScreen = new EventsScreen({
 const resultsScreen = new ResultsScreen({
   click: () => audio.click(),
   onRetry: () => startEvent(raceEvent),
-  onNext: () => {
-    const i = EVENTS.indexOf(raceEvent);
-    const next = EVENTS.slice(i + 1).find((x) => career.unlocked(x));
-    if (next) startEvent(next);
-  },
-  onEvents: openEvents,
+  onNext: () => startEvent(nextEvent()),
+  onEvents: toTitle,
 });
+resultsScreen.onClose = () => (badgesScreen.inline = null);
 
 function openGarage() {
   audio.unlock();
@@ -381,9 +378,11 @@ function openGarage() {
 }
 
 function updateBank() {
-  const pts = progress.points;
-  $('title-bank').textContent = pts ? `★ ${pts.toLocaleString()} points earned` : '';
-  $('title-badges').textContent = badgesScreen.label;
+  $('title-bank').textContent = `★ ${progress.points.toLocaleString()}`;
+  $('title-badges').textContent = String(achievements.count);
+  const a = AVATARS[profiles.current];
+  $('home-avatar').textContent = a ? a.icon : '🙂';
+  $('home-avatar').style.setProperty('--c', a ? a.color : '#9aa3c7');
 }
 
 // ------------------------------------------------------------------ badges
@@ -392,6 +391,7 @@ const badgesScreen = new BadgesScreen({
   achievements,
   click: () => audio.click(),
   onBack: () => {
+    audio.ui('back');
     badgesScreen.close();
     toTitle();
   },
@@ -452,6 +452,102 @@ function trackEvent(e) {
   }
 }
 
+// ------------------------------------------------- players, maps, grown-ups
+
+const gate = new Gate({ sound: (k) => audio.ui(k) });
+
+/** Point every per-player save at the current profile and reload it. */
+function rebindPlayer() {
+  for (const store of [garage, career, progress, achievements]) {
+    store.storage = profiles.storageFor();
+    store.load();
+  }
+  useVehicle(garage.selected);
+  syncGarageStats();
+  updateBank();
+}
+
+function usePlayer(id) {
+  progress.save();
+  achievements.save();
+  profiles.select(id);
+  rebindPlayer();
+  toTitle();
+}
+
+const profilesScreen = new ProfilesScreen({
+  profiles,
+  sound: (k) => audio.ui(k),
+  onPick: usePlayer,
+  onAdd: (id) => {
+    if (id) {
+      progress.save();
+      achievements.save();
+      profiles.add(id);
+      usePlayer(id);
+    } else gate.ask((ok) => ok && profilesScreen.open('new'));
+  },
+});
+
+function openProfiles(m = 'pick') {
+  mode = 'profiles';
+  $('screen-title').hidden = true;
+  profilesScreen.open(m);
+}
+
+const mapsScreen = new MapsScreen({
+  sound: (k) => audio.ui(k),
+  current: () => settings.track,
+  onBack: toTitle,
+  onPick: async (id) => {
+    // Ask for tilt permission first, while still inside the tap.
+    const scheme = settings.controlScheme;
+    const tilt = chooseScheme(scheme, null);
+    settings.track = id;
+    saveSettings(settings);
+    mapsScreen.close();
+    loadTrack(id);
+    await tilt;
+    showDriving();
+  },
+});
+
+function openMaps() {
+  mode = 'maps';
+  $('screen-title').hidden = true;
+  mapsScreen.open();
+}
+
+const grownupScreen = new GrownupScreen({
+  profiles,
+  sound: (k) => audio.ui(k),
+  onRemove: (id) => {
+    const wasCurrent = id === profiles.current;
+    profiles.remove(id);
+    if (wasCurrent) rebindPlayer();
+  },
+  onAdd: () => {
+    grownupScreen.close();
+    openProfiles('new');
+  },
+  onRaces: () => {
+    grownupScreen.close();
+    openEvents();
+  },
+  onDone: () => {
+    grownupScreen.close();
+    if (!profiles.list.length) openProfiles('new');
+    else toTitle();
+  },
+});
+
+function openGrownup() {
+  mode = 'grownup';
+  $('screen-title').hidden = true;
+  syncSettingsForm();
+  grownupScreen.open();
+}
+
 function openBadges() {
   audio.unlock();
   mode = 'badges';
@@ -479,43 +575,35 @@ function lockLandscape() {
   enter.then(() => screen.orientation.lock('landscape')).catch(() => {});
 }
 
-// Title screen
-for (const b of document.querySelectorAll('.scheme')) {
-  if (b.dataset.scheme === 'tilt' && !tiltSupported()) b.disabled = true;
-  b.addEventListener('click', () => {
-    audio.click();
-    $('title-hint').textContent = '';
-    settings.controlScheme = b.dataset.scheme;
-    syncTitle();
-  });
-}
-$('title-auto').addEventListener('change', (e) => {
-  settings.autoAccelerate = e.target.checked;
-  applySettings();
-});
+// Home screen
 $('btn-garage').addEventListener('click', () => {
-  audio.click();
+  audio.ui('open');
   openGarage();
 });
 $('btn-badges').addEventListener('click', () => {
-  audio.click();
+  audio.ui('open');
   openBadges();
 });
-$('map-prev').addEventListener('click', () => stepMap(-1));
-$('map-next').addEventListener('click', () => stepMap(1));
+// ▶ Play goes straight into the next race: no list to read.
 $('btn-races').addEventListener('click', () => {
   audio.click();
   lockLandscape();
-  openEvents();
+  startEvent(nextEvent());
 });
-$('btn-drive').addEventListener('click', async () => {
+$('btn-drive').addEventListener('click', () => {
+  audio.unlock();
+  audio.ui('open');
+  lockLandscape();
+  openMaps();
+});
+$('btn-profile').addEventListener('click', () => {
+  audio.ui('open');
+  openProfiles();
+});
+$('btn-grownup').addEventListener('click', () => {
   audio.unlock();
   audio.click();
-  lockLandscape();
-  const scheme = settings.controlScheme;
-  await chooseScheme(scheme, $('title-hint'));
-  if (scheme === 'tilt' && settings.controlScheme !== 'tilt') return; // stay to show the hint
-  showDriving();
+  gate.ask((ok) => ok && openGrownup());
 });
 
 // Pause screen
@@ -636,9 +724,10 @@ const loop = new GameLoop({
 applySettings();
 syncGarageStats();
 $('title-car').textContent = car.name;
-syncMapPicker();
 updateBank();
 enforceLandscape();
+// Shared device: ask who is playing (or let the first player pick an animal).
+if (profiles.list.length !== 1) openProfiles(profiles.list.length ? 'pick' : 'new');
 loop.start();
 window.addEventListener('pagehide', () => {
   progress.save();
@@ -662,4 +751,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSe
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, startEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
+window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, profiles, gate, startEvent, nextEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };

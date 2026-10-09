@@ -25,6 +25,8 @@ const STATS = [
   ['handling', 'Handling'],
   ['offroad', 'Off-road'],
 ];
+// Picture filter chips: kids pick by icon, the small label is for grown-ups.
+const FAMILY_ICON = { all: '⭐', race: '🏎️', sports: '🚗', muscle: '🔥', hatch: '🚘', jeep: '⛰️', suv: '🚙', pickup: '🛻', monster: '🦖', truck: '🚛' };
 const SPIN_SPEED = 0.35; // rad/s while idle
 const START_YAW = Math.PI - 0.65; // front three-quarter view
 
@@ -37,9 +39,11 @@ export class GarageScreen {
    * @param {(id:string)=>void} o.onDrive  owned vehicle chosen
    * @param {()=>void} o.onBack
    * @param {()=>void} o.click  UI sound
+   * @param {(kind:string)=>void} [o.sound]  meaningful UI sounds (back, nope, buy)
    */
   constructor(o) {
     Object.assign(this, o);
+    this.sound ||= () => this.click();
     this.root = $('screen-garage');
     this.previewId = this.garage.selected;
     this.filter = 'all';
@@ -63,7 +67,9 @@ export class GarageScreen {
     const chips = $('garage-filters');
     for (const f of ['all', ...fams]) {
       const b = document.createElement('button');
-      b.textContent = f === 'all' ? 'All' : FAMILIES[f].label;
+      b.innerHTML = '<span aria-hidden="true"></span><small></small>';
+      b.firstChild.textContent = FAMILY_ICON[f] || '🚗';
+      b.lastChild.textContent = f === 'all' ? 'All' : FAMILIES[f].label;
       b.dataset.filter = f;
       b.addEventListener('click', () => {
         this.click();
@@ -101,7 +107,7 @@ export class GarageScreen {
     $('garage-prev').addEventListener('click', () => this.step(-1));
     $('garage-next').addEventListener('click', () => this.step(1));
     $('garage-back').addEventListener('click', () => {
-      this.click();
+      this.sound('back');
       this.onBack();
     });
     $('garage-reset').addEventListener('click', () => {
@@ -194,10 +200,18 @@ export class GarageScreen {
       return;
     }
     if (this.garage.unlock(id, this.progress)) {
-      this.click();
+      this.sound('buy');
       this.onUnlock?.(id);
       this.render();
-    }
+    } else this.nope($('garage-action'));
+  }
+
+  /** "Not yet": a sound and a little shake on the button. */
+  nope(el) {
+    this.sound('nope');
+    el.classList.remove('shake');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('shake');
   }
 
   render() {
@@ -212,14 +226,19 @@ export class GarageScreen {
     btn.classList.toggle('unlock', !owned);
     if (owned) {
       btn.disabled = false;
-      btn.textContent = 'Drive!';
+      btn.textContent = '✓';
+      btn.setAttribute('aria-label', 'Use this car');
     } else if (this.progress.points >= v.price) {
       btn.disabled = false;
-      btn.textContent = `Unlock ★ ${v.price.toLocaleString()}`;
+      btn.textContent = `🔓 ★ ${v.price.toLocaleString()}`;
     } else {
-      btn.disabled = true;
-      btn.textContent = `★ ${(v.price - this.progress.points).toLocaleString()} more to unlock`;
+      // Never disabled: tapping says "not yet" with a sound.
+      btn.disabled = false;
+      btn.classList.add('cant');
+      btn.textContent = `🔒 ★ ${(v.price - this.progress.points).toLocaleString()} more`;
     }
+    if (owned || this.progress.points >= v.price) btn.classList.remove('cant');
+    if (!owned) btn.removeAttribute('aria-label');
     this.renderCars();
     this.renderOptions();
     this.renderKit();
@@ -288,13 +307,13 @@ export class GarageScreen {
       } else {
         const cost = upgradeCost(v.id, level);
         buy.textContent = `★ ${cost.toLocaleString()}`;
-        buy.disabled = this.progress.points < cost;
+        buy.classList.toggle('cant', this.progress.points < cost);
         buy.addEventListener('click', () => {
           if (this.garage.buyUpgrade(v.id, k, this.progress)) {
-            this.click();
+            this.sound('buy');
             this.onPreview(v.id);
             this.render();
-          }
+          } else this.nope(buy);
         });
       }
       row.append(info, buy);

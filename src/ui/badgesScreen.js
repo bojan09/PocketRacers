@@ -50,8 +50,19 @@ export class BadgesScreen {
     }
   }
 
-  /** Celebrate a newly earned badge. */
+  /**
+   * Celebrate a newly earned badge: a pop-up, or a chip inside `inline`
+   * (the results panel) so nothing covers the medal.
+   */
   pop(a) {
+    if (this.inline) {
+      const chip = document.createElement('span');
+      chip.className = 'badge-chip';
+      chip.textContent = `${a.icon} +★${a.reward.toLocaleString()}`;
+      chip.title = a.name;
+      this.inline.append(chip);
+      return;
+    }
     while (this.pops.children.length >= 3) this.pops.firstChild.remove();
     const el = document.createElement('div');
     el.className = 'badge-pop';

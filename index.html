@@ -87,41 +87,37 @@
         </div>
       </div>
 
-      <!-- Title / test-drive screen -->
+      <!-- Home: three big picture buttons, no reading needed -->
       <section id="screen-title" class="screen screen-title">
-        <div class="title-card">
-          <h1 class="logo"><span>Pocket</span><span>Racers</span></h1>
-          <div class="map-picker" aria-label="Map for free drive">
-            <button id="map-prev" class="map-arrow" aria-label="Previous map"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></button>
-            <span class="map-label"><b id="map-name">Sunny Valley</b><small id="map-mood"></small></span>
-            <button id="map-next" class="map-arrow" aria-label="Next map"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg></button>
+        <header class="home-top">
+          <button id="btn-profile" class="avatar-btn" aria-label="Change player"><span class="avatar" id="home-avatar"></span><b id="title-bank"></b></button>
+          <div class="home-corner">
+            <button id="btn-badges" class="round-btn" aria-label="Badges"><span aria-hidden="true">🏆</span><b id="title-badges"></b></button>
+            <button id="btn-grownup" class="round-btn small" aria-label="Grown-ups"><span aria-hidden="true">⚙️</span></button>
           </div>
-          <h2 class="section-label">Choose your controls</h2>
-          <div class="scheme-picker" role="radiogroup" aria-label="Control scheme">
-            <button class="scheme" role="radio" data-scheme="buttons">
-              <svg viewBox="0 0 48 32" aria-hidden="true"><rect x="2" y="6" width="18" height="20" rx="5" /><rect x="28" y="6" width="18" height="20" rx="5" /><path d="m13 11-5 5 5 5M35 11l5 5-5 5" class="stroke" /></svg>
-              <b>Buttons</b><small>Tap left &amp; right</small>
-            </button>
-            <button class="scheme" role="radio" data-scheme="wheel">
-              <svg viewBox="0 0 48 32" aria-hidden="true"><circle cx="24" cy="16" r="13" class="stroke" /><circle cx="24" cy="16" r="3.5" /><path d="M11 16h9.5M27.5 16H37M24 19.5V29" class="stroke" /></svg>
-              <b>Wheel</b><small>Drag to turn</small>
-            </button>
-            <button class="scheme" role="radio" data-scheme="tilt">
-              <svg viewBox="0 0 48 32" aria-hidden="true"><rect x="10" y="4" width="28" height="24" rx="4" transform="rotate(-15 24 16)" class="stroke" /><path d="M4 26a22 22 0 0 0 8 4M44 26a22 22 0 0 1-8 4" class="stroke" /></svg>
-              <b>Tilt</b><small>Turn your device</small>
-            </button>
-          </div>
-          <label class="toggle-row"><input type="checkbox" id="title-auto" /> <span>Auto-accelerate</span></label>
-          <div class="title-actions">
-            <button id="btn-garage" class="btn btn-garage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9H3z" /><path d="M7 20v-6h10v6" class="cut" /></svg><span>Garage<small id="title-car"></small></span></button>
-            <button id="btn-races" class="big-btn">Race!</button>
-            <button id="btn-drive" class="btn btn-free">Free drive</button>
-          </div>
-          <p class="hint" id="title-hint"></p>
-          <div class="title-foot">
-            <button id="btn-badges" class="pill-btn">🏅 Badges <b id="title-badges"></b></button>
-            <p class="bank" id="title-bank"></p>
-          </div>
+        </header>
+        <h1 class="logo"><span>Pocket</span><span>Racers</span></h1>
+        <div class="home-buttons">
+          <button id="btn-drive" class="home-btn drive" aria-label="Drive"><span class="home-icon" aria-hidden="true">🗺️</span><b>Drive</b></button>
+          <button id="btn-races" class="home-btn play" aria-label="Play"><svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg><b>Play</b></button>
+          <button id="btn-garage" class="home-btn garage" aria-label="Garage"><span class="home-icon" aria-hidden="true">🚗</span><b>Garage</b><small id="title-car"></small></button>
+        </div>
+      </section>
+
+      <!-- Who's playing? -->
+      <section id="screen-profiles" class="screen screen-profiles" hidden>
+        <h2 class="who" id="profiles-title">Who's playing?</h2>
+        <div class="profile-row" id="profile-row"></div>
+      </section>
+
+      <!-- Free drive: pick a map by its picture -->
+      <section id="screen-maps" class="screen screen-events" hidden>
+        <div class="events-wrap">
+          <header class="events-top">
+            <button id="maps-back" class="icon-btn" aria-label="Back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></button>
+            <h2>🗺️</h2>
+          </header>
+          <div class="map-grid" id="map-grid"></div>
         </div>
       </section>
 
@@ -141,12 +137,11 @@
         <button class="garage-arrow next" id="garage-next" aria-label="Next vehicle"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg></button>
         <div class="garage-panel">
           <div class="tabs" role="tablist">
-            <button role="tab" data-tab="cars" aria-selected="true">Vehicles</button>
-            <button role="tab" data-tab="paint" aria-selected="false">Paint</button>
-            <button role="tab" data-tab="wheels" aria-selected="false">Wheels</button>
-            <button role="tab" data-tab="style" aria-selected="false">Style</button>
-            <button role="tab" data-tab="kit" aria-selected="false">Kit</button>
-            <button role="tab" data-tab="tune" aria-selected="false">Tune</button>
+            <button role="tab" data-tab="cars" aria-selected="true" aria-label="Vehicles">🚗</button>
+            <button role="tab" data-tab="paint" aria-selected="false" aria-label="Paint">🎨</button>
+            <button role="tab" data-tab="wheels" aria-selected="false" aria-label="Wheels">🛞</button>
+            <button role="tab" data-tab="style" aria-selected="false" aria-label="Style and kit">✨</button>
+            <button role="tab" data-tab="tune" aria-selected="false" aria-label="Faster">⚡</button>
           </div>
           <div class="tab-body" data-body="cars">
             <div class="chips" id="garage-filters"></div>
@@ -166,11 +161,8 @@
             <h3>Rim colour</h3>
             <div class="swatches" data-key="rim"></div>
           </div>
-          <div class="tab-body" data-body="kit" hidden>
-            <div id="garage-kit"></div>
-          </div>
           <div class="tab-body" data-body="tune" hidden>
-            <p class="tune-note">Upgrades make this vehicle faster for good. Paid with points.</p>
+            <p class="tune-note">⚡ Make it faster! Paid with ★ stars.</p>
             <div id="garage-tune"></div>
           </div>
           <div class="tab-body" data-body="style" hidden>
@@ -182,6 +174,7 @@
             <div class="choices" data-key="tint"></div>
             <h3>Neon underglow</h3>
             <div class="swatches" data-key="neon"></div>
+            <div id="garage-kit"></div>
             <button class="btn" id="garage-reset">Reset to factory look</button>
           </div>
           <button id="garage-action" class="big-btn garage-action"></button>
@@ -215,29 +208,52 @@
       <!-- Race results -->
       <section id="screen-results" class="screen screen-results" hidden>
         <div class="panel results-panel" role="dialog" aria-modal="true" aria-labelledby="results-title">
+          <div class="result-medal" id="results-medal" aria-hidden="true"></div>
           <h2 id="results-title"></h2>
           <div class="result-stars" id="results-stars" aria-label="Stars"></div>
           <p class="result-sub" id="results-sub"></p>
           <ol class="standings" id="results-standings"></ol>
           <p class="result-points" id="results-points"></p>
+          <div class="result-badges" id="results-badges"></div>
           <div class="row-buttons">
-            <button id="results-retry" class="btn">Retry</button>
-            <button id="results-next" class="big-btn">Next race</button>
-            <button id="results-events" class="btn">Races</button>
+            <button id="results-events" class="home-btn small" aria-label="Home"><span class="home-icon" aria-hidden="true">🏠</span></button>
+            <button id="results-retry" class="home-btn small" aria-label="Again"><span class="home-icon" aria-hidden="true">↻</span></button>
+            <button id="results-next" class="home-btn play" aria-label="Next race"><svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
           </div>
         </div>
       </section>
 
-      <!-- Pause + settings -->
+      <!-- Pause: three big icons -->
       <section id="screen-pause" class="screen screen-pause" hidden>
-        <div class="panel" role="dialog" aria-modal="true" aria-labelledby="pause-title">
-          <h2 id="pause-title">Paused</h2>
-          <div class="row-buttons">
-            <button id="btn-resume" class="big-btn">Resume</button>
-            <button id="btn-restart" class="btn">Restart</button>
-            <button id="btn-menu" class="btn">Menu</button>
-          </div>
+        <div class="pause-buttons" role="dialog" aria-modal="true" aria-label="Paused">
+          <button id="btn-menu" class="home-btn small" aria-label="Home"><span class="home-icon" aria-hidden="true">🏠</span></button>
+          <button id="btn-resume" class="home-btn play" aria-label="Resume"><svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
+          <button id="btn-restart" class="home-btn small" aria-label="Restart"><span class="home-icon" aria-hidden="true">↻</span></button>
+        </div>
+      </section>
 
+      <!-- Grown-up lock: a sum young children can't answer yet -->
+      <section id="screen-gate" class="screen screen-gate" hidden>
+        <div class="panel gate-panel" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+          <button id="gate-cancel" class="gate-x" aria-label="Close">✕</button>
+          <h2 id="gate-title">Grown-ups only</h2>
+          <p class="gate-q"><span id="gate-q"></span> = <b id="gate-answer"></b></p>
+          <div class="keypad" id="gate-keys"></div>
+        </div>
+      </section>
+
+      <!-- Grown-up settings -->
+      <section id="screen-grownup" class="screen screen-pause" hidden>
+        <div class="panel" role="dialog" aria-modal="true" aria-labelledby="grownup-title">
+          <div class="grownup-top">
+            <h2 id="grownup-title">Grown-ups</h2>
+            <button id="grownup-done" class="big-btn">Done</button>
+          </div>
+          <h3>Players</h3>
+          <p class="note">Each player has their own cars, stars and badges. Removing a player deletes their progress.</p>
+          <div class="gu-profiles" id="gu-profiles"></div>
+          <h3>Races</h3>
+          <button id="gu-races" class="btn">Open the full race list</button>
           <h3>Controls</h3>
           <div class="segmented" data-setting="controlScheme">
             <button data-value="buttons">Buttons</button>

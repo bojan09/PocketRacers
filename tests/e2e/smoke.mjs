@@ -45,6 +45,10 @@ async function open(viewport, query = '', quality = 'low') {
     if (!localStorage.getItem('pocketracers.settings')) {
       localStorage.setItem('pocketracers.settings', JSON.stringify({ v: 1, data: { graphics: q } }));
     }
+    // One player (🦊), so the game opens on the home screen.
+    if (!localStorage.getItem('pocketracers.profiles')) {
+      localStorage.setItem('pocketracers.profiles', JSON.stringify({ v: 1, list: ['fox'], current: 'fox' }));
+    }
   }, quality);
   const page = await context.newPage();
   const errors = [];
@@ -72,11 +76,31 @@ const state = (page) =>
     return { mode: g.mode, z: p.z, x: p.x, speed: p.speed, steer: p.steer, nitro: p.nitro, touch: { ...g.input.touch.state }, scheme: g.settings.controlScheme };
   });
 
-async function drive(page) {
+/** Home → Drive → tap a map card (the current one by default). */
+async function drive(page, map = null) {
   await page.click('#btn-drive');
+  await page.click(map ? `.map-card[data-map="${map}"]` : '.map-card[aria-current="true"]');
   await page.waitForFunction(() => window.__pocketRacers.mode === 'driving');
   await page.waitForTimeout(200);
 }
+
+/** Answer the grown-up sum and open the grown-up panel from home. */
+async function grownup(page) {
+  await page.click('#btn-grownup');
+  const q = await page.textContent('#gate-q');
+  const [a, b] = q.split('+').map(Number);
+  for (const d of String(a + b)) await page.click(`#gate-keys [data-key="${d}"]`);
+  await page.waitForSelector('#screen-grownup:not([hidden])');
+}
+
+/** Pause and go back to the home screen. */
+async function home(page) {
+  await page.click('#btn-pause');
+  await page.click('#btn-menu');
+  await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
+}
+
+const PLAYER = (key) => `pocketracers.${key}@fox`;
 
 // ------------------------------------------------------------- landscape
 {
@@ -148,9 +172,12 @@ async function drive(page) {
     if (shots) await page.screenshot({ path: `${shots}/landscape-pause.png` });
   });
 
-  await check('switch to steering wheel and drag to steer', async () => {
-    await page.click('[data-setting="controlScheme"] [data-value="wheel"]');
-    await page.click('#btn-resume');
+  await check('switch to steering wheel (grown-up settings) and drag to steer', async () => {
+    await page.click('#btn-menu');
+    await grownup(page);
+    await page.click('#screen-grownup [data-setting="controlScheme"] [data-value="wheel"]');
+    await page.click('#grownup-done');
+    await drive(page);
     await page.waitForTimeout(150);
     const w = await center(page, '[data-control="wheel"]');
     assert.ok(w.w > 50, 'wheel visible');
@@ -216,14 +243,13 @@ async function drive(page) {
 {
   const { context, page, errors } = await open({ width: 844, height: 390 });
   await check('tilt without sensor data falls back to buttons with a message', async () => {
-    await page.click('.scheme[data-scheme="tilt"]');
-    await page.click('#btn-drive');
+    await grownup(page);
+    await page.click('#screen-grownup [data-setting="controlScheme"] [data-value="tilt"]');
     await page.waitForTimeout(1800);
     const s = await state(page);
     assert.equal(s.scheme, 'buttons');
-    assert.equal(s.mode, 'title');
-    const hint = await page.textContent('#title-hint');
-    assert.match(hint, /buttons/i);
+    assert.match(await page.textContent('#toast'), /buttons/i);
+    await page.click('#grownup-done');
   });
 
   await check('tilt with sensor data: calibrates to neutral and steers', async () => {
@@ -239,9 +265,11 @@ async function drive(page) {
         window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { alpha: 0, ...o }));
       }, 16);
     }, angle);
-    await page.click('.scheme[data-scheme="tilt"]');
-    await page.click('#btn-drive');
-    await page.waitForFunction(() => window.__pocketRacers.mode === 'driving', null, { timeout: 3000 });
+    await grownup(page);
+    await page.click('#screen-grownup [data-setting="controlScheme"] [data-value="tilt"]');
+    await page.waitForFunction(() => window.__pocketRacers.settings.controlScheme === 'tilt', null, { timeout: 3000 });
+    await page.click('#grownup-done');
+    await drive(page);
     let s = await state(page);
     assert.equal(s.scheme, 'tilt');
     await page.waitForTimeout(300);
@@ -255,6 +283,91 @@ async function drive(page) {
     if (shots) await page.screenshot({ path: `${shots}/landscape-tilt.png` });
   });
   await check('no console errors (tilt)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+
+// ------------------------------------------------------ players + lock
+{
+  // An older save (from before profiles) becomes 🦊's; 🐼 is added fresh.
+  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  await context.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('pocketracers.settings', JSON.stringify({ v: 1, data: { graphics: 'low' } }));
+    localStorage.setItem('pocketracers.progress', JSON.stringify({ v: 1, points: 5000 }));
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await page.goto(base);
+  await page.waitForFunction(() => window.__pocketRacers);
+  const pts = () => page.evaluate(() => window.__pocketRacers.progress.points);
+  await check('old progress goes to the first player only; one player opens on home', async () => {
+    assert.deepEqual(await page.evaluate(() => window.__pocketRacers.profiles.list), ['fox']);
+    assert.equal(await page.evaluate(() => window.__pocketRacers.mode), 'title');
+    assert.equal(await pts(), 5000);
+  });
+  await check("a second player starts fresh; launch then asks who's playing", async () => {
+    await page.click('#btn-profile');
+    await page.click('#profile-row .add');
+    const q = await page.textContent('#gate-q');
+    const [a, b] = q.split('+').map(Number);
+    for (const d of String(a + b)) await page.click(`#gate-keys [data-key="${d}"]`);
+    await page.click('[data-profile=panda]');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
+    assert.equal(await pts(), 0);
+    await page.reload();
+    await page.waitForFunction(() => window.__pocketRacers);
+    assert.equal(await page.evaluate(() => window.__pocketRacers.mode), 'profiles');
+    assert.deepEqual(await page.$$eval('#profile-row [data-profile]', (b) => b.map((x) => x.dataset.profile)), ['fox', 'panda']);
+  });
+  await check('each player has their own points and cars', async () => {
+    await page.click('[data-profile=fox]');
+    assert.equal(await pts(), 5000);
+    await page.evaluate(() => window.__pocketRacers.garage.unlock('trailhound', window.__pocketRacers.progress));
+    assert.ok((await pts()) < 5000);
+    await page.click('#btn-profile');
+    await page.click('[data-profile=panda]');
+    assert.equal(await pts(), 0, 'panda untouched');
+    assert.ok(!(await page.evaluate(() => window.__pocketRacers.garage.owns('trailhound'))));
+    await page.click('#btn-profile');
+    await page.click('[data-profile=fox]');
+    assert.ok(await page.evaluate(() => window.__pocketRacers.garage.owns('trailhound')));
+  });
+  await check('a wrong answer keeps the grown-up panel locked', async () => {
+    await page.click('#btn-grownup');
+    const q = await page.textContent('#gate-q');
+    const [a, b] = q.split('+').map(Number);
+    const wrong = String(a + b + 1);
+    for (const d of wrong) await page.click(`#gate-keys [data-key="${d}"]`);
+    await page.waitForTimeout(400);
+    assert.ok(await page.isHidden('#screen-gate'));
+    assert.ok(await page.isHidden('#screen-grownup'));
+  });
+  await check('adding a player needs the lock and starts fresh', async () => {
+    await page.click('#btn-profile');
+    await page.click('#profile-row .add');
+    assert.ok(await page.isVisible('#screen-gate'));
+    const q = await page.textContent('#gate-q');
+    const [a, b] = q.split('+').map(Number);
+    for (const d of String(a + b)) await page.click(`#gate-keys [data-key="${d}"]`);
+    await page.click('[data-profile=unicorn]');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.profiles.current), 'unicorn');
+    assert.equal(await pts(), 0);
+    assert.equal(await page.textContent('#home-avatar'), '🦄');
+  });
+  await check('grown-ups can remove a player (two taps)', async () => {
+    await grownup(page);
+    await page.click('[data-remove=unicorn]');
+    assert.ok(await page.evaluate(() => window.__pocketRacers.profiles.list.includes('unicorn')), 'first tap only asks');
+    await page.click('[data-remove=unicorn]');
+    assert.deepEqual(await page.evaluate(() => window.__pocketRacers.profiles.list), ['fox', 'panda']);
+    assert.equal(await page.evaluate(() => localStorage.getItem('pocketracers.progress@unicorn')), null);
+    await page.click('#grownup-done');
+  });
+  await check('no console errors (players)', async () => assert.deepEqual(errors, []));
   await context.close();
 }
 
@@ -280,8 +393,9 @@ async function drive(page) {
     assert.ok(after.pts >= before + 150, `${before} -> ${after.pts}`);
     assert.match(await page.textContent('.badge-pop'), /Lift Off/);
   });
-  await check('graphics Auto is the default and shows its level', async () => {
-    await page.click('#btn-pause');
+  await check('graphics settings offer Auto', async () => {
+    await home(page);
+    await grownup(page);
     assert.match(await page.textContent('#graphics-auto'), /Auto/);
   });
   await check('no console errors (badges)', async () => assert.deepEqual(errors, []));
@@ -309,9 +423,9 @@ async function drive(page) {
 {
   // Garage: browse, customise, unlock with earned points, drive the new vehicle.
   const { context, page, errors } = await open({ width: 844, height: 390 });
-  await page.evaluate(() => {
-    localStorage.setItem('pocketracers.progress', JSON.stringify({ v: 1, points: 2600 }));
-  });
+  await page.evaluate((k) => {
+    localStorage.setItem(k, JSON.stringify({ v: 1, points: 2600 }));
+  }, PLAYER('progress'));
   await page.reload();
   await page.waitForFunction(() => window.__pocketRacers);
   await check('garage opens on the selected vehicle', async () => {
@@ -325,7 +439,7 @@ async function drive(page) {
     assert.equal(await page.textContent('#garage-name'), 'Comet S');
     await page.click('.car-card:has-text("Trailhound")');
     assert.equal(await page.textContent('#garage-name'), 'Trailhound');
-    assert.match(await page.textContent('#garage-action'), /Unlock/);
+    assert.match(await page.textContent('#garage-action'), /🔓/);
   });
   await check('paint, rims and style change the preview and persist', async () => {
     await page.click('[data-tab=paint]');
@@ -334,23 +448,25 @@ async function drive(page) {
     await page.click('.choices[data-key=rimStyle] button[data-value=star]');
     await page.click('[data-tab=style]');
     await page.click('.choices[data-key=ride] button[data-value=max]');
-    const custom = await page.evaluate(() => JSON.parse(localStorage.getItem('pocketracers.garage')).custom.trailhound);
+    const custom = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).custom.trailhound, PLAYER('garage'));
     assert.deepEqual(custom, { body: '#ff006e', rimStyle: 'star', ride: 'max' });
     assert.equal(await page.evaluate(() => window.__pocketRacers.renderer.carDef.paint.body), '#ff006e');
   });
-  await check('unlock spends points; locked-and-unaffordable shows what is missing', async () => {
+  await check('unlock spends points; too expensive says "not yet" and shakes', async () => {
     await page.click('#garage-action');
     assert.match(await page.textContent('#garage-bank'), /600/);
-    assert.equal(await page.textContent('#garage-action'), 'Drive!');
+    assert.equal(await page.textContent('#garage-action'), '✓');
     await page.click('[data-tab=cars]');
     await page.click('.car-card:has-text("Bolt R")');
-    assert.ok(await page.isDisabled('#garage-action'));
+    assert.match(await page.getAttribute('#garage-action', 'class'), /cant/);
+    await page.click('#garage-action');
+    assert.match(await page.getAttribute('#garage-action', 'class'), /shake/);
+    assert.ok(!(await page.evaluate(() => window.__pocketRacers.garage.owns('bolt'))));
     await page.click('.car-card:has-text("Trailhound")');
   });
   await check('kit, neon and a performance upgrade', async () => {
-    await page.click('[data-tab=kit]');
-    await page.click('#garage-kit button:has-text("Bull bar")');
     await page.click('[data-tab=style]');
+    await page.click('#garage-kit button:has-text("Bull bar")');
     await page.click('.swatches[data-key=neon] button[data-value="#8ac926"]');
     const custom = await page.evaluate(() => window.__pocketRacers.garage.custom('trailhound'));
     assert.equal(custom.bullbar, 'bullbar');
@@ -363,9 +479,10 @@ async function drive(page) {
     assert.ok(st.pts < before);
     await page.click('[data-tab=cars]');
   });
-  await check('drive the unlocked vehicle', async () => {
+  await check('✓ picks the vehicle and goes home; it drives', async () => {
     await page.click('#garage-action');
-    await page.waitForFunction(() => window.__pocketRacers.mode === 'driving');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
+    await drive(page);
     const car = await page.evaluate(() => ({ id: window.__pocketRacers.car.id, session: window.__pocketRacers.session.car.id }));
     assert.deepEqual(car, { id: 'trailhound', session: 'trailhound' });
     await page.waitForTimeout(600);
@@ -384,15 +501,18 @@ async function drive(page) {
 {
   // Races: events list, countdown, AI opponents, finish, results, career save.
   const { context, page, errors } = await open({ width: 844, height: 390 });
-  await check('events list shows unlocked and locked races', async () => {
-    await page.click('#btn-races');
+  await check('grown-ups can open the full race list', async () => {
+    await grownup(page);
+    await page.click('#gu-races');
     assert.equal(await page.evaluate(() => window.__pocketRacers.mode), 'events');
     assert.equal(await page.locator('.event-card').count(), 12);
     assert.ok((await page.locator('.event-card.locked').count()) >= 5);
+    await page.click('#events-back');
   });
-  await check('a race starts with a countdown and 5 AI opponents', async () => {
-    await page.click('.event-card:has-text("Rookie Race")');
+  await check('▶ Play starts the first race straight away, with 5 AI opponents', async () => {
+    await page.click('#btn-races', { force: true }); // it gently pulses
     await page.waitForFunction(() => window.__pocketRacers.mode === 'driving');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.race && window.__pocketRacers.nextEvent().id), 'rookie');
     const st = await page.evaluate(() => ({ phase: window.__pocketRacers.race.phase, racers: window.__pocketRacers.session.racers.length }));
     assert.deepEqual(st, { phase: 'countdown', racers: 5 });
     await page.waitForFunction(() => window.__pocketRacers.race.phase === 'racing', null, { timeout: 8000 });
@@ -410,8 +530,10 @@ async function drive(page) {
     assert.equal(await page.locator('#results-standings li').count(), 6);
     const after = await page.evaluate(() => window.__pocketRacers.progress.points);
     assert.ok(after > before);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('pocketracers.career')).events.rookie.stars);
+    const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).events.rookie.stars, PLAYER('career'));
     assert.ok(saved >= 1);
+    assert.ok(await page.isVisible('#results-next'), 'next race offered');
+    assert.ok((await page.locator('#results-badges .badge-chip').count()) >= 1, 'badges shown inside the results');
   });
   await check('retry restarts the race; menu returns to free drive', async () => {
     await page.click('#results-retry');
@@ -426,29 +548,25 @@ async function drive(page) {
 }
 
 {
-  // Maps: the title picker switches maps; every map loads and drives.
+  // Maps: picture cards; every map loads and drives.
   const { context, page, errors } = await open({ width: 844, height: 390 });
-  await check('map picker cycles through all five maps and they drive', async () => {
-    const seen = [];
-    for (let i = 0; i < 5; i++) {
-      seen.push(await page.textContent('#map-name'));
-      await page.click('#btn-drive');
-      await page.waitForFunction(() => window.__pocketRacers.mode === 'driving');
+  await check('every map card loads its map and drives', async () => {
+    const ids = await page.$$eval('.map-card', (c) => c.map((b) => b.dataset.map));
+    assert.deepEqual(ids, ['sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast']);
+    for (const id of ids) {
+      await drive(page, id);
       await page.waitForTimeout(700);
-      assert.ok(await page.evaluate(() => window.__pocketRacers.session.player.speed > 1000), `${seen.at(-1)} drives`);
-      await page.click('#btn-pause');
-      await page.click('#btn-menu');
-      await page.click('#map-next');
+      assert.equal(await page.evaluate(() => window.__pocketRacers.trackId), id);
+      assert.ok(await page.evaluate(() => window.__pocketRacers.session.player.speed > 1000), `${id} drives`);
+      await home(page);
     }
-    assert.deepEqual(seen, ['Sunny Valley', 'Desert Canyon', 'Snowy Peaks', 'Night City', 'Tropical Coast']);
-    assert.equal(await page.textContent('#map-name'), 'Sunny Valley');
   });
   await check('chosen map is remembered', async () => {
-    await page.click('#map-next');
     await page.reload();
     await page.waitForFunction(() => window.__pocketRacers);
-    assert.equal(await page.textContent('#map-name'), 'Desert Canyon');
-    assert.equal(await page.evaluate(() => window.__pocketRacers.trackId), 'desert-canyon');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.trackId), 'tropical-coast');
+    await page.click('#btn-drive');
+    assert.equal(await page.getAttribute('.map-card[aria-current="true"]', 'data-map'), 'tropical-coast');
   });
   await check('no console errors (maps)', async () => assert.deepEqual(errors, []));
   await context.close();

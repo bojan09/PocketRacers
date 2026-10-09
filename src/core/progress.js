@@ -1,15 +1,20 @@
 // Player progress: the points wallet, earned by tricks and spent on garage
-// unlocks. Prototype persistence uses localStorage; the versioned
-// IndexedDB save system replaces this later.
+// unlocks. Saved per player profile (see profiles.js).
 
 const KEY = 'pocketracers.progress';
 
 export class Progress {
-  constructor() {
+  constructor(storage = globalThis.localStorage) {
+    this.storage = storage;
+    this.load();
+  }
+
+  /** (Re)read the wallet from `this.storage`. */
+  load() {
     this.points = 0;
     this.dirty = false;
     try {
-      const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+      const raw = JSON.parse(this.storage?.getItem(KEY) || 'null');
       if (raw && raw.v === 1 && Number.isFinite(raw.points) && raw.points >= 0) this.points = Math.floor(raw.points);
     } catch {
       /* storage unavailable: start from zero */
@@ -33,7 +38,7 @@ export class Progress {
   save() {
     if (!this.dirty) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ v: 1, points: this.points }));
+      this.storage?.setItem(KEY, JSON.stringify({ v: 1, points: this.points }));
       this.dirty = false;
     } catch {
       /* full or blocked: keep in memory */

@@ -54,6 +54,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > 26 badges with progress bars and point rewards. Graphics "Auto" (the new
 > default) watches real frame times while driving and steps High → Medium →
 > Low on devices that can't keep up.
+>
+> **Phase 4A — menus for young children:** "Who's playing?" animal profiles
+> (each child has their own cars, stars and badges; an older save becomes
+> 🦊's, and more players are added behind the grown-up lock). Home is three picture buttons — ▶ Play (straight into the
+> next race), 🗺️ Drive (picture map cards) and 🚗 Garage (icon tabs). Pause
+> and results are icon-only. Settings, the full race list and player
+> management sit behind a grown-up lock (a two-digit sum). "Not yet" and
+> "bought" sounds replace text-only feedback.
 
 ## Run locally
 

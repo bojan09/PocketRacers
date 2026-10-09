@@ -396,6 +396,36 @@ export class GameAudio {
     });
   }
 
+  /**
+   * Menu sounds that carry meaning without reading: 'back', 'nope' (locked
+   * or not enough stars), 'buy' (unlock/upgrade) and 'open'.
+   */
+  ui(kind) {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const SOUNDS = {
+      back: { type: 'triangle', notes: [700, 470], step: 0.07, len: 0.1, vol: 0.12 },
+      nope: { type: 'square', notes: [220, 165], step: 0.14, len: 0.13, vol: 0.06 },
+      buy: { type: 'triangle', notes: [523, 659, 784, 1047, 1319], step: 0.065, len: 0.25, vol: 0.14 },
+      open: { type: 'triangle', notes: [520, 780], step: 0.06, len: 0.1, vol: 0.12 },
+    };
+    const sd = SOUNDS[kind];
+    if (!sd) return this.click();
+    const ac = this.ctx;
+    sd.notes.forEach((freq, i) => {
+      const t = ac.currentTime + i * sd.step;
+      const o = ac.createOscillator();
+      o.type = sd.type;
+      o.frequency.value = freq;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(sd.vol, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t + sd.len);
+      o.connect(g).connect(this.master);
+      o.start(t);
+      o.stop(t + sd.len + 0.02);
+    });
+  }
+
   click() {
     if (!this.ctx || this.ctx.state !== 'running') return;
     const ac = this.ctx;

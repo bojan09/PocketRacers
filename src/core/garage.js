@@ -47,9 +47,14 @@ export function sanitizeGarage(raw) {
 export class Garage {
   constructor(storage = globalThis.localStorage) {
     this.storage = storage;
+    this.load();
+  }
+
+  /** (Re)read the save from `this.storage`. */
+  load() {
     let raw = null;
     try {
-      raw = JSON.parse(storage?.getItem(KEY) || 'null');
+      raw = JSON.parse(this.storage?.getItem(KEY) || 'null');
     } catch {
       /* unreadable: start fresh */
     }

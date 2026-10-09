@@ -12,8 +12,8 @@ const ORDINAL = (n) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' :
 const starRow = (n) => '<b>★</b>'.repeat(n) + '★'.repeat(3 - n);
 
 export class EventsScreen {
-  constructor({ career, garage, onPick, onBack, click }) {
-    Object.assign(this, { career, garage, onPick, onBack, click });
+  constructor({ career, garage, onPick, onBack, click, sound }) {
+    Object.assign(this, { career, garage, onPick, onBack, click, sound });
     this.root = $('screen-events');
     $('events-back').addEventListener('click', () => {
       click();
@@ -61,8 +61,10 @@ export class EventsScreen {
         b.append(lock);
       }
       b.addEventListener('click', () => {
-        this.click();
-        if (open) this.onPick(e);
+        if (open) {
+          this.click();
+          this.onPick(e);
+        } else this.sound?.('nope');
       });
       grid.append(b);
     }
@@ -94,8 +96,9 @@ export class ResultsScreen {
     let title;
     if (e.mode === 'timetrial') title = ['No medal', 'Bronze!', 'Silver!', 'Gold!'][info.stars];
     else if (r.eliminated) title = 'Knocked out!';
-    else title = r.place === 1 ? '1st place! 🏆' : `${ORDINAL(r.place)} place`;
+    else title = r.place === 1 ? '1st place!' : `${ORDINAL(r.place)} place`;
     $('results-title').textContent = title;
+    $('results-medal').textContent = info.stars === 0 ? '💪' : e.mode === 'timetrial' ? ['', '🥉', '🥈', '🥇'][info.stars] : r.eliminated ? '💪' : ['🏆', '🥈', '🥉'][r.place - 1] || '🏁';
     $('results-stars').innerHTML = starRow(info.stars);
     const sub = [`Time ${formatTime(r.time)}`];
     if (r.bestLap) sub.push(`Best lap ${formatTime(r.bestLap)}`);
@@ -123,11 +126,14 @@ export class ResultsScreen {
     $('results-points').textContent = `+${info.points.toLocaleString()} ★ points`;
     const next = $('results-next');
     next.hidden = !info.next;
-    next.textContent = info.next ? `Next: ${info.next.name}` : '';
+    // No next race (or this one needs another go): "again" is the big button.
+    $('results-retry').classList.toggle('play', !info.next);
+    $('results-retry').classList.toggle('small', !!info.next);
     this.root.hidden = false;
   }
 
   close() {
     this.root.hidden = true;
+    this.onClose?.();
   }
 }

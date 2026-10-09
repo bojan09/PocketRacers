@@ -20,16 +20,21 @@ export function sanitizeAchievements(raw) {
 export class Achievements {
   constructor(storage = globalThis.localStorage) {
     this.storage = storage;
+    /** Called with each newly earned badge. */
+    this.onEarn = null;
+    this.load();
+  }
+
+  /** (Re)read the save from `this.storage`. */
+  load() {
     let raw = null;
     try {
-      raw = JSON.parse(storage?.getItem(KEY) || 'null');
+      raw = JSON.parse(this.storage?.getItem(KEY) || 'null');
     } catch {
       /* unreadable: start fresh */
     }
     this.state = sanitizeAchievements(raw);
     this.dirty = false;
-    /** Called with each newly earned badge. */
-    this.onEarn = null;
   }
 
   stat(k) {
