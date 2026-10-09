@@ -275,7 +275,7 @@ const loop = new GameLoop({
     }
     session.events.length = 0;
     if (mode === 'driving') {
-      audio.update(session.player, car.handling.maxSpeed, input.state.throttle);
+      audio.update(session.player, car.handling.maxSpeed, input.state.throttle, frameDt);
       hud.update(session);
     }
     hud.tickFps(frameDt, loop.frameMs, settings.showFps);

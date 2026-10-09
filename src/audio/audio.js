@@ -1,5 +1,9 @@
-// Synthesised audio (Web Audio API) — no sound files needed. The context is
-// created/resumed only after a user gesture, as mobile browsers require.
+// Game audio (Web Audio API). Engine: recorded loops when present
+// (assets/audio/engine/), otherwise a synthesised engine; effects are
+// synthesised. The context is created/resumed only after a user gesture, as
+// mobile browsers require.
+
+import { Gearbox, EngineSampler } from './engine.js';
 
 export class GameAudio {
   constructor() {
@@ -30,24 +34,45 @@ export class GameAudio {
     this.master.gain.value = this.volume;
     this.master.connect(ac.destination);
 
-    // Engine: two detuned oscillators through a low-pass filter.
+    // Synthesised engine (fallback): firing-rate sawtooth, half-rate square
+    // and sub sine, soft-clipped for grit, through an RPM-tracking low-pass.
     this.engineGain = ac.createGain();
     this.engineGain.gain.value = 0;
     this.engineFilter = ac.createBiquadFilter();
     this.engineFilter.type = 'lowpass';
     this.engineFilter.frequency.value = 700;
-    this.engineFilter.Q.value = 4;
+    this.engineFilter.Q.value = 2.2;
+    const drive = ac.createWaveShaper();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i / (curve.length - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * 2.2);
+    }
+    drive.curve = curve;
+    const mixIn = ac.createGain();
+    mixIn.gain.value = 0.6;
     this.osc1 = ac.createOscillator();
     this.osc1.type = 'sawtooth';
     this.osc2 = ac.createOscillator();
     this.osc2.type = 'square';
-    const o2g = ac.createGain();
-    o2g.gain.value = 0.35;
-    this.osc1.connect(this.engineFilter);
-    this.osc2.connect(o2g).connect(this.engineFilter);
-    this.engineFilter.connect(this.engineGain).connect(this.master);
-    this.osc1.start();
-    this.osc2.start();
+    this.osc3 = ac.createOscillator();
+    this.osc3.type = 'sine';
+    const g2 = ac.createGain();
+    g2.gain.value = 0.4;
+    const g3 = ac.createGain();
+    g3.gain.value = 0.8;
+    this.osc1.connect(mixIn);
+    this.osc2.connect(g2).connect(mixIn);
+    this.osc3.connect(g3).connect(mixIn);
+    mixIn.connect(drive).connect(this.engineFilter).connect(this.engineGain).connect(this.master);
+    for (const o of [this.osc1, this.osc2, this.osc3]) o.start();
+
+    this.gearbox = new Gearbox();
+    this.lastThrottle = 0;
+    this.sampler = new EngineSampler(ac, this.master, 'assets/audio/engine/');
+    this.sampler.load().then((ok) => {
+      this.useSamples = ok;
+    });
 
     // Shared noise source for nitro hiss, tyre scrub and impacts.
     const len = ac.sampleRate;
@@ -89,28 +114,69 @@ export class GameAudio {
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
   }
 
+  /** Turbo blow-off hiss plus a few exhaust crackles. */
+  liftOff() {
+    const now = this.ctx.currentTime;
+    if (this.lastLift && now - this.lastLift < 0.8) return;
+    this.lastLift = now;
+    this.whoosh(2400, 900, 0.35, 0.09);
+    for (let i = 0; i < 4; i++) {
+      const t = now + 0.08 + i * 0.07 + Math.random() * 0.05;
+      const n = this.ctx.createBufferSource();
+      n.buffer = this.noiseBuf;
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 900;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.16, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      n.connect(f).connect(g).connect(this.master);
+      n.start(t, Math.random() * 0.5);
+      n.stop(t + 0.06);
+    }
+  }
+
   /** Silence continuous sounds (pause menu). */
   quiet() {
     if (!this.ctx) return;
+    this.sampler?.silence();
     const t = this.ctx.currentTime;
     for (const g of [this.engineGain, this.nitroGain, this.skidGain, this.scrapeGain]) g.gain.setTargetAtTime(0, t, 0.05);
   }
 
   /** Per-frame update from the player state. */
-  update(player, maxSpeed, throttle) {
+  update(player, maxSpeed, throttle, dt = 1 / 60) {
     if (!this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
-    const sp = Math.min(1.5, Math.abs(player.speed) / maxSpeed);
-    // Fake gearbox: rpm climbs within each of five gears.
-    const gears = 5;
-    const g = Math.min(gears - 1, Math.floor(sp * gears));
-    const inGear = sp * gears - g;
-    const rpm = 0.25 + inGear * 0.6 + g * 0.05;
-    const f = 55 + rpm * 120 + (player.nitro ? 25 : 0);
-    this.osc1.frequency.setTargetAtTime(f, t, 0.03);
-    this.osc2.frequency.setTargetAtTime(f * 0.5 + 1.5, t, 0.03);
-    this.engineFilter.frequency.setTargetAtTime(500 + rpm * 1400 + throttle * 400, t, 0.05);
-    this.engineGain.gain.setTargetAtTime(0.09 + throttle * 0.06 + sp * 0.03, t, 0.05);
+    const sp = Math.abs(player.speed) / maxSpeed;
+    const thr = player.nitro ? 1 : throttle;
+    const gb = this.gearbox.update(Math.min(dt, 0.1), sp, thr, player.airborne);
+    const rpm = gb.rpm;
+    const rpmFrac = (rpm - this.gearbox.idle) / (this.gearbox.redline - this.gearbox.idle);
+    // Upshift: a brief torque cut you can hear.
+    const dip = gb.shifted === 1 && thr > 0.5 ? 0.45 : 1;
+    // Lifting off at high revs: turbo blow-off and a few exhaust pops.
+    if (this.lastThrottle > 0.6 && thr < 0.2 && rpm > 4500) this.liftOff();
+    this.lastThrottle = thr;
+
+    if (this.useSamples) {
+      this.sampler.update(rpm, thr, 0.55 * dip);
+      this.engineGain.gain.setTargetAtTime(0, t, 0.05);
+    } else {
+      const f = (rpm / 60) * 2; // 4-cylinder: two firings per revolution
+      this.osc1.frequency.setTargetAtTime(f, t, 0.025);
+      this.osc2.frequency.setTargetAtTime(f * 0.5 + 0.7, t, 0.025);
+      this.osc3.frequency.setTargetAtTime(f * 0.5, t, 0.025);
+      this.engineFilter.frequency.setTargetAtTime(280 + rpm * 0.32 + thr * 900, t, 0.04);
+      const gain = (0.07 + thr * 0.07 + rpmFrac * 0.04) * dip;
+      if (dip < 1) {
+        this.engineGain.gain.setValueAtTime(gain, t);
+        this.engineGain.gain.setTargetAtTime(gain / dip, t + 0.08, 0.05);
+      } else {
+        this.engineGain.gain.setTargetAtTime(gain, t, 0.04);
+      }
+    }
     this.nitroGain.gain.setTargetAtTime(player.nitro ? 0.22 : 0, t, 0.06);
     this.skidGain.gain.setTargetAtTime(player.sliding ? 0.18 : 0, t, 0.05);
     this.scrapeGain.gain.setTargetAtTime(player.scraping ? 0.12 : 0, t, 0.04);
