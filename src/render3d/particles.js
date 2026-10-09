@@ -5,6 +5,8 @@
 const FLOATS = 9; // pos3, rgba4, uv2
 const MAX = 420;
 const RIBBON_MAX = 48; // trail samples
+const WEATHER_MAX = 600; // snowflakes / raindrops around the camera
+const GLOW_MAX = 96; // headlight and street-lamp light pools
 // Rainbow bands, left to right across the trail.
 const RAINBOW = [
   [1, 0.23, 0.28],
@@ -36,8 +38,8 @@ export class Particles {
   constructor() {
     this.pool = [];
     for (let i = 0; i < MAX; i++) this.pool.push({ life: 0 });
-    this.alphaData = new Float32Array((MAX + 64 + 320) * 6 * FLOATS);
-    this.addData = new Float32Array(MAX * 6 * FLOATS);
+    this.alphaData = new Float32Array((MAX + 64 + 320 + WEATHER_MAX) * 6 * FLOATS);
+    this.addData = new Float32Array((MAX + GLOW_MAX + WEATHER_MAX) * 6 * FLOATS);
     this.alphaCount = 0;
     this.addCount = 0;
     this.ribbonData = new Float32Array(RIBBON_MAX * RAINBOW.length * 6 * FLOATS);
@@ -85,7 +87,11 @@ export class Particles {
   }
 
   /** Build vertex data. camRight / camUp are unit vectors. */
-  build(camRight, camUp, shadows, billboards = null) {
+  /**
+   * @param weather  optional Weather (snow drawn soft, rain as additive streaks)
+   * @param glows    optional light pools [{x, y, z, rx:[3], rz:[3], r, g, b, a}] (additive, flat)
+   */
+  build(camRight, camUp, shadows, billboards = null, weather = null, glows = null) {
     let ai = 0;
     let di = 0;
     const A = this.alphaData;
@@ -131,6 +137,27 @@ export class Particles {
       const c = p.col || t;
       if (t[4]) di = quad(D, di, p.x, p.y, p.z, rx, ry, rz, ux, uy, uz, c[0], c[1], c[2], t[3] * k);
       else ai = quad(A, ai, p.x, p.y, p.z, rx, ry, rz, ux, uy, uz, c[0], c[1], c[2], t[3] * k);
+    }
+    if (glows) {
+      for (let g = 0; g < Math.min(glows.length, GLOW_MAX); g++) {
+        const o = glows[g];
+        di = quad(D, di, o.x, o.y, o.z, o.rx[0], o.rx[1], o.rx[2], o.rz[0], o.rz[1], o.rz[2], o.r, o.g, o.b, o.a);
+      }
+    }
+    if (weather && weather.count) {
+      const W = weather;
+      const s = W.size;
+      for (let n = 0; n < W.count; n++) {
+        const x = W.pos[n * 3];
+        const y = W.pos[n * 3 + 1];
+        const z = W.pos[n * 3 + 2];
+        if (W.kind === 'rain') {
+          // Thin vertical streak facing the camera.
+          di = quad(D, di, x, y, z, camRight[0] * s * 0.12, camRight[1] * s * 0.12, camRight[2] * s * 0.12, 0, s * 2.2, 0, W.colour[0], W.colour[1], W.colour[2], W.alpha);
+        } else {
+          ai = quad(A, ai, x, y, z, camRight[0] * s, camRight[1] * s, camRight[2] * s, camUp[0] * s, camUp[1] * s, camUp[2] * s, W.colour[0], W.colour[1], W.colour[2], W.alpha);
+        }
+      }
     }
     this.alphaCount = ai / FLOATS;
     this.addCount = di / FLOATS;
@@ -182,3 +209,52 @@ export class Particles {
 }
 
 export const FX_FLOATS = FLOATS;
+
+/**
+ * Falling snow / rain / drifting dust in a box that travels with the camera.
+ * A fixed set of drops wraps around the box, so there is no spawning cost.
+ */
+export class Weather {
+  constructor(kind, density = 1) {
+    this.kind = kind;
+    const n = { snow: 420, rain: 520, dust: 140 }[kind] || 0;
+    this.count = Math.min(WEATHER_MAX, Math.round(n * density));
+    this.pos = new Float32Array(this.count * 3);
+    this.vel = new Float32Array(this.count * 3);
+    this.box = kind === 'rain' ? [36, 22, 36] : [44, 24, 44];
+    const seedRand = (() => {
+      let x = 2463534242;
+      return () => ((x ^= x << 13), (x ^= x >>> 17), (x ^= x << 5), (x >>> 0) / 4294967296);
+    })();
+    for (let i = 0; i < this.count; i++) {
+      for (let k = 0; k < 3; k++) this.pos[i * 3 + k] = (seedRand() - 0.5) * this.box[k] * 2;
+      if (kind === 'rain') this.vel.set([-1, -26 - seedRand() * 6, 0], i * 3);
+      else if (kind === 'snow') this.vel.set([(seedRand() - 0.5) * 1.5, -1.6 - seedRand() * 1.4, (seedRand() - 0.5) * 1.5], i * 3);
+      else this.vel.set([4 + seedRand() * 3, (seedRand() - 0.5) * 0.4, 1 + seedRand()], i * 3);
+    }
+    this.size = { snow: 0.17, rain: 0.4, dust: 0.5 }[kind] || 0.1;
+    this.colour = { snow: [1, 1, 1], rain: [0.6, 0.7, 0.9], dust: [0.86, 0.7, 0.5] }[kind] || [1, 1, 1];
+    this.alpha = { snow: 0.95, rain: 0.55, dust: 0.12 }[kind] || 0.5;
+    this.centre = null;
+    this.time = 0;
+  }
+
+  /** Move the drops; wrap them into the box around `eye`. */
+  update(dt, eye) {
+    this.time += dt;
+    const sway = Math.sin(this.time * 0.9) * 0.6;
+    for (let i = 0; i < this.count; i++) {
+      for (let k = 0; k < 3; k++) {
+        const j = i * 3 + k;
+        const v = this.pos[j] + (this.vel[j] + (k === 0 && this.kind === 'snow' ? sway : 0)) * dt;
+        const b = this.box[k];
+        const c = eye[k] + (k === 1 ? 4 : 0);
+        // Wrap relative to the camera so the box follows it.
+        let rel = v - c;
+        if (rel > b) rel -= 2 * b;
+        else if (rel < -b) rel += 2 * b;
+        this.pos[j] = c + rel;
+      }
+    }
+  }
+}

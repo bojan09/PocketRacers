@@ -1,6 +1,8 @@
 // Player settings. Prototype persistence uses localStorage; the versioned
 // IndexedDB save system replaces this in the persistence phase.
 
+import { TRACKS, DEFAULT_TRACK } from '../data/tracks/index.js';
+
 const KEY = 'pocketracers.settings';
 const VERSION = 1;
 
@@ -17,12 +19,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   reduceEffects: false,
   showFps: false,
   triedSchemes: [],
+  track: DEFAULT_TRACK, // free-drive map
 });
 
 const VALID = {
   controlScheme: ['buttons', 'wheel', 'tilt'],
   buttonSize: ['s', 'm', 'l'],
   quality: ['low', 'medium', 'high'],
+  track: TRACKS.map((t) => t.id),
 };
 
 function sanitize(raw) {

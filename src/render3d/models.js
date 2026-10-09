@@ -225,10 +225,10 @@ function cone() {
 }
 
 /** A clump of grass blades (flat-coloured gradient triangles). */
-export function grassTuft(rand) {
+export function grassTuft(rand, kind = 'grass') {
   const m = new MeshBuilder().material(0, 0);
-  const base = C('#3f8f3a');
-  const tip = C('#a6cf5c');
+  const base = kind === 'dry' ? C('#9a7a3a') : C('#3f8f3a');
+  const tip = kind === 'dry' ? C('#e0c27a') : C('#a6cf5c');
   const n = 5;
   for (let i = 0; i < n; i++) {
     const a = rand() * Math.PI;
@@ -267,6 +267,214 @@ export function starModel() {
   return m;
 }
 
+// ------------------------------------------------------------ desert
+
+function cactus(rand) {
+  const m = new MeshBuilder().material(0.08, 0.5);
+  const g = vary(C('#3f8f4a'), rand, 0.15);
+  const h = 3.2 + rand() * 2.2;
+  const r = 0.32;
+  m.cylinder(0, h / 2, 0, r, h / 2, 10, 'y', g, g);
+  m.sphere(0, h, 0, r, r * 0.9, r, g, { segs: 10, rings: 5 });
+  // One or two arms: out, then up.
+  const arms = rand() < 0.5 ? [-1, 1] : [rand() < 0.5 ? -1 : 1];
+  for (const sx of arms) {
+    const y = h * (0.4 + rand() * 0.2);
+    const out = 0.65;
+    const up = 0.8 + rand() * 0.9;
+    const ar = r * 0.7;
+    m.cylinder((sx * out) / 2, y, 0, ar, out / 2, 8, 'x', g, g);
+    m.cylinder(sx * out, y + up / 2, 0, ar, up / 2, 8, 'y', g, g);
+    m.sphere(sx * out, y + up, 0, ar, ar * 0.9, ar, g, { segs: 8, rings: 4 });
+  }
+  return m;
+}
+
+function desertRock(rand) {
+  const m = new MeshBuilder().material(0.05, 0.9);
+  const c = vary(C('#c27a4a'), rand, 0.2);
+  const s = 1.2 + rand() * 1.4;
+  m.blob(0, s * 0.45, 0, s * 1.3, s * 0.7, s, c, rand, 0.3);
+  m.blob(s * 0.6, s * 0.3, s * 0.3, s * 0.7, s * 0.45, s * 0.6, shadeBy(c, 0.7), rand, 0.3);
+  return m;
+}
+
+/** Big flat-topped sandstone mesa with layered bands (background). */
+function mesa(rand) {
+  const m = new MeshBuilder().material(0.03, 0.9);
+  const bands = [C('#b5592e'), C('#d0834e'), C('#c06a3c'), C('#e0a06a')];
+  const r = 16 + rand() * 14;
+  const h = 18 + rand() * 20;
+  const layers = 4;
+  for (let i = 0; i < layers; i++) {
+    const y0 = (h * i) / layers;
+    const y1 = (h * (i + 1)) / layers;
+    const rr = r * (1 - i * 0.07);
+    m.cylinder(0, (y0 + y1) / 2, 0, rr, (y1 - y0) / 2, 9, 'y', vary(bands[i % bands.length], rand, 0.08), C('#e8b27c'), rr * 0.96, false);
+  }
+  return m;
+}
+
+// -------------------------------------------------------------- snow
+
+function snowPine(rand) {
+  const m = pine(rand);
+  m.material(0.25, 0.3);
+  const white = C('#f4f8ff');
+  const h = 7 + rand() * 3;
+  for (let i = 0; i < 4; i++) {
+    const base = 1.1 + i * h * 0.19;
+    const r = 2.3 - i * 0.48;
+    const tierH = h * 0.34;
+    // Snow caps on each tier.
+    m.cylinder(0, base + tierH * 0.78, 0, r * 0.5, tierH * 0.24, 11, 'y', white, white, 0);
+  }
+  return m;
+}
+
+function snowman(rand) {
+  const m = new MeshBuilder().material(0.3, 0.2);
+  const white = C('#f7fbff');
+  const s = 0.9 + rand() * 0.3;
+  m.sphere(0, 0.75 * s, 0, 0.8 * s, 0.75 * s, 0.8 * s, white, { segs: 12, rings: 8 });
+  m.sphere(0, 1.85 * s, 0, 0.58 * s, 0.55 * s, 0.58 * s, white, { segs: 12, rings: 8 });
+  m.sphere(0, 2.7 * s, 0, 0.4 * s, 0.4 * s, 0.4 * s, white, { segs: 12, rings: 8 });
+  m.material(0.1, 0);
+  // Carrot nose, coal eyes and buttons, a scarf and a top hat.
+  m.cylinder(0, 2.68 * s, 0.55 * s, 0.07 * s, 0.18 * s, 8, 'z', C('#ff8c1a'), C('#ff8c1a'), 0);
+  for (const x of [-0.13, 0.13]) m.sphere(x * s, 2.82 * s, 0.35 * s, 0.05 * s, 0.05 * s, 0.05 * s, C('#1b1f3b'), { segs: 6, rings: 4 });
+  for (const y of [1.65, 1.9, 2.15]) m.sphere(0, y * s, 0.55 * s, 0.06 * s, 0.06 * s, 0.05 * s, C('#1b1f3b'), { segs: 6, rings: 4 });
+  const scarf = rand() < 0.5 ? C('#ff4d5e') : C('#2ec4b6');
+  m.cylinder(0, 2.35 * s, 0, 0.44 * s, 0.08 * s, 12, 'y', scarf, scarf);
+  m.box(0.25 * s, 2.05 * s, 0.38 * s, 0.09 * s, 0.25 * s, 0.03 * s, scarf);
+  m.cylinder(0, 3.08 * s, 0, 0.38 * s, 0.03 * s, 12, 'y', C('#1b1f3b'), C('#1b1f3b'));
+  m.cylinder(0, 3.3 * s, 0, 0.25 * s, 0.22 * s, 12, 'y', C('#1b1f3b'), C('#1b1f3b'));
+  return m;
+}
+
+// -------------------------------------------------------------- city
+
+const BUILDING_COLOURS = ['#3a4466', '#4a3f63', '#2f4f5f', '#5b4a3a', '#3d3d4f', '#2a5a4a'];
+
+/** Tall city block with lit windows (glows at night). */
+function tower(rand) {
+  const m = new MeshBuilder();
+  const w = 12 + rand() * 10;
+  const d = 12 + rand() * 8;
+  const h = 22 + rand() * 48;
+  const body = C(BUILDING_COLOURS[Math.floor(rand() * BUILDING_COLOURS.length)]);
+  m.material(0.25, 0.4);
+  m.box(0, h / 2, 0, w / 2, h / 2, d / 2, body);
+  m.box(0, h + 0.6, 0, w / 2 - 1.5, 0.6, d / 2 - 1.5, shadeBy(body, 0.4));
+  // Windows on all four faces: some lit (warm), some dark.
+  const lit = [C('#ffd98a'), C('#ffe7b0'), C('#bfe3ff')];
+  const dark = shadeBy(body, 0.45);
+  m.material(0.9, 0);
+  const rows = Math.floor((h - 3) / 3.2);
+  for (const face of [0, 1, 2, 3]) {
+    const span = face % 2 ? d : w;
+    const cols = Math.max(2, Math.floor(span / 3));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const on = rand() < 0.55;
+        const col = on ? lit[Math.floor(rand() * lit.length)] : dark;
+        const u = -span / 2 + (c + 0.5) * (span / cols);
+        const y = 3 + r * 3.2 + 1.2;
+        const hw = (span / cols) * 0.32;
+        const off = (face % 2 ? w : d) / 2 + 0.03;
+        const P = (a, b) => (face === 0 ? [a, b, off] : face === 2 ? [-a, b, -off] : face === 1 ? [off, b, -a] : [-off, b, a]);
+        m.quad(P(u - hw, y - 0.8), P(u + hw, y - 0.8), P(u + hw, y + 0.8), P(u - hw, y + 0.8), col, on ? 0.85 : 0);
+      }
+    }
+  }
+  // Blinking-red-style roof light.
+  m.box(0, h + 1.6, 0, 0.25, 0.4, 0.25, C('#ff4d5e'), 0.9);
+  return m;
+}
+
+/** Low shop with a glowing sign and awning. */
+function shop(rand) {
+  const m = new MeshBuilder();
+  const w = 10 + rand() * 6;
+  const body = C(['#e9e2d0', '#d6e4f0', '#f0d9d9', '#dfe8d3'][Math.floor(rand() * 4)]);
+  m.material(0.1, 0.5);
+  m.box(0, 3, 0, w / 2, 3, 4, body);
+  m.material(0.9, 0);
+  m.box(0, 1.6, 4.02, w / 2 - 1, 1.2, 0.02, C('#ffe7b0'), 0.8);
+  const sign = C(['#ff4d5e', '#4cc9f0', '#ffd23f', '#7b5cff'][Math.floor(rand() * 4)]);
+  m.box(0, 4.6, 4.1, w / 2 - 1.5, 0.6, 0.1, sign, 0.9);
+  m.material(0.2, 0.3);
+  m.box(0, 3.3, 4.6, w / 2, 0.08, 0.7, shadeBy(sign, 0.8));
+  return m;
+}
+
+// ------------------------------------------------------------ tropics
+
+function palm(rand) {
+  const m = new MeshBuilder();
+  const h = 6 + rand() * 3;
+  const lean = (rand() - 0.5) * 1.6;
+  const trunkC = C('#9b7653');
+  m.material(0.05, 0.8);
+  const n = 7;
+  let top = [0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    const t0 = i / n;
+    const t1 = (i + 1) / n;
+    const x0 = lean * t0 * t0;
+    const x1 = lean * t1 * t1;
+    const r = 0.26 - t0 * 0.08;
+    m.cylinder((x0 + x1) / 2, (h * (t0 + t1)) / 2, 0, r, h / n / 2 + 0.03, 7, 'y', shadeBy(trunkC, i % 2 ? 0.85 : 1), trunkC, r * 0.92);
+    top = [x1, h * t1, 0];
+  }
+  m.material(0.1, 0.4);
+  const leaf = vary(C('#2f9a4a'), rand, 0.15);
+  const fronds = 7;
+  for (let i = 0; i < fronds; i++) {
+    const a = (i / fronds) * Math.PI * 2 + rand() * 0.3;
+    const len = 3.2 + rand() * 0.8;
+    const dx = Math.cos(a);
+    const dz = Math.sin(a);
+    const mid = [top[0] + dx * len * 0.5, top[1] + 0.5, top[2] + dz * len * 0.5];
+    const tip = [top[0] + dx * len, top[1] - 1.1, top[2] + dz * len];
+    const side = [-dz * 0.55, 0, dx * 0.55];
+    m.tri(top, [mid[0] + side[0], mid[1], mid[2] + side[2]], mid, leaf);
+    m.tri(top, mid, [mid[0] - side[0], mid[1], mid[2] - side[2]], shadeBy(leaf, 0.85));
+    m.tri([mid[0] + side[0], mid[1], mid[2] + side[2]], tip, mid, shadeBy(leaf, 0.95));
+    m.tri(mid, tip, [mid[0] - side[0], mid[1], mid[2] - side[2]], shadeBy(leaf, 0.8));
+  }
+  for (let i = 0; i < 3; i++) m.sphere(top[0] + (i - 1) * 0.25, top[1] - 0.3, 0.2, 0.18, 0.18, 0.18, C('#6b4a2a'), { segs: 6, rings: 4 });
+  return m;
+}
+
+function hut(rand) {
+  const m = new MeshBuilder();
+  const wood = C('#b07a4a');
+  const straw = C('#d9b56a');
+  m.material(0.05, 0.8);
+  for (const [x, z] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) m.cylinder(x, 1, z, 0.15, 1, 6, 'y', wood, wood);
+  m.box(0, 2.1, 0, 2.4, 0.12, 2.4, wood);
+  m.box(0, 3.2, 0, 2.1, 1.0, 2.1, C(['#f2e6c9', '#bfe3f2', '#f7d1c4'][Math.floor(rand() * 3)]));
+  m.material(0.05, 0.9);
+  m.cylinder(0, 5.1, 0, 3.4, 0.95, 8, 'y', straw, straw, 0, false);
+  return m;
+}
+
+function umbrella(rand) {
+  const m = new MeshBuilder();
+  const a = C(['#ff4d5e', '#4cc9f0', '#ffd23f', '#7b5cff'][Math.floor(rand() * 4)]);
+  const b = C('#ffffff');
+  m.material(0.3, 0);
+  m.cylinder(0, 1.2, 0, 0.05, 1.2, 6, 'y', b, b);
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2;
+    const a1 = ((i + 1) / n) * Math.PI * 2;
+    m.tri([0, 2.7, 0], [Math.cos(a1) * 1.6, 2.2, Math.sin(a1) * 1.6], [Math.cos(a0) * 1.6, 2.2, Math.sin(a0) * 1.6], i % 2 ? a : b);
+  }
+  return m;
+}
+
 export const MODEL_BUILDERS = {
   pine,
   oak,
@@ -281,4 +489,14 @@ export const MODEL_BUILDERS = {
   barn,
   windmill: windmillTower,
   cone,
+  cactus,
+  desertRock,
+  mesa,
+  snowPine,
+  snowman,
+  tower,
+  shop,
+  palm,
+  hut,
+  umbrella,
 };

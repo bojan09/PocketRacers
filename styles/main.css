@@ -1320,6 +1320,60 @@ button {
   }
 }
 
+/* ---------- Title: map picker ---------- */
+
+.map-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 6px 0 8px;
+}
+
+.map-label {
+  display: grid;
+  min-width: 190px;
+  line-height: 1.1;
+}
+
+.map-label b {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.map-label small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.map-arrow {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid #e4e7f2;
+  background: #f6f7fb;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.map-arrow svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.event-card .map {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--teal);
+}
+
 /* ---------- Race HUD ---------- */
 
 .pos-pill b {
@@ -1594,6 +1648,13 @@ button {
   }
   .subtitle {
     margin: 2px 0 4px;
+  }
+  .map-picker {
+    margin: 2px 0 4px;
+  }
+  .map-arrow {
+    width: 34px;
+    height: 34px;
   }
   .section-label {
     margin: 4px 0;

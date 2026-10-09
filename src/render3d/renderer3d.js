@@ -32,7 +32,7 @@ import { buildMountains, buildCloudPuffs } from './environment.js';
 import { buildCarBody, buildWheel } from './carModel.js';
 import { windmillSails, starModel, MODEL_BUILDERS } from './models.js';
 import { MeshBuilder } from '../gl/meshBuilder.js';
-import { Particles, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
+import { Particles, Weather, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
 
 const TRAIL_LIFE = 0.5; // seconds a rainbow sample stays visible
 const GOLD = [1, 0.82, 0.25];
@@ -72,36 +72,7 @@ export class Renderer3D {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.skyTri);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), gl.STATIC_DRAW);
 
-    const pal = track.palette;
-    this.pal = {
-      fog: hexToRgb(pal.fog),
-      sun: hexToRgb(pal.sunColor).map((c) => c * 0.98),
-      skyAmb: hexToRgb(pal.skyAmbient).map((c) => c * 0.6),
-      groundAmb: hexToRgb(pal.groundAmbient).map((c) => c * 0.5),
-      skyTop: hexToRgb(pal.skyTop),
-      skyHorizon: hexToRgb(pal.skyHorizon),
-      groundRefl: hexToRgb(pal.grass).map((c) => c * 0.45),
-      sunDir: normalize(pal.sunDir),
-      fogNear: pal.fogNear,
-      fogFar: pal.fogFar,
-    };
-
-    // --- World geometry ---------------------------------------------------
-    const t0 = performance.now();
-    this.terrain = buildTerrain(track);
-    this.terrainTiles = this.terrain.tiles.map((b) => uploadMesh(gl, b));
-    this.water = uploadMesh(gl, this.terrain.water);
-    const { chunks, animated } = buildTrackChunks(track, this.terrain);
-    this.chunks = chunks.map((c) => uploadMesh(gl, c.builder));
-    this.animated = animated;
-    this.sails = uploadMesh(gl, windmillSails());
-    this.starMesh = uploadMesh(gl, starModel());
-    this.coneMesh = uploadMesh(gl, MODEL_BUILDERS.cone());
-    const b = this.terrain.bounds;
-    const center = [(b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2];
-    this.mountains = uploadMesh(gl, buildMountains(pal, center, Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.5 + 520));
-    this.cloudPuffs = buildCloudPuffs(center);
-    this.buildMs = performance.now() - t0;
+    this.setTrack(track);
 
     // --- Cars ---------------------------------------------------------------
     this.player = null;
@@ -165,7 +136,79 @@ export class Renderer3D {
   setQuality(name) {
     this.quality = QUALITY[name] || QUALITY.high;
     this.particles.quality = this.quality.particles;
+    if (this.env?.weather && this.env.weather !== 'none') this.weather = new Weather(this.env.weather, this.quality.particles + 0.2);
     this.resize();
+  }
+
+  /** Build (or rebuild for another map) all static world geometry. */
+  setTrack(track) {
+    const gl = this.gl;
+    this.track = track;
+    const env = track.def.env || {};
+    this.env = env;
+    const pal = track.palette;
+    this.pal = {
+      fog: hexToRgb(pal.fog),
+      sun: hexToRgb(pal.sunColor).map((c) => c * 0.98),
+      skyAmb: hexToRgb(pal.skyAmbient).map((c) => c * 0.6),
+      groundAmb: hexToRgb(pal.groundAmbient).map((c) => c * 0.5),
+      skyTop: hexToRgb(pal.skyTop),
+      skyHorizon: hexToRgb(pal.skyHorizon),
+      groundRefl: hexToRgb(pal.grass).map((c) => c * 0.45),
+      sunDir: normalize(pal.sunDir),
+      fogNear: pal.fogNear,
+      fogFar: pal.fogFar,
+      stars: env.night ? 1 : 0,
+    };
+
+    // --- World geometry ---------------------------------------------------
+    const t0 = performance.now();
+    this.disposeWorld();
+    this.terrain = buildTerrain(track);
+    this.terrainTiles = this.terrain.tiles.map((b) => uploadMesh(gl, b));
+    this.water = uploadMesh(gl, this.terrain.water);
+    const { chunks, animated } = buildTrackChunks(track, this.terrain);
+    this.chunks = chunks.map((c) => uploadMesh(gl, c.builder));
+    this.animated = animated;
+    this.sails = uploadMesh(gl, windmillSails());
+    this.starMesh = uploadMesh(gl, starModel());
+    this.coneMesh = uploadMesh(gl, MODEL_BUILDERS.cone());
+    const b = this.terrain.bounds;
+    const center = [(b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2];
+    this.mountains = uploadMesh(gl, env.mountains === false ? new MeshBuilder() : buildMountains(pal, center, Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.5 + 520));
+    this.cloudPuffs = env.clouds === false ? [] : buildCloudPuffs(center);
+    if (env.cloudTint) {
+      const t = hexToRgb(env.cloudTint);
+      for (const p of this.cloudPuffs) {
+        p.r *= t[0];
+        p.g *= t[1];
+        p.b *= t[2];
+      }
+    }
+    this.buildMs = performance.now() - t0;
+
+    // Night: street lamps throw light pools on the road.
+    this.lamps = [];
+    if (env.night) {
+      for (const sg of track.segments) {
+        for (const o of sg.sprites) {
+          if (o.kind !== 'lamp') continue;
+          const x = Math.sign(o.offset) * (Math.abs(o.offset) - 0.25);
+          const p = [sg.pos[0] + sg.R[0] * x * track.roadHalfWidthM, sg.pos[1] + 0.06, sg.pos[2] + sg.R[2] * x * track.roadHalfWidthM];
+          this.lamps.push({ p, R: sg.R, T: sg.T });
+        }
+      }
+    }
+    this.weather = env.weather && env.weather !== 'none' ? new Weather(env.weather, this.quality ? this.quality.particles + 0.2 : 1) : null;
+    this.trailCount = 0;
+    this.particles?.clear();
+    this.camDir = null;
+  }
+
+  disposeWorld() {
+    const gl = this.gl;
+    if (!this.chunks) return;
+    for (const m of [...this.chunks, ...this.terrainTiles, this.water, this.mountains, this.sails, this.starMesh, this.coneMesh]) deleteMesh(gl, m);
   }
 
   /** Meshes for AI racers (rebuilt per race). */
@@ -560,7 +603,8 @@ export class Renderer3D {
     // --- Particles, clouds & contact shadows ---------------------------------
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, inTunnel);
     this.particles.update(dt);
-    this.particles.build(this.camRight, this.camUp, this.shadows, this.quality.clouds ? this.cloudBillboards() : null);
+    if (this.weather && !inTunnel) this.weather.update(dt, eye);
+    this.particles.build(this.camRight, this.camUp, this.shadows, this.quality.clouds ? this.cloudBillboards() : null, this.weather && !inTunnel ? this.weather : null, this.env.night ? this.nightGlows(session, f) : null);
     this.drawFx();
 
     this.drawOverlay(dt);
@@ -579,6 +623,7 @@ export class Renderer3D {
     gl.uniform3fv(SU.uFogColor, pal.fog);
     gl.uniform3fv(SU.uSunDir, pal.sunDir);
     gl.uniform3fv(SU.uSunColor, pal.skySun || pal.sun);
+    gl.uniform1f(SU.uStars, pal.stars || 0);
     gl.depthMask(false);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.skyTri);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 12, 0);
@@ -859,6 +904,45 @@ export class Renderer3D {
     const gl = this.gl;
     while (this.enabledAttribs < n) gl.enableVertexAttribArray(this.enabledAttribs++);
     while (this.enabledAttribs > n) gl.disableVertexAttribArray(--this.enabledAttribs);
+  }
+
+  /** Night light pools: headlights ahead of every car plus nearby street lamps. */
+  nightGlows(session, f) {
+    const out = (this.glowList ||= []);
+    out.length = 0;
+    const beam = (fr, len, width, a) => {
+      out.push({
+        x: fr.pos[0] + fr.T[0] * (len * 0.75) + fr.U[0] * 0.08,
+        y: fr.pos[1] + fr.T[1] * (len * 0.75) + 0.08,
+        z: fr.pos[2] + fr.T[2] * (len * 0.75) + fr.U[2] * 0.08,
+        rx: [fr.R[0] * width, fr.R[1] * width, fr.R[2] * width],
+        rz: [fr.T[0] * len, fr.T[1] * len, fr.T[2] * len],
+        r: 1,
+        g: 0.93,
+        b: 0.75,
+        a,
+      });
+    };
+    const fr = this.frame2;
+    const lift = (p) => this.track.frame(p.z, p.x, fr);
+    lift(session.player);
+    beam(fr, 9, 2.6, 0.95);
+    for (const r of session.racers) {
+      lift(r.p);
+      if (this.near(fr.pos, 160)) beam(fr, 8, 2.4, 0.7);
+    }
+    for (const c of session.traffic) {
+      this.track.frame(c.z, c.x, fr);
+      if (this.near(fr.pos, 140)) beam(fr, 7, 2.2, 0.6);
+    }
+    for (const L of this.lamps) {
+      const dx = L.p[0] - this.eye[0];
+      const dz = L.p[2] - this.eye[2];
+      if (dx * dx + dz * dz > 180 * 180) continue;
+      out.push({ x: L.p[0], y: L.p[1], z: L.p[2], rx: [L.R[0] * 6, 0, L.R[2] * 6], rz: [L.T[0] * 6, 0, L.T[2] * 6], r: 1, g: 0.8, b: 0.45, a: 0.75 });
+    }
+    void f;
+    return out;
   }
 
   cloudBillboards() {

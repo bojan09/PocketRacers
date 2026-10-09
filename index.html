@@ -91,7 +91,11 @@
       <section id="screen-title" class="screen screen-title">
         <div class="title-card">
           <h1 class="logo"><span>Pocket</span><span>Racers</span></h1>
-          <p class="subtitle">Sunny Valley</p>
+          <div class="map-picker" aria-label="Map for free drive">
+            <button id="map-prev" class="map-arrow" aria-label="Previous map"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></button>
+            <span class="map-label"><b id="map-name">Sunny Valley</b><small id="map-mood"></small></span>
+            <button id="map-next" class="map-arrow" aria-label="Next map"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg></button>
+          </div>
           <h2 class="section-label">Choose your controls</h2>
           <div class="scheme-picker" role="radiogroup" aria-label="Control scheme">
             <button class="scheme" role="radio" data-scheme="buttons">

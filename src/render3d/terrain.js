@@ -59,6 +59,13 @@ export function buildTerrain(track, seed = 77) {
   const segs = track.segments;
   const RW = track.roadHalfWidthM;
   const water = track.def.waterLevel ?? -50;
+  // Per-map landscape: hill size, a sea that floods the low ground (coast),
+  // the height where snow starts, and how much the far rim rises.
+  const env = track.def.env || {};
+  const hillAmp = env.hills ?? 46;
+  const hillBase = env.sea ? water - 9 : (env.hillBase ?? 3);
+  const snowLine = env.snowLine ?? 72;
+  const rim = env.rim ?? 60;
   const noise = valueNoise(seed);
 
   let minX = Infinity;
@@ -132,14 +139,14 @@ export function buildTerrain(track, seed = 77) {
       }
       const d = Math.min(Math.sqrt(best), 1e4);
       const roadLow = near.pos[1] - 0.3 - RW * Math.abs(Math.sin(near.bank));
-      const hills = 3 + noise(x * 0.006, z * 0.006) * 46 + noise(x * 0.03 + 50, z * 0.03) * 4;
+      const hills = hillBase + noise(x * 0.006, z * 0.006) * hillAmp + noise(x * 0.03 + 50, z * 0.03) * (env.bumps ?? 4);
       const inner = RW + 5;
       let h = d < inner ? roadLow : roadLow + (hills - roadLow) * smoothstep(inner, inner + 70, d);
       // Keep the ground below the road surface anywhere near it.
       if (d < inner + 12) h = Math.min(h, roadLow);
       // Rim of hills at the map edge hides the world boundary.
       const edge = Math.min(x - minX, maxX - x, z - minZ, maxZ - z);
-      if (edge < 150) h += Math.pow(1 - edge / 150, 2) * 60;
+      if (edge < 150) h += Math.pow(1 - edge / 150, 2) * rim;
       // Lakes under bridges; the banks next to the approach roads stay put.
       const protectedBank = !near.bridge && d < inner + 14;
       for (const L of lakes) {
@@ -210,7 +217,7 @@ export function buildTerrain(track, seed = 77) {
       const steep = 1 - ay;
       c = mixc(c, rockC, Math.min(1, Math.max(0, (steep - 0.22) * 4)));
       c = mixc(c, sand, Math.min(1, Math.max(0, (water + 2.2 - h) / 2.5)));
-      c = mixc(c, snow, Math.min(1, Math.max(0, (h - 72) / 10)));
+      c = mixc(c, snow, Math.min(1, Math.max(0, (h - snowLine) / 10)));
       colours[k * 3] = c[0];
       colours[k * 3 + 1] = c[1];
       colours[k * 3 + 2] = c[2];
@@ -245,7 +252,9 @@ export function buildTerrain(track, seed = 77) {
   const waterMesh = new MeshBuilder().material(1, 0);
   if (track.def.waterLevel !== undefined) {
     const w = hexToRgb(pal.water);
-    waterMesh.quad([minX, water, minZ], [maxX, water, minZ], [maxX, water, maxZ], [minX, water, maxZ], w, 0);
+    // A sea runs out to the horizon; a lake stays inside the map.
+    const e = env.sea ? 4000 : 0;
+    waterMesh.quad([minX - e, water, minZ - e], [maxX + e, water, minZ - e], [maxX + e, water, maxZ + e], [minX - e, water, maxZ + e], w, 0);
   }
 
   return { sampler, tiles, water: waterMesh, bounds: { minX, maxX, minZ, maxZ } };

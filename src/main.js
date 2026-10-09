@@ -7,7 +7,7 @@ import { TRAFFIC_MODELS, TRAFFIC_PAINTS } from './data/cars.js';
 import { makeVehicle, VEHICLE_BY_ID } from './data/vehicles.js';
 import { Garage } from './core/garage.js';
 import { GarageScreen } from './ui/garageScreen.js';
-import testTrack from './data/tracks/testTrack.js';
+import { TRACKS, TRACK_BY_ID, TRACK_MOOD } from './data/tracks/index.js';
 import { buildTrack3D } from './world/track3d.js';
 import { DrivingSession } from './sim/session.js';
 import { Renderer3D } from './render3d/renderer3d.js';
@@ -25,7 +25,11 @@ import { EventsScreen, ResultsScreen } from './ui/raceScreens.js';
 const $ = (id) => document.getElementById(id);
 
 const settings = loadSettings();
-const track = buildTrack3D(testTrack);
+// Built maps are cached: switching back is instant.
+const builtTracks = {};
+const getTrack = (id) => (builtTracks[id] ||= buildTrack3D(TRACK_BY_ID[id]));
+let trackId = settings.track;
+const track = getTrack(trackId);
 const garage = new Garage();
 let car = makeVehicle(garage.selected, garage.custom(garage.selected));
 const session = new DrivingSession(track, car);
@@ -52,7 +56,7 @@ const progress = new Progress();
 
 let mode = 'title'; // 'title' | 'garage' | 'events' | 'driving' | 'paused' | 'results'
 const career = new Career();
-const FREE_TRAFFIC = session.trafficCount;
+let FREE_TRAFFIC = session.trafficCount;
 let race = null; // active Race (null in free drive)
 let raceEvent = null;
 let raceAttempt = 0;
@@ -164,6 +168,32 @@ function resume() {
   showDriving();
 }
 
+/** Switch the world to another map (no-op if already there). */
+function loadTrack(id) {
+  if (id === trackId) return;
+  trackId = id;
+  const T = getTrack(id);
+  session.setTrack(T);
+  renderer.setTrack(T);
+  renderer.setRacers([]);
+  FREE_TRAFFIC = session.trafficCount;
+}
+
+function syncMapPicker() {
+  const def = TRACK_BY_ID[settings.track];
+  $('map-name').textContent = def.name;
+  $('map-mood').textContent = TRACK_MOOD[def.id] || '';
+}
+
+function stepMap(dir) {
+  audio.click();
+  const i = TRACKS.findIndex((t) => t.id === settings.track);
+  settings.track = TRACKS[(i + dir + TRACKS.length) % TRACKS.length].id;
+  saveSettings(settings);
+  syncMapPicker();
+  loadTrack(settings.track);
+}
+
 /** Leave race mode: back to free drive with the player's own vehicle. */
 function endRace() {
   clearTimeout(resultsTimer);
@@ -175,6 +205,7 @@ function endRace() {
   renderer.setRacers([]);
   if (car.id !== garage.selected) useVehicle(garage.selected);
   else session.reset();
+  loadTrack(settings.track);
 }
 
 function toTitle() {
@@ -232,6 +263,7 @@ async function startEvent(e) {
   resultsScreen.close();
   $('screen-title').hidden = true;
   $('screen-pause').hidden = true;
+  loadTrack(e.track);
   const v = vehicleFor(e, garage);
   car = makeVehicle(v.id, garage.custom(v.id));
   session.setCar(car, false);
@@ -343,6 +375,8 @@ $('btn-garage').addEventListener('click', () => {
   audio.click();
   openGarage();
 });
+$('map-prev').addEventListener('click', () => stepMap(-1));
+$('map-next').addEventListener('click', () => stepMap(1));
 $('btn-races').addEventListener('click', () => {
   audio.click();
   openEvents();
@@ -458,6 +492,7 @@ const loop = new GameLoop({
 
 applySettings();
 $('title-car').textContent = car.name;
+syncMapPicker();
 updateBank();
 updateRotateNote();
 loop.start();
@@ -466,4 +501,4 @@ window.addEventListener('pagehide', () => progress.save());
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, startEvent, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
+window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, startEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };

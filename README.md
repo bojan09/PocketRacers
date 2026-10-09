@@ -35,8 +35,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > and gentle catch-up. Countdown, positions, final lap, results with stars
 > and points; loaner vehicles so no event is ever blocked.
 >
-> Next: 2G maps · 2H full 50-vehicle roster & deep customisation ·
-> 3 offline, achievements, performance pass.
+> **Phase 2G — maps:** five maps — Sunny Valley, Desert Canyon (sunset,
+> dust, mesas), Snowy Peaks (snowfall, slippery grip, snowmen), Night City
+> (night, rain, wet roads, lit towers, headlights and street-lamp pools) and
+> Tropical Coast (islands, sea to the horizon, palms). Map picker for free
+> drive; 12 career events spread across all maps.
+>
+> Next: 2H full 50-vehicle roster & deep customisation · 3 offline,
+> achievements, performance pass.
 
 ## Run locally
 
@@ -64,7 +70,7 @@ index.html             app shell, HUD, touch controls, menus
 styles/main.css        interface styles (mobile-first, safe areas)
 src/main.js            bootstrap + screen flow
 src/core/              fixed-timestep loop, settings, points wallet, garage save
-src/data/              vehicle families + roster, traffic, tracks (data, not code paths)
+src/data/              vehicle families + roster, traffic, events, tracks/ (one file per map)
 src/world/track3d.js   closed-spline 3D track → segments (curvature, banking, flags, colliders)
 src/sim/session.js     driving physics, jumps, collisions, traffic, lap timing (pure, testable)
 src/sim/fun.js         stars, cones, boost pads, near misses, drifts, tricks, combo scoring

@@ -232,6 +232,7 @@ uniform vec3 uSkyHorizon;
 uniform vec3 uFogColor;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
+uniform float uStars;
 varying vec2 vNdc;
 void main() {
   vec4 a = uInvViewProj * vec4(vNdc, -1.0, 1.0);
@@ -242,6 +243,13 @@ void main() {
   col = mix(uFogColor, col, smoothstep(-0.02, 0.12, h));
   float s = max(dot(d, uSunDir), 0.0);
   col += uSunColor * (pow(s, 900.0) * 3.0 + pow(s, 48.0) * 0.35 + pow(s, 6.0) * 0.12);
+  if (uStars > 0.0) {
+    // Night: a sparse field of twinkle-free stars fixed to the sky.
+    vec3 cell = floor(d * 260.0);
+    float r = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float star = step(0.9965, r) * smoothstep(0.04, 0.3, h);
+    col += vec3(star * uStars * (0.6 + 0.4 * fract(r * 97.0)));
+  }
   gl_FragColor = vec4(col, 1.0);
 }`;
 

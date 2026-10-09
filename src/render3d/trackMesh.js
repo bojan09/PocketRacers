@@ -10,7 +10,7 @@ import { rampLift } from '../world/track3d.js';
 
 export const CHUNK = 60; // segments per chunk
 const STEP = 2; // segments per road strip
-const FACES_ROAD = new Set(['lamp', 'house', 'barn']);
+const FACES_ROAD = new Set(['lamp', 'house', 'barn', 'shop', 'hut', 'snowman']);
 
 export function buildTrackChunks(track, terrain) {
   const pal = track.palette;
@@ -43,6 +43,7 @@ export function buildTrackChunks(track, terrain) {
   const rockC = col('rockFace');
   const lightC = col('tunnelLight');
   const deck = [0.62, 0.62, 0.66];
+  const wet = !!track.def.env?.wet; // rain-soaked asphalt reflects the sky and lights
 
   const models = {};
   const modelFor = (kind) => {
@@ -52,7 +53,9 @@ export function buildTrackChunks(track, terrain) {
   };
   const animated = [];
   const m = mat4.create();
-  const tufts = [0, 1, 2, 3].map(() => grassTuft(rand));
+  // Verge tufts: green grass, dry desert grass, or none (snow, city).
+  const tuftKind = track.def.env?.tufts ?? 'grass';
+  const tufts = tuftKind ? [0, 1, 2, 3].map(() => grassTuft(rand, tuftKind)) : null;
 
   const chunks = [];
   for (let c0 = 0; c0 < count; c0 += CHUNK) {
@@ -65,7 +68,7 @@ export function buildTrackChunks(track, terrain) {
       const band = Math.floor(i / 6) % 2;
 
       // Road surface: asphalt with a faint sheen and the detail texture.
-      mb.material(0.12, 1);
+      mb.material(wet ? 0.65 : 0.12, 1);
       mb.quad(P(a, -1), P(a, 1), P(b, 1), P(b, -1), band ? road : roadAlt);
 
       // Kerbs (rumble strips).
@@ -132,7 +135,7 @@ export function buildTrackChunks(track, terrain) {
         mb.quad(P(a, -1.35, -2.5), P(a, -1.35, -0.12), P(b, -1.35, -0.12), P(b, -1.35, -2.5), grass);
         mb.quad(P(a, 1.35, -0.12), P(a, 1.35, -2.5), P(b, 1.35, -2.5), P(b, 1.35, -0.12), grass);
         // Grass tufts scattered along the verges.
-        for (const side of [-1, 1]) {
+        for (const side of tufts ? [-1, 1] : []) {
           if (rand() < 0.35) continue;
           const off = side * (1.4 + rand() * 1.4);
           const xm = off * RW;

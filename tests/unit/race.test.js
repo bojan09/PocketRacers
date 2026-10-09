@@ -125,13 +125,19 @@ test('career: records best stars and time, cleans bad saves, unlocks by stars', 
   const storage = { getItem: (k) => data[k] ?? null, setItem: (k, v) => (data[k] = v) };
   const c = new Career(storage);
   assert.equal(c.totalStars, 0);
-  assert.ok(c.unlocked(EVENT_BY_ID.rookie) && !c.unlocked(EVENT_BY_ID.mud));
+  assert.ok(c.unlocked(EVENT_BY_ID.rookie) && !c.unlocked(EVENT_BY_ID.islands));
   assert.deepEqual(c.record('rookie', 2, 90), { newStars: 2, improved: true });
   assert.deepEqual(c.record('rookie', 1, 95), { newStars: 0, improved: false });
   assert.equal(c.stars('rookie'), 2);
   assert.equal(c.best('rookie'), 90);
-  assert.ok(c.unlocked(EVENT_BY_ID.mud));
+  assert.ok(c.unlocked(EVENT_BY_ID.islands) && !c.unlocked(EVENT_BY_ID.mud));
   assert.equal(new Career(storage).stars('rookie'), 2);
   const clean = sanitizeCareer({ v: 1, events: { rookie: { stars: 9, best: -3 }, fake: { stars: 3 } } });
   assert.deepEqual(clean.events, { rookie: { stars: 3, best: null } });
+});
+
+test('every event runs on a real map', async () => {
+  const { TRACK_BY_ID } = await import('../../src/data/tracks/index.js');
+  for (const e of EVENTS) assert.ok(TRACK_BY_ID[e.track], `${e.id} track ${e.track}`);
+  assert.equal(new Set(EVENTS.map((e) => e.track)).size, 5, 'all five maps are used');
 });

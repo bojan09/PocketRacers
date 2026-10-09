@@ -76,9 +76,18 @@ export class DrivingSession {
     this.trafficCount = trafficCount;
     this.seed = seed;
     this.steerSensitivity = 1;
-    this.surfaceGrip = 1;
+    this.surfaceGrip = track.def.env?.grip ?? 1; // < 1 on snow
     this.events = [];
     this.fun = new FunSystem(this);
+    this.reset();
+  }
+
+  /** Switch map (free-drive picker or an event on another track). */
+  setTrack(track) {
+    this.track = track;
+    this.trafficCount = track.def.trafficCount ?? 0;
+    this.surfaceGrip = track.def.env?.grip ?? 1;
+    this.setCar(this.car, false);
     this.reset();
   }
 

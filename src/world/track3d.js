@@ -29,6 +29,16 @@ export const OBJECT_KINDS = {
   barn: { w: 3000, solid: 0 },
   windmill: { w: 1600, solid: 0 },
   cone: { w: 160, solid: 0 },
+  cactus: { w: 500, solid: 0.4 },
+  desertRock: { w: 900, solid: 0.7 },
+  mesa: { w: 9000, solid: 0 },
+  snowPine: { w: 820, solid: 0.35 },
+  snowman: { w: 600, solid: 0.5 },
+  tower: { w: 5000, solid: 0 },
+  shop: { w: 3000, solid: 0 },
+  palm: { w: 600, solid: 0.3 },
+  hut: { w: 2600, solid: 0 },
+  umbrella: { w: 400, solid: 0 },
 };
 
 // --- spline ----------------------------------------------------------------

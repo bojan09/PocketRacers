@@ -4,6 +4,7 @@ import { EVENTS, vehicleFor, rewards } from '../data/events.js';
 import { FAMILIES } from '../data/vehicleFamilies.js';
 import { VEHICLE_BY_ID } from '../data/vehicles.js';
 import { formatTime } from './hud.js';
+import { TRACK_BY_ID } from '../data/tracks/index.js';
 
 const $ = (id) => document.getElementById(id);
 const MODE_LABEL = { race: 'Race', elimination: 'Knockout', timetrial: 'Time trial' };
@@ -44,11 +45,13 @@ export class EventsScreen {
       b.innerHTML = `
         <span class="meta"></span>
         <h3></h3>
+        <span class="map"></span>
         <p></p>
         <span class="stars">${starRow(c.stars(e.id))}</span>
         <span class="car"></span>`;
       b.querySelector('.meta').textContent = `${MODE_LABEL[e.mode]} · ${e.laps} lap${e.laps > 1 ? 's' : ''} · ${rule}`;
       b.querySelector('h3').textContent = e.name;
+      b.querySelector('.map').textContent = `📍 ${TRACK_BY_ID[e.track].name}`;
       b.querySelector('p').textContent = e.blurb;
       b.querySelector('.car').textContent = `${v.loaner ? 'Loaner' : 'You drive'}: ${VEHICLE_BY_ID[v.id].name}${best ? ` · Best ${formatTime(best)}` : ''} · up to ★${rewards(e)[0].toLocaleString()}`;
       if (!open) {

@@ -319,7 +319,7 @@ async function drive(page) {
   await check('events list shows unlocked and locked races', async () => {
     await page.click('#btn-races');
     assert.equal(await page.evaluate(() => window.__pocketRacers.mode), 'events');
-    assert.equal(await page.locator('.event-card').count(), 8);
+    assert.equal(await page.locator('.event-card').count(), 12);
     assert.ok((await page.locator('.event-card.locked').count()) >= 5);
   });
   await check('a race starts with a countdown and 5 AI opponents', async () => {
@@ -354,6 +354,35 @@ async function drive(page) {
     assert.deepEqual(st, { mode: 'title', race: false, racers: 0 });
   });
   await check('no console errors (races)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+
+{
+  // Maps: the title picker switches maps; every map loads and drives.
+  const { context, page, errors } = await open({ width: 844, height: 390 });
+  await check('map picker cycles through all five maps and they drive', async () => {
+    const seen = [];
+    for (let i = 0; i < 5; i++) {
+      seen.push(await page.textContent('#map-name'));
+      await page.click('#btn-drive');
+      await page.waitForFunction(() => window.__pocketRacers.mode === 'driving');
+      await page.waitForTimeout(700);
+      assert.ok(await page.evaluate(() => window.__pocketRacers.session.player.speed > 1000), `${seen.at(-1)} drives`);
+      await page.click('#btn-pause');
+      await page.click('#btn-menu');
+      await page.click('#map-next');
+    }
+    assert.deepEqual(seen, ['Sunny Valley', 'Desert Canyon', 'Snowy Peaks', 'Night City', 'Tropical Coast']);
+    assert.equal(await page.textContent('#map-name'), 'Sunny Valley');
+  });
+  await check('chosen map is remembered', async () => {
+    await page.click('#map-next');
+    await page.reload();
+    await page.waitForFunction(() => window.__pocketRacers);
+    assert.equal(await page.textContent('#map-name'), 'Desert Canyon');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.trackId), 'desert-canyon');
+  });
+  await check('no console errors (maps)', async () => assert.deepEqual(errors, []));
   await context.close();
 }
 
