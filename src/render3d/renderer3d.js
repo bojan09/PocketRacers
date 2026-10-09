@@ -168,6 +168,52 @@ export class Renderer3D {
     this.resize();
   }
 
+  /** Meshes for AI racers (rebuilt per race). */
+  setRacers(racers) {
+    const gl = this.gl;
+    for (const m of this.racerMeshes || []) for (const k of ['body', 'brake', 'wheel']) deleteMesh(gl, m[k]);
+    this.racerMeshes = racers.map((r) => {
+      const body = buildCarBody(r.car.model, r.car.paint);
+      return {
+        body: uploadMesh(gl, body.body),
+        brake: uploadMesh(gl, body.brake),
+        wheel: uploadMesh(gl, buildWheel(r.car.model, r.car.paint)),
+        anchors: body.anchors,
+        spin: 0,
+      };
+    });
+  }
+
+  /** World matrix for a racer body (air, ramp pitch, spin and roll). */
+  racerMatrix(p, alpha, anchors, out, f) {
+    const T = this.track;
+    const pz = this.lerpZ(p.prevZ, p.z, alpha);
+    const px = lerp(p.prevX, p.x, alpha);
+    T.frame(pz, px, f);
+    this.groundCar(f, px);
+    const air = lerp(p.prevAir ?? p.air, p.air, alpha);
+    if (air > 0) for (let k = 0; k < 3; k++) f.pos[k] += f.U[k] * air;
+    mat4.fromBasis(out, f.R, f.U, [-f.T[0], -f.T[1], -f.T[2]], f.pos);
+    const speedM = p.speed * T.metresPerUnit;
+    let pitch = 0;
+    if (p.airborne) pitch = clamp(Math.atan2(p.vy, Math.max(5, Math.abs(speedM))) * 0.6, -0.3, 0.35);
+    else if (p.rampPitch) pitch = p.rampPitch;
+    mat4.rotateY(out, out, -p.latVel * 0.08);
+    mat4.rotateX(out, out, pitch);
+    const roll = p.roll + p.rampRoll;
+    // Shoved by Super Nitro: a quick wobble.
+    const kt = (this.simTime ?? 0) - (p.knockTime ?? -10);
+    const wobble = kt < 0.7 ? Math.sin(kt * 18) * 0.25 * (1 - kt / 0.7) * (p.knockDir || 1) : 0;
+    if (p.spin || roll || wobble) {
+      const cy = anchors.height * 0.45;
+      mat4.translate(out, out, 0, cy, 0);
+      mat4.rotateY(out, out, -p.spin + wobble);
+      mat4.rotateZ(out, out, -roll);
+      mat4.translate(out, out, 0, -cy, 0);
+    }
+    return air;
+  }
+
   /** Build (or rebuild after a garage change) the player's vehicle meshes. */
   setVehicle(def) {
     const gl = this.gl;
@@ -421,6 +467,33 @@ export class Renderer3D {
       d.brake = false;
       if (!this.shadowsOn) this.addShadow(tf, 1.3, 2.8);
     }
+    this.simTime = session.time;
+    session.racers.forEach((r, i) => {
+      const meshes = this.racerMeshes?.[i];
+      if (!meshes || this.carDrawCount >= this.carDraws.length - 1) return;
+      const rf = this.frame2;
+      const d = this.carDraws[this.carDrawCount];
+      const rair = this.racerMatrix(r.p, alpha, meshes.anchors, d.m, rf);
+      if (!this.near(rf.pos, fogFar)) return;
+      this.carDrawCount++;
+      meshes.spin -= ((r.p.speed * mpu) / (r.car.model.wheels.radius || 0.34)) * dt;
+      d.meshes = meshes;
+      d.spin = meshes.spin;
+      d.steer = r.p.steer * meshes.anchors.maxSteer;
+      d.brake = r.p.braking;
+      if (!this.shadowsOn || rair > 0) {
+        const lift = rf.pos;
+        for (let k = 0; k < 3; k++) lift[k] -= rf.U[k] * rair;
+        this.addShadow(rf, meshes.anchors.halfWidth * 1.2, meshes.anchors.length * 0.55, (this.shadowsOn ? 0.3 : 0.55) / (1 + rair * 0.6));
+      }
+      // Nitro flames for AI too.
+      if (r.p.nitro && this.near(rf.pos, 120)) {
+        for (const e of meshes.anchors.exhausts) {
+          transformPoint(this.p3, d.m, e);
+          this.particles.spawn('flameCore', this.p3[0], this.p3[1], this.p3[2], rf.T[0] * r.p.speed * mpu, 0, rf.T[2] * r.p.speed * mpu, 0.22, Math.max(0.07, dt * 1.5), 0);
+        }
+      }
+    });
     const pd = this.carDraws[this.carDrawCount++];
     pd.meshes = this.player;
     pd.m.set(carM);

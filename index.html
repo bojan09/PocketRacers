@@ -34,6 +34,7 @@
             <span class="star-icon" aria-hidden="true">★</span> <b id="hud-score">0</b>
             <span id="hud-combo" class="combo" hidden>×2</span>
           </div>
+          <div class="pill pos-pill" id="hud-pos-pill" hidden><span class="pill-label">POS</span> <b id="hud-pos">1/6</b></div>
           <div class="pill"><span class="pill-label">LAP</span> <b id="hud-lap">1</b></div>
           <div class="pill time"><span class="pill-label">TIME</span> <b id="hud-time">0:00.00</b></div>
           <div class="pill time"><span class="pill-label">BEST</span> <b id="hud-best">--:--.--</b></div>
@@ -44,6 +45,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5" /><rect x="14" y="5" width="4" height="14" rx="1.5" /></svg>
           </button>
         </div>
+        <div id="countdown" class="countdown" aria-live="assertive" hidden></div>
         <div id="toast" class="toast" aria-live="polite"></div>
         <div id="popups" class="popups" aria-live="polite"></div>
         <div id="fps" class="fps" hidden></div>
@@ -89,7 +91,7 @@
       <section id="screen-title" class="screen screen-title">
         <div class="title-card">
           <h1 class="logo"><span>Pocket</span><span>Racers</span></h1>
-          <p class="subtitle">3D preview · Sunny Valley</p>
+          <p class="subtitle">Sunny Valley</p>
           <h2 class="section-label">Choose your controls</h2>
           <div class="scheme-picker" role="radiogroup" aria-label="Control scheme">
             <button class="scheme" role="radio" data-scheme="buttons">
@@ -108,7 +110,8 @@
           <label class="toggle-row"><input type="checkbox" id="title-auto" /> <span>Auto-accelerate</span></label>
           <div class="title-actions">
             <button id="btn-garage" class="btn btn-garage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9H3z" /><path d="M7 20v-6h10v6" class="cut" /></svg><span>Garage<small id="title-car"></small></span></button>
-            <button id="btn-drive" class="big-btn">Drive!</button>
+            <button id="btn-races" class="big-btn">Race!</button>
+            <button id="btn-drive" class="btn btn-free">Free drive</button>
           </div>
           <p class="hint" id="title-hint"></p>
           <p class="bank" id="title-bank"></p>
@@ -162,6 +165,34 @@
             <button class="btn" id="garage-reset">Reset to factory look</button>
           </div>
           <button id="garage-action" class="big-btn garage-action"></button>
+        </div>
+      </section>
+
+      <!-- Race events (career) -->
+      <section id="screen-events" class="screen screen-events" hidden>
+        <div class="events-wrap">
+          <header class="events-top">
+            <button id="events-back" class="icon-btn" aria-label="Back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></button>
+            <h2>Races</h2>
+            <span class="bank-pill" id="events-stars"></span>
+          </header>
+          <div class="event-grid" id="event-grid"></div>
+        </div>
+      </section>
+
+      <!-- Race results -->
+      <section id="screen-results" class="screen screen-results" hidden>
+        <div class="panel results-panel" role="dialog" aria-modal="true" aria-labelledby="results-title">
+          <h2 id="results-title"></h2>
+          <div class="result-stars" id="results-stars" aria-label="Stars"></div>
+          <p class="result-sub" id="results-sub"></p>
+          <ol class="standings" id="results-standings"></ol>
+          <p class="result-points" id="results-points"></p>
+          <div class="row-buttons">
+            <button id="results-retry" class="btn">Retry</button>
+            <button id="results-next" class="big-btn">Next race</button>
+            <button id="results-events" class="btn">Races</button>
+          </div>
         </div>
       </section>
 

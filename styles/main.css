@@ -1320,6 +1320,270 @@ button {
   }
 }
 
+/* ---------- Race HUD ---------- */
+
+.pos-pill b {
+  font-size: 1.15em;
+}
+
+.countdown {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(64px, 22vmin, 150px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow:
+    0 6px 0 rgba(27, 31, 59, 0.45),
+    0 0 30px rgba(255, 210, 63, 0.6);
+  pointer-events: none;
+}
+
+.countdown.pop {
+  animation: count-pop 0.9s ease-out;
+}
+
+.countdown.go {
+  color: var(--sun);
+}
+
+@keyframes count-pop {
+  from {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.85;
+  }
+}
+
+/* ---------- Events ---------- */
+
+.btn-free {
+  min-height: 56px;
+}
+
+.screen-events {
+  place-items: start center;
+  background: linear-gradient(180deg, #2a2f5a, #4b5aa8);
+}
+
+.events-wrap {
+  width: min(980px, 100%);
+}
+
+.events-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #fff;
+}
+
+.events-top h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+#events-back svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.event-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.event-card {
+  position: relative;
+  border: 0;
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: 0 6px 0 rgba(27, 31, 59, 0.35);
+  padding: 12px 14px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  color: var(--ink);
+}
+
+.event-card h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.event-card .meta {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grape);
+}
+
+.event-card p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.event-card .stars {
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: #d4d7e6;
+}
+
+.event-card .stars b {
+  color: var(--sun);
+  -webkit-text-stroke: 1px #c98a00;
+}
+
+.event-card .car {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.event-card.locked {
+  background: #dfe2ef;
+}
+
+.event-card.locked > :not(.lock) {
+  opacity: 0.45;
+}
+
+.event-card .lock {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+/* ---------- Results ---------- */
+
+.screen-results {
+  background: rgba(27, 31, 59, 0.55);
+}
+
+.results-panel {
+  text-align: center;
+}
+
+.results-panel h2 {
+  font-size: clamp(28px, 7vmin, 44px);
+  margin-bottom: 4px;
+}
+
+.result-stars {
+  font-size: 40px;
+  letter-spacing: 6px;
+  color: #d4d7e6;
+  line-height: 1;
+}
+
+.result-stars b {
+  color: var(--sun);
+  -webkit-text-stroke: 1.5px #c98a00;
+  display: inline-block;
+  animation: star-in 0.5s ease-out both;
+}
+
+.result-stars b:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.result-stars b:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes star-in {
+  from {
+    transform: scale(2.2) rotate(-30deg);
+    opacity: 0;
+  }
+}
+
+.result-sub {
+  margin: 6px 0;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.standings {
+  list-style: none;
+  margin: 8px auto;
+  padding: 0;
+  max-width: 420px;
+  text-align: left;
+  display: grid;
+  gap: 3px;
+}
+
+.standings li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 12px;
+  background: #f3f4f9;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.standings li.me {
+  background: #fff1c2;
+  font-weight: 900;
+}
+
+.standings li small {
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.result-points {
+  font-weight: 900;
+  font-size: 18px;
+  margin: 6px 0 12px;
+}
+
+@media (max-height: 480px) {
+  .results-panel {
+    padding: 10px 16px;
+  }
+  .result-stars {
+    font-size: 30px;
+  }
+  .standings li {
+    padding: 3px 10px;
+    font-size: 13px;
+  }
+  .result-points {
+    margin: 4px 0 8px;
+  }
+}
+
 /* Short landscape phones: compress the title card */
 @media (max-height: 480px) {
   .title-card {

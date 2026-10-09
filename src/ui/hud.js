@@ -23,6 +23,9 @@ export class Hud {
       combo: document.getElementById('hud-combo'),
       popups: document.getElementById('popups'),
       nitro: document.querySelector('.ctl-nitro'),
+      pos: document.getElementById('hud-pos'),
+      posPill: document.getElementById('hud-pos-pill'),
+      countdown: document.getElementById('countdown'),
     };
     this.el.nitroLabel = this.el.nitro.querySelector('span');
     this.last = {};
@@ -38,8 +41,18 @@ export class Hud {
     }
   }
 
+  /** Race mode on/off (shows position, lap x/y). */
+  setRace(race) {
+    this.race = race;
+    this.el.posPill.hidden = !race || race.mode === 'timetrial';
+    this.el.countdown.hidden = true;
+    this.last = {};
+  }
+
   update(session) {
     const p = session.player;
+    const race = this.race;
+    if (race && race.mode !== 'timetrial') this.set('pos', `${race.position()}/${race.entrants.filter((b) => !b.result || !b.result.eliminated).length}`);
     this.set('score', session.fun.score.toLocaleString());
     const combo = session.fun.combo;
     if (this.last.comboN !== combo) {
@@ -69,8 +82,8 @@ export class Hud {
     } else if (p.super) {
       this.el.nitro.style.setProperty('--super', String(p.superTime / 3.5));
     }
-    this.set('lap', String(p.lap));
-    this.set('time', p.timing ? formatTime(p.lapTime) : '0:00.00');
+    this.set('lap', race ? `${Math.min(p.lap, race.laps)}/${race.laps}` : String(p.lap));
+    this.set('time', race ? (race.clock > 0 ? formatTime(race.clock) : '0:00.00') : p.timing ? formatTime(p.lapTime) : '0:00.00');
     this.set('best', formatTime(p.bestLap));
     this.set('speed', String(Math.round(Math.abs(p.speed) * SPEED_TO_KMH)));
   }
@@ -99,6 +112,30 @@ export class Hud {
   }
 
   onEvent(e) {
+    if (e.type === 'countdown') {
+      const c = this.el.countdown;
+      c.hidden = false;
+      c.textContent = e.n > 0 ? String(e.n) : 'GO!';
+      c.classList.toggle('go', e.n === 0);
+      c.classList.remove('pop');
+      void c.offsetWidth;
+      c.classList.add('pop');
+      clearTimeout(this.countTimer);
+      if (e.n === 0) this.countTimer = setTimeout(() => (c.hidden = true), 900);
+      return;
+    }
+    if (e.type === 'finalLap') {
+      this.toast('Final lap!', 1600);
+      return;
+    }
+    if (e.type === 'racerOut') {
+      this.toast(`${e.name} is out!`, 1600);
+      return;
+    }
+    if (e.type === 'finish' || e.type === 'eliminated') {
+      this.popup(e.type === 'finish' ? 'FINISH!' : 'KNOCKED OUT!', '', true);
+      return;
+    }
     if (e.type === 'superReady') {
       this.toast('SUPER NITRO ready! Tap the gold button', 2200);
       return;

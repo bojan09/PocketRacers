@@ -17,6 +17,10 @@ import { GameAudio } from './audio/audio.js';
 import { Hud } from './ui/hud.js';
 import { mountTuningPanel } from './ui/tuning.js';
 import { Progress } from './core/progress.js';
+import { Race } from './sim/race.js';
+import { EVENTS, pickOpponents, vehicleFor, starsFor, rewards, medalTimes } from './data/events.js';
+import { Career } from './core/career.js';
+import { EventsScreen, ResultsScreen } from './ui/raceScreens.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -46,7 +50,13 @@ const hud = new Hud();
 const canVibrate = typeof navigator.vibrate === 'function';
 const progress = new Progress();
 
-let mode = 'title'; // 'title' | 'garage' | 'driving' | 'paused'
+let mode = 'title'; // 'title' | 'garage' | 'events' | 'driving' | 'paused' | 'results'
+const career = new Career();
+const FREE_TRAFFIC = session.trafficCount;
+let race = null; // active Race (null in free drive)
+let raceEvent = null;
+let raceAttempt = 0;
+let resultsTimer = 0;
 audio.setEngine(car.engine);
 
 // ---------------------------------------------------------------- settings
@@ -154,7 +164,23 @@ function resume() {
   showDriving();
 }
 
+/** Leave race mode: back to free drive with the player's own vehicle. */
+function endRace() {
+  clearTimeout(resultsTimer);
+  if (!race) return;
+  race = null;
+  raceEvent = null;
+  hud.setRace(null);
+  session.trafficCount = FREE_TRAFFIC;
+  renderer.setRacers([]);
+  if (car.id !== garage.selected) useVehicle(garage.selected);
+  else session.reset();
+}
+
 function toTitle() {
+  endRace();
+  $('screen-events').hidden = true;
+  $('screen-results').hidden = true;
   mode = 'title';
   input.releaseAll();
   input.touch.enabled = false;
@@ -197,6 +223,91 @@ const garageScreen = new GarageScreen({
   },
 });
 
+// ------------------------------------------------------------------ races
+
+async function startEvent(e) {
+  audio.unlock();
+  clearTimeout(resultsTimer);
+  eventsScreen.close();
+  resultsScreen.close();
+  $('screen-title').hidden = true;
+  $('screen-pause').hidden = true;
+  const v = vehicleFor(e, garage);
+  car = makeVehicle(v.id, garage.custom(v.id));
+  session.setCar(car, false);
+  renderer.setVehicle(car);
+  audio.setEngine(car.engine);
+  session.trafficCount = 0;
+  raceEvent = e;
+  raceAttempt++;
+  race = new Race(session, {
+    mode: e.mode,
+    laps: e.laps,
+    difficulty: e.difficulty,
+    opponents: pickOpponents(e, car, 5, raceAttempt),
+    gridSlot: 3,
+  });
+  renderer.setRacers(session.racers);
+  hud.setRace(race);
+  if (settings.controlScheme === 'tilt') await chooseScheme('tilt', null);
+  showDriving();
+  if (v.loaner) hud.toast(`Loaner car: ${car.name}`, 2200);
+}
+
+function showResults() {
+  const r = race.results;
+  const e = raceEvent;
+  const stars = starsFor(e, { ...r, car });
+  const rec = career.record(e.id, stars, r.eliminated ? null : r.time);
+  const pay = rewards(e);
+  const points = stars ? (rec.newStars ? pay[3 - stars] : Math.round((pay[3 - stars] * 0.25) / 50) * 50) : 100;
+  progress.add(points);
+  progress.save();
+  const i = EVENTS.indexOf(e);
+  const next = EVENTS.slice(i + 1).find((x) => career.unlocked(x)) || null;
+  mode = 'results';
+  input.releaseAll();
+  input.touch.enabled = false;
+  audio.quiet();
+  $('hud').hidden = true;
+  controlsEl.hidden = true;
+  resultsScreen.show(r, { event: e, stars, points, next, medals: e.mode === 'timetrial' ? medalTimes(e, car) : null });
+}
+
+function openEvents() {
+  audio.unlock();
+  endRace();
+  mode = 'events';
+  resultsScreen.close();
+  $('screen-title').hidden = true;
+  $('hud').hidden = true;
+  controlsEl.hidden = true;
+  $('rotate-note').hidden = true;
+  eventsScreen.open();
+}
+
+const eventsScreen = new EventsScreen({
+  career,
+  garage,
+  click: () => audio.click(),
+  onPick: (e) => startEvent(e),
+  onBack: () => {
+    eventsScreen.close();
+    toTitle();
+  },
+});
+
+const resultsScreen = new ResultsScreen({
+  click: () => audio.click(),
+  onRetry: () => startEvent(raceEvent),
+  onNext: () => {
+    const i = EVENTS.indexOf(raceEvent);
+    const next = EVENTS.slice(i + 1).find((x) => career.unlocked(x));
+    if (next) startEvent(next);
+  },
+  onEvents: openEvents,
+});
+
 function openGarage() {
   audio.unlock();
   mode = 'garage';
@@ -232,6 +343,10 @@ $('btn-garage').addEventListener('click', () => {
   audio.click();
   openGarage();
 });
+$('btn-races').addEventListener('click', () => {
+  audio.click();
+  openEvents();
+});
 $('btn-drive').addEventListener('click', async () => {
   audio.unlock();
   audio.click();
@@ -246,6 +361,10 @@ $('btn-pause').addEventListener('click', pause);
 input.onPauseKey = () => (mode === 'driving' ? pause() : mode === 'paused' ? resume() : null);
 $('btn-resume').addEventListener('click', resume);
 $('btn-restart').addEventListener('click', () => {
+  if (race) {
+    startEvent(raceEvent);
+    return;
+  }
   session.reset();
   resume();
 });
@@ -304,7 +423,9 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 
 const loop = new GameLoop({
   update(dt) {
-    if (mode === 'driving') session.step(dt, input.read());
+    if (mode !== 'driving') return;
+    if (race) race.step(dt, input.read());
+    else session.step(dt, input.read());
   },
   render(alpha, frameDt) {
     if (mode === 'garage') {
@@ -324,6 +445,7 @@ const loop = new GameLoop({
         else if (e.type === 'score' && e.kind === 'smash') navigator.vibrate(15);
       }
       if (e.type === 'score') progress.add(e.points);
+      if (e.type === 'finish' || e.type === 'eliminated') resultsTimer = setTimeout(showResults, 1800);
     }
     session.events.length = 0;
     if (mode === 'driving') {
@@ -344,4 +466,4 @@ window.addEventListener('pagehide', () => progress.save());
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, get car() { return car; }, get mode() { return mode; } };
+window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, startEvent, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };

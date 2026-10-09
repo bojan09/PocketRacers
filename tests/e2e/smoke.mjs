@@ -314,6 +314,50 @@ async function drive(page) {
 }
 
 {
+  // Races: events list, countdown, AI opponents, finish, results, career save.
+  const { context, page, errors } = await open({ width: 844, height: 390 });
+  await check('events list shows unlocked and locked races', async () => {
+    await page.click('#btn-races');
+    assert.equal(await page.evaluate(() => window.__pocketRacers.mode), 'events');
+    assert.equal(await page.locator('.event-card').count(), 8);
+    assert.ok((await page.locator('.event-card.locked').count()) >= 5);
+  });
+  await check('a race starts with a countdown and 5 AI opponents', async () => {
+    await page.click('.event-card:has-text("Rookie Race")');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'driving');
+    const st = await page.evaluate(() => ({ phase: window.__pocketRacers.race.phase, racers: window.__pocketRacers.session.racers.length }));
+    assert.deepEqual(st, { phase: 'countdown', racers: 5 });
+    await page.waitForFunction(() => window.__pocketRacers.race.phase === 'racing', null, { timeout: 8000 });
+    await page.waitForTimeout(1500);
+    const moving = await page.evaluate(() => window.__pocketRacers.session.racers.every((r) => r.p.speed > 2000));
+    assert.ok(moving, 'AI cars are racing');
+    assert.match(await page.textContent('#hud-pos'), /^\d\/6$/);
+    assert.equal(await page.textContent('#hud-lap'), '1/3');
+  });
+  await check('finishing shows results, pays points and saves stars', async () => {
+    const before = await page.evaluate(() => window.__pocketRacers.progress.points);
+    await page.evaluate(() => (window.__pocketRacers.session.player.lap = 4));
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'results', null, { timeout: 8000 });
+    assert.ok(await page.isVisible('#screen-results'));
+    assert.equal(await page.locator('#results-standings li').count(), 6);
+    const after = await page.evaluate(() => window.__pocketRacers.progress.points);
+    assert.ok(after > before);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('pocketracers.career')).events.rookie.stars);
+    assert.ok(saved >= 1);
+  });
+  await check('retry restarts the race; menu returns to free drive', async () => {
+    await page.click('#results-retry');
+    await page.waitForFunction(() => window.__pocketRacers.mode === 'driving' && window.__pocketRacers.race?.phase === 'countdown');
+    await page.click('#btn-pause');
+    await page.click('#btn-menu');
+    const st = await page.evaluate(() => ({ mode: window.__pocketRacers.mode, race: !!window.__pocketRacers.race, racers: window.__pocketRacers.session.racers.length }));
+    assert.deepEqual(st, { mode: 'title', race: false, racers: 0 });
+  });
+  await check('no console errors (races)', async () => assert.deepEqual(errors, []));
+  await context.close();
+}
+
+{
   const { context, page, cdp } = await open({ width: 844, height: 390 }, '', 'high');
   await drive(page);
   // Time only our render() call (headless Chromium rasterises in software,

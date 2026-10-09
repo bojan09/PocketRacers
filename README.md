@@ -29,8 +29,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > wheels-down landings. Tricks fill a gold Super Nitro meter: tap the gold
 > button for a faster, free boost with a shockwave that bumps traffic aside.
 >
-> Next: 2F races & AI · 2G maps · 2H full 50-vehicle roster & deep
-> customisation · 3 offline, achievements, performance pass.
+> **Phase 2F — races & AI:** 8-event career (race, knockout, time trial;
+> off-road, speed, monster and truck-only cups) unlocked with stars. 5 AI
+> opponents drive the same physics (jumps included), with difficulty levels
+> and gentle catch-up. Countdown, positions, final lap, results with stars
+> and points; loaner vehicles so no event is ever blocked.
+>
+> Next: 2G maps · 2H full 50-vehicle roster & deep customisation ·
+> 3 offline, achievements, performance pass.
 
 ## Run locally
 
@@ -61,7 +67,9 @@ src/core/              fixed-timestep loop, settings, points wallet, garage save
 src/data/              vehicle families + roster, traffic, tracks (data, not code paths)
 src/world/track3d.js   closed-spline 3D track → segments (curvature, banking, flags, colliders)
 src/sim/session.js     driving physics, jumps, collisions, traffic, lap timing (pure, testable)
-src/sim/fun.js         stars, cones, boost pads, near misses, drifts, combo scoring
+src/sim/fun.js         stars, cones, boost pads, near misses, drifts, tricks, combo scoring
+src/sim/ai.js          AI racing driver (same inputs and physics as the player)
+src/sim/race.js        race director: grid, countdown, laps, positions, elimination, results
 src/input/             touch buttons / steering wheel / tilt / keyboard → one input state
 src/gl/                WebGL helpers, shaders, matrix math, mesh builder
 src/render3d/          renderer, terrain, track/scenery meshes, car models, sky, particles
