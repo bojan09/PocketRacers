@@ -29,6 +29,9 @@ const TYPES = {
 
 export class Particles {
   constructor() {
+    // Positions are written relative to this (the renderer's origin), so
+    // far-away worlds stay precise in 32-bit vertex data.
+    this.origin = [0, 0, 0];
     this.pool = [];
     for (let i = 0; i < MAX; i++) this.pool.push({ life: 0 });
     this.alphaData = new Float32Array((MAX + 64 + 320 + WEATHER_MAX) * 6 * FLOATS);
@@ -89,7 +92,11 @@ export class Particles {
     let di = 0;
     const A = this.alphaData;
     const D = this.addData;
+    const [ox, oy, oz] = this.origin;
     const quad = (arr, i, cx, cy, cz, rx, ry, rz, ux, uy, uz, r, g, b, a) => {
+      cx -= ox;
+      cy -= oy;
+      cz -= oz;
       for (let c = 0; c < 24; c += 4) {
         const sx = CORNERS[c];
         const sy = CORNERS[c + 1];
@@ -177,9 +184,9 @@ export class Particles {
           // White-hot core fading to the car's colour at the edges.
           const e = Math.abs(u);
           const w = Math.min(1, (1 - e) * (1 - e) * (0.3 + hot * 0.45) + f * 0.05);
-          D[i++] = s.x + s.rx * u * halfWidth;
-          D[i++] = s.y + s.ry * u * halfWidth;
-          D[i++] = s.z + s.rz * u * halfWidth;
+          D[i++] = s.x - this.origin[0] + s.rx * u * halfWidth;
+          D[i++] = s.y - this.origin[1] + s.ry * u * halfWidth;
+          D[i++] = s.z - this.origin[2] + s.rz * u * halfWidth;
           D[i++] = colour[0] + (1 - colour[0]) * w;
           D[i++] = colour[1] + (1 - colour[1]) * w;
           D[i++] = colour[2] + (1 - colour[2]) * w;

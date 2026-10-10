@@ -42,6 +42,8 @@ export const ACHIEVEMENTS = [
   { id: 'island-25', icon: '🧭', name: 'Island Explorer', desc: 'Uncover a quarter of the island map', stat: 'islandMap', goal: 25, reward: 1000 },
   { id: 'island-80', icon: '🏝️', name: 'Map Maker', desc: 'Uncover most of the island map', stat: 'islandMap', goal: 80, reward: 5000 },
   { id: 'island-flags', icon: '🏁', name: 'Flag Chaser', desc: 'Finish every flag race on the island', stat: 'islandFlags', goal: 4, reward: 3000 },
+  { id: 'bigland-2', icon: '🚗', name: 'Road Trip', desc: 'Drive 2 km from home in Big Land', stat: 'bigLandKm', goal: 2, reward: 1000 },
+  { id: 'bigland-10', icon: '🌍', name: 'Far Far Away', desc: 'Drive 10 km from home in Big Land', stat: 'bigLandKm', goal: 10, reward: 5000 },
   { id: 'explorer', icon: '🗺️', name: 'Explorer', desc: 'Drive on every map', stat: 'maps', goal: TRACKS.length, reward: 1000 },
   { id: 'cars-5', icon: '🚗', name: 'Collector', desc: 'Own 5 vehicles', stat: 'owned', goal: 5, reward: 750 },
   { id: 'cars-15', icon: '🏎️', name: 'Big Garage', desc: 'Own 15 vehicles', stat: 'owned', goal: 15, reward: 3000 },

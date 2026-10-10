@@ -50,6 +50,9 @@ let car = makeVehicle(garage.selected, garage.custom(garage.selected), garage.up
 const session = new DrivingSession(track, car);
 // Open world (free driving anywhere): built the first time it is chosen.
 const ISLAND = { id: 'island', name: 'Island', art: { sky: ['#4cc9f0', '#c8f1ff'], ground: '#6cc24a', icons: ['🏝️', '⛰️', '🌲'], sun: '☀️' } };
+const BIG_LAND = { id: 'bigland', name: 'Big Land', art: { sky: ['#7bc4ff', '#e3f4ff'], ground: '#8cc152', icons: ['🛣️', '🌵', '🏔️'], sun: '🌤️' } };
+// The open worlds, built the first time they are visited: { world, free }.
+const worlds = {};
 let world = null;
 let free = null;
 let worldMode = false;
@@ -495,10 +498,11 @@ function rebindPlayer() {
   updateBank();
   session.assist = profiles.littleDriver();
   session.fun.known = new Set(achievements.state.animals);
-  if (world) {
+  if (worlds.island) {
     explore.count = explore.countLand();
-    minimap.refog();
+    if (world === worlds.island.world) minimap.refog();
   }
+  if (free) free.assist = profiles.littleDriver();
 }
 
 function usePlayer(id) {
@@ -531,15 +535,15 @@ function openProfiles(m = 'pick') {
 
 const mapsScreen = new MapsScreen({
   sound: (k) => audio.ui(k),
-  current: () => (worldMode ? ISLAND.id : settings.track),
-  extras: [ISLAND],
+  current: () => (worldMode ? (world.endless ? BIG_LAND.id : ISLAND.id) : settings.track),
+  extras: [ISLAND, BIG_LAND],
   onBack: toTitle,
   onPick: async (id) => {
     // Ask for tilt permission first, while still inside the tap.
     const scheme = settings.controlScheme;
     const tilt = chooseScheme(scheme, null);
     mapsScreen.close();
-    if (id === ISLAND.id) enterWorld();
+    if (id === ISLAND.id || id === BIG_LAND.id) enterWorld(id);
     else {
       leaveWorld();
       settings.track = id;
@@ -551,23 +555,44 @@ const mapsScreen = new MapsScreen({
   },
 });
 
-/** Drive anywhere: the island open world. */
-function enterWorld() {
+/** Drive anywhere: the island, or Big Land (endless). */
+function enterWorld(id = ISLAND.id) {
   endRace();
-  if (!world) {
-    world = new OpenWorld();
-    free = new FreeSession(world, car);
-    explore.setWorld(world);
-    minimap.setWorld(world, explore);
+  if (worldMode) leaveWorld();
+  if (!worlds[id]) {
+    const w = new OpenWorld({ endless: id === BIG_LAND.id });
+    worlds[id] = { world: w, free: new FreeSession(w, car) };
+    if (!w.endless) explore.setWorld(w);
   }
+  ({ world, free } = worlds[id]);
+  minimap.setWorld(world, explore);
   free.setCar(car);
   free.reset();
+  free.assist = profiles.littleDriver();
   free.steerSensitivity = session.steerSensitivity;
   free.fun.known = session.fun.known;
   renderer.setWorld(world, TRACK_BY_ID[DEFAULT_TRACK].palette);
   worldMode = true;
   $('hud').classList.add('world');
   $('minimap').hidden = false;
+  farShown = '';
+}
+
+/** Big Land: how far from home (km), the best kept per player, badges. */
+const farPill = $('hud-far');
+let farShown = '';
+function farHud() {
+  const on = world.endless;
+  if (farPill.hidden === on) farPill.hidden = !on;
+  if (!on) return;
+  const p = free.player;
+  const km = Math.hypot(p.x - world.spawn.x, p.z - world.spawn.z) / 1000;
+  if (km > explore.far + 0.05) {
+    explore.recordFar(km);
+    achievements.max('bigLandKm', explore.far);
+  }
+  const text = `${km.toFixed(1)} km`;
+  if (text !== farShown) farPill.lastElementChild.textContent = farShown = text;
 }
 
 /**
@@ -628,6 +653,7 @@ function leaveWorld() {
   $('minimap').hidden = true;
   $('road-arrow').hidden = true;
   flagPill.hidden = true;
+  farPill.hidden = true;
   renderer.freeWorldChunks();
   renderer.camDir = null;
   session.reset();
@@ -754,7 +780,8 @@ function openMap() {
   input.touch.enabled = false;
   audio.quiet();
   explore.save();
-  $('world-map-pct').textContent = `${explore.percent}%`;
+  const p = free.player;
+  $('world-map-pct').textContent = world.endless ? `${(Math.hypot(p.x - world.spawn.x, p.z - world.spawn.z) / 1000).toFixed(1)} km` : `${explore.percent}%`;
   $('world-map').hidden = false;
   minimap.drawBig(free.player, (id) => free.fun.known.has(id), carColour());
 }
@@ -872,7 +899,7 @@ const loop = new GameLoop({
     session.roam = !race;
     if (worldMode) {
       free.step(dt, input.read());
-      uncover();
+      if (!world.endless) uncover();
     }
     else if (race) race.step(dt, input.read());
     else session.step(dt, input.read());
@@ -918,6 +945,7 @@ const loop = new GameLoop({
       if (worldMode) {
         minimap.drawSmall(free.player, (id) => free.fun.known.has(id), carColour(), frameDt);
         flagHud();
+        farHud();
         roadArrow();
       }
       const level = autoQuality?.frame(frameDt * 1000);

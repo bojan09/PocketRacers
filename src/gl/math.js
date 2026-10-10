@@ -9,6 +9,14 @@ export const mat4 = {
     return m;
   },
 
+  /** A matrix with double precision, for things placed far from the origin
+   * (the renderer subtracts its origin before handing it to WebGL). */
+  create64() {
+    const m = new Float64Array(16);
+    m[0] = m[5] = m[10] = m[15] = 1;
+    return m;
+  },
+
   identity(out) {
     out.fill(0);
     out[0] = out[5] = out[10] = out[15] = 1;

@@ -113,16 +113,21 @@ export class Renderer3D {
     this.view = mat4.create();
     this.proj = mat4.create();
     this.viewProj = mat4.create();
-    this.model = mat4.create();
-    this.tmp = mat4.create();
+    this.model = mat4.create64();
+    this.tmp = mat4.create64();
+    // Drawing origin: world positions are made relative to it (in double
+    // precision) before WebGL sees them. 0 on tracks; follows the car in
+    // the open worlds so far-away places don't shimmer.
+    this.origin = this.particles.origin;
+    this.uploadM = new Float32Array(16);
     this.invViewProj = mat4.create();
     this.lightView = mat4.create();
     this.lightProj = mat4.create();
     this.lightVP = mat4.create();
     this.shadowCenter = [0, 0, 0];
-    this.carDraws = Array.from({ length: 32 }, () => ({ meshes: null, m: mat4.create(), spin: 0, steer: 0, brake: false }));
+    this.carDraws = Array.from({ length: 32 }, () => ({ meshes: null, m: mat4.create64(), spin: 0, steer: 0, brake: false }));
     this.carDrawCount = 0;
-    this.wheelM = mat4.create();
+    this.wheelM = mat4.create64();
     this.frame = makeFrame();
     this.frame2 = makeFrame();
     this.eye = [0, 5, 10];
@@ -529,6 +534,7 @@ export class Renderer3D {
 
   render(session, alpha, dt) {
     if (this.lost) return;
+    this.origin.fill(0); // tracks are small: draw in world coordinates
     const gl = this.gl;
     const T = this.track;
     const p = session.player;
@@ -842,6 +848,7 @@ export class Renderer3D {
    */
   renderGarage(dt, yaw, view = {}) {
     if (this.lost) return;
+    this.origin.fill(0);
     const gl = this.gl;
     this.time += dt;
     if (!this.studio) this.studio = this.buildStudio();
@@ -1090,9 +1097,10 @@ export class Renderer3D {
     // texels so shadow edges don't shimmer as it moves.
     mat4.lookAt(this.lightView, [L[0] * 100, L[1] * 100, L[2] * 100], [0, 0, 0], [0, 1, 0]);
     const c = this.shadowCenter;
-    c[0] = carPos[0] + camDir[0] * S * 0.62;
-    c[1] = carPos[1];
-    c[2] = carPos[2] + camDir[2] * S * 0.62;
+    const o = this.origin;
+    c[0] = carPos[0] - o[0] + camDir[0] * S * 0.62;
+    c[1] = carPos[1] - o[1];
+    c[2] = carPos[2] - o[2] + camDir[2] * S * 0.62;
     const v = this.lightView;
     const lx = v[0] * c[0] + v[4] * c[1] + v[8] * c[2] + v[12];
     const ly = v[1] * c[0] + v[5] * c[1] + v[9] * c[2] + v[13];
@@ -1116,11 +1124,11 @@ export class Renderer3D {
     const DU = this.depth.uniforms;
     gl.uniformMatrix4fv(DU.uLightVP, false, this.lightVP);
     const reach = S * 1.6;
-    const casts = (mesh) => Math.hypot(mesh.center[0] - c[0], mesh.center[2] - c[2]) - mesh.radius < reach;
+    const casts = (mesh) => Math.hypot(mesh.center[0] - o[0] - c[0], mesh.center[2] - o[2] - c[2]) - mesh.radius < reach;
     mat4.identity(this.tmp);
     const draw = (mesh, m) => {
       if (!mesh.count) return;
-      gl.uniformMatrix4fv(DU.uModel, false, m);
+      gl.uniformMatrix4fv(DU.uModel, false, this.relModel(m));
       bindPositions(gl, mesh);
       gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     };
@@ -1244,10 +1252,21 @@ export class Renderer3D {
     return dx * dx + dz * dz < fogFar * fogFar;
   }
 
+  /** `model` as 32-bit, relative to the drawing origin. */
+  relModel(model) {
+    const u = this.uploadM;
+    u.set(model);
+    const o = this.origin;
+    u[12] = model[12] - o[0];
+    u[13] = model[13] - o[1];
+    u[14] = model[14] - o[2];
+    return u;
+  }
+
   drawLit(mesh, model) {
     if (!mesh.count) return;
     const gl = this.gl;
-    gl.uniformMatrix4fv(this.lit.uniforms.uModel, false, model);
+    gl.uniformMatrix4fv(this.lit.uniforms.uModel, false, this.relModel(model));
     bindLitMesh(gl, mesh);
     gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
   }

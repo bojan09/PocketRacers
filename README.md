@@ -147,6 +147,17 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > top speed so slow vehicles can get 3 too. Best stars are kept per player;
 > a 🏁 badge for finishing all four. Roads now hold the car over their
 > crests (ramps still launch it) so races are not lost flying off a bend.
+>
+> **Phase 7G — Big Land:** a second open world with no coast: the same
+> landscape generator, broader hills, and an endless grid of winding roads
+> (about 620 m apart, built a piece at a time as you drive, with kicker
+> ramps). Roads follow the land smoothed in 2D, so crossings meet level and
+> grades stay drivable. The small map draws the land around the car as it
+> goes; a pill shows how far from home you are, the farthest is kept per
+> player, and there are badges for 2 km and 10 km. The renderer draws
+> relative to an origin that follows the camera in 1000 m steps (game
+> logic stays in exact 64-bit world coordinates), so nothing shimmers
+> hundreds of km out.
 
 ## Tests
 

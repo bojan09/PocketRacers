@@ -196,7 +196,7 @@ button {
 }
 
 /* Island map: hides lap/time pills in the open world. */
-.hud.world .pill:not(.score-pill):not(.flag-pill) {
+.hud.world .pill:not(.score-pill):not(.flag-pill):not(.far-pill) {
   display: none;
 }
 

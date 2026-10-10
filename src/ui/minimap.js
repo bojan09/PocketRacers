@@ -10,6 +10,10 @@ const BASE = 256; // pixels across the pre-drawn island picture
 const SMALL_VIEW = 260; // metres from the centre to the rim of the small map
 const ICONS = { castle: '🏰', lighthouse: '🗼' };
 const FOG = '#c3cde0';
+// Big Land: the picture of the land around the car.
+const LOCAL_SPAN = 1200; // metres across
+const LOCAL_PX = 128;
+const LOCAL_ROWS = 8; // rows drawn per map update (15 a second)
 
 function groundColour(world, x, z) {
   const h = world.baseHeight(x, z);
@@ -35,7 +39,20 @@ export class Minimap {
   /** Draw the island once, and the clouds from what this player has seen. */
   setWorld(world, explore) {
     this.world = world;
-    this.explore = explore;
+    this.explore = world.endless ? null : explore;
+    this.local = null;
+    this.pending = null;
+    if (world.endless) {
+      // Big Land: no fixed picture, no clouds; the land around the car is
+      // drawn as it goes (see updateLocal).
+      this.base = this.fog = null;
+      return;
+    }
+    if (this.islandWorld === world && this.islandBase) {
+      this.base = this.islandBase;
+      this.refog();
+      return;
+    }
     const c = document.createElement('canvas');
     c.width = c.height = BASE;
     const g = c.getContext('2d');
@@ -59,12 +76,56 @@ export class Minimap {
       });
       g.stroke();
     }
-    this.base = c;
+    this.base = this.islandBase = c;
+    this.islandWorld = world;
     this.refog();
+  }
+
+  /**
+   * Big Land: keep a picture of the land around the car (LOCAL_SPAN metres
+   * across), redrawn a few rows at a time when the car has moved on.
+   */
+  updateLocal(p) {
+    const W = this.world;
+    const far = !this.local || Math.hypot(p.x - this.local.x, p.z - this.local.z) > LOCAL_SPAN * 0.18;
+    if (far && !this.pending) {
+      const c = document.createElement('canvas');
+      c.width = c.height = LOCAL_PX;
+      this.pending = { x: Math.round(p.x / 64) * 64, z: Math.round(p.z / 64) * 64, canvas: c, g: c.getContext('2d'), row: 0 };
+    }
+    const P = this.pending;
+    if (!P) return;
+    const m = LOCAL_SPAN / LOCAL_PX;
+    const x0 = P.x - LOCAL_SPAN / 2;
+    const z0 = P.z - LOCAL_SPAN / 2;
+    for (let n = 0; n < LOCAL_ROWS && P.row < LOCAL_PX; n++, P.row++)
+      for (let i = 0; i < LOCAL_PX; i++) {
+        P.g.fillStyle = groundColour(W, x0 + (i + 0.5) * m, z0 + (P.row + 0.5) * m);
+        P.g.fillRect(i, P.row, 1, 1);
+      }
+    if (P.row < LOCAL_PX) return;
+    // Roads on top, then swap the new picture in.
+    const g = P.g;
+    g.strokeStyle = '#5b5f6e';
+    g.lineWidth = 1.6;
+    g.lineCap = 'round';
+    g.beginPath();
+    for (let bz = Math.floor(z0 / 32); bz <= Math.floor((z0 + LOCAL_SPAN) / 32); bz++)
+      for (let bx = Math.floor(x0 / 32); bx <= Math.floor((x0 + LOCAL_SPAN) / 32); bx++)
+        for (const a of W.roadSamplesInBucket(bx, bz)) {
+          const b = W.roads[a.road].samples[a.i + 1];
+          if (!b) continue;
+          g.moveTo((a.x - x0) / m, (a.z - z0) / m);
+          g.lineTo((b.x - x0) / m, (b.z - z0) / m);
+        }
+    g.stroke();
+    this.local = P;
+    this.pending = null;
   }
 
   /** Rebuild the clouds (after loading a save or switching player). */
   refog() {
+    if (!this.explore) return;
     const f = document.createElement('canvas');
     f.width = f.height = EXPLORE_GRID;
     const g = f.getContext('2d');
@@ -80,6 +141,7 @@ export class Minimap {
 
   /** Clear the clouds from newly seen cells. */
   uncover(cells) {
+    if (!this.fogCtx) return;
     for (const [i, j] of cells) this.fogCtx.clearRect(i, j, 1, 1);
   }
 
@@ -88,6 +150,7 @@ export class Minimap {
     const W = this.world;
     const E = this.explore;
     const out = [];
+    if (!E) return out;
     const seen = (x, z) => E.seen(E.cell(x), E.cell(z));
     for (const l of W.landmarks) if (ICONS[l.kind] && seen(l.x, l.z)) out.push({ x: l.x, z: l.z, icon: ICONS[l.kind] });
     if (W.stuntPark && seen(W.stuntPark.x, W.stuntPark.z)) out.push({ x: W.stuntPark.x, z: W.stuntPark.z, icon: '🤸' });
@@ -115,6 +178,7 @@ export class Minimap {
     this.timer -= dt;
     if (!this.world || this.timer > 0) return;
     this.timer = 1 / 15;
+    if (this.world.endless) this.updateLocal(p);
     const cv = this.small;
     const dpr = Minimap.fit(cv);
     const R = cv.width / 2;
@@ -125,7 +189,7 @@ export class Minimap {
     g.beginPath();
     g.arc(R, R, R - 2 * dpr, 0, Math.PI * 2);
     g.clip();
-    g.fillStyle = '#2f7fd0';
+    g.fillStyle = this.world.endless ? FOG : '#2f7fd0';
     g.fillRect(0, 0, cv.width, cv.height);
     g.translate(R, R);
     g.rotate(-p.yaw);
@@ -190,17 +254,22 @@ export class Minimap {
     const cv = this.big;
     const dpr = Minimap.fit(cv);
     const g = cv.getContext('2d');
-    // Fit the island (not the whole sea) into the canvas.
-    const span = this.world.radius * 2.15;
+    // Fit the island (not the whole sea) into the canvas; in Big Land, the
+    // land around the car.
+    const endless = this.world.endless;
+    const span = endless ? LOCAL_SPAN * 0.9 : this.world.radius * 2.15;
     const s = Math.min(cv.width, cv.height) / span;
-    g.fillStyle = '#2f7fd0';
+    const cx = endless ? p.x : 0;
+    const cz = endless ? p.z : 0;
+    g.fillStyle = endless ? FOG : '#2f7fd0';
     g.fillRect(0, 0, cv.width, cv.height);
     g.save();
     g.translate(cv.width / 2, cv.height / 2);
     g.scale(s, s);
+    g.translate(-cx, -cz);
     this.drawLand(g);
     g.restore();
-    const at = (x, z) => [cv.width / 2 + x * s, cv.height / 2 + z * s];
+    const at = (x, z) => [cv.width / 2 + (x - cx) * s, cv.height / 2 + (z - cz) * s];
     g.font = `${Math.round(22 * dpr)}px sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
@@ -214,8 +283,13 @@ export class Minimap {
 
   /** Island picture and clouds in world metres (the caller sets the transform). */
   drawLand(g) {
-    const H = EXPLORE_SPAN / 2;
     g.imageSmoothingEnabled = true;
+    if (this.world.endless) {
+      const L = this.local;
+      if (L) g.drawImage(L.canvas, L.x - LOCAL_SPAN / 2, L.z - LOCAL_SPAN / 2, LOCAL_SPAN, LOCAL_SPAN);
+      return;
+    }
+    const H = EXPLORE_SPAN / 2;
     g.drawImage(this.base, -H, -H, EXPLORE_SPAN, EXPLORE_SPAN);
     g.drawImage(this.fog, -H, -H, EXPLORE_SPAN, EXPLORE_SPAN);
   }

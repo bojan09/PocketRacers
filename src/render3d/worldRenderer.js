@@ -86,7 +86,7 @@ export function buildChunkMesh(world, cx, cz, pal) {
  */
 export function buildChunkScenery(world, cx, cz, variants, knocked) {
   const mb = new MeshBuilder();
-  const m = mat4.create();
+  const m = mat4.create64();
   for (const o of world.chunkObjects(cx, cz)) {
     if (o.prop && (!o.scenery || knocked?.has(o.id))) continue;
     const list = variants(o.kind);
@@ -170,25 +170,28 @@ function addRoads(mb, world, cx, cz) {
   const x0 = cx * CHUNK;
   const z0 = cz * CHUNK;
   mb.material(0.15, 0.4);
-  for (const road of world.roads) {
-    const S = road.samples;
-    const lift = ROAD_LIFT + (road.samples[0].road % 4) * 0.006; // no flicker where roads meet
-    for (let i = 0; i < S.length; i++) {
-      const a = S[i];
-      if (a.x < x0 || a.x >= x0 + CHUNK || a.z < z0 || a.z >= z0 + CHUNK) continue;
-      const b = S[i + 1] || (road.closed ? S[0] : null);
-      if (!b) continue;
-      const at = (s, off, dy = 0) => [s.x - s.tz * off, s.h + lift + dy, s.z + s.tx * off];
-      const band = (o0, o1, c, dy = 0) => mb.quad(at(a, o0, dy), at(a, o1, dy), at(b, o1, dy), at(b, o0, dy), c);
-      band(-ROAD_HALF, ROAD_HALF, ASPHALT);
-      band(-ROAD_HALF + 0.2, -ROAD_HALF + 0.42, LINE, 0.01);
-      band(ROAD_HALF - 0.42, ROAD_HALF - 0.2, LINE, 0.01);
-      if (a.i % 4 < 2) band(-0.1, 0.1, CENTRE, 0.01);
-      // Kerb skirt down into the ground so the edge never floats.
-      mb.quad(at(a, -ROAD_HALF), at(b, -ROAD_HALF), at(b, -ROAD_HALF - 0.2, -0.8), at(a, -ROAD_HALF - 0.2, -0.8), [0.42, 0.42, 0.44]);
-      mb.quad(at(a, ROAD_HALF), at(a, ROAD_HALF + 0.2, -0.8), at(b, ROAD_HALF + 0.2, -0.8), at(b, ROAD_HALF), [0.42, 0.42, 0.44]);
+  // The road samples in this chunk (the lookup buckets tile it exactly).
+  const B = CHUNK / 32;
+  for (let bz = cz * B; bz < (cz + 1) * B; bz++)
+    for (let bx = cx * B; bx < (cx + 1) * B; bx++) {
+      for (const a of world.roadSamplesInBucket(bx, bz)) {
+        if (a.x < x0 || a.x >= x0 + CHUNK || a.z < z0 || a.z >= z0 + CHUNK) continue;
+        const road = world.roads[a.road];
+        const S = road.samples;
+        const b = S[a.i + 1] || (road.closed ? S[0] : null);
+        if (!b) continue;
+        const lift = ROAD_LIFT + ((a.layer ?? a.road) % 4) * 0.006; // no flicker where roads meet
+        const at = (s, off, dy = 0) => [s.x - s.tz * off, s.h + lift + dy, s.z + s.tx * off];
+        const band = (o0, o1, c, dy = 0) => mb.quad(at(a, o0, dy), at(a, o1, dy), at(b, o1, dy), at(b, o0, dy), c);
+        band(-ROAD_HALF, ROAD_HALF, ASPHALT);
+        band(-ROAD_HALF + 0.2, -ROAD_HALF + 0.42, LINE, 0.01);
+        band(ROAD_HALF - 0.42, ROAD_HALF - 0.2, LINE, 0.01);
+        if (a.i % 4 < 2) band(-0.1, 0.1, CENTRE, 0.01);
+        // Kerb skirt down into the ground so the edge never floats.
+        mb.quad(at(a, -ROAD_HALF), at(b, -ROAD_HALF), at(b, -ROAD_HALF - 0.2, -0.8), at(a, -ROAD_HALF - 0.2, -0.8), [0.42, 0.42, 0.44]);
+        mb.quad(at(a, ROAD_HALF), at(a, ROAD_HALF + 0.2, -0.8), at(b, ROAD_HALF + 0.2, -0.8), at(b, ROAD_HALF), [0.42, 0.42, 0.44]);
+      }
     }
-  }
 }
 
 export function installWorldRendering(Renderer3D) {
@@ -399,7 +402,21 @@ export function installWorldRendering(Renderer3D) {
     this.superFx += ((p.super ? 1 : 0) - this.superFx) * Math.min(1, dt * 4);
     vfov = Math.min(vfov, 96 * DEG) + (this.nitroFx + this.superFx * 0.6) * (fx ? 9 : 4) * DEG;
     mat4.perspective(this.proj, vfov, aspect, 0.3, 4500);
-    mat4.lookAt(this.view, eye, tgt, [0, 1, 0]);
+    // Draw relative to an origin near the camera, so 32-bit GPU maths stays
+    // precise however far the car has driven. It moves in 1000 m steps: the
+    // ground's detail texture (0.29 and 0.023 repeats per metre) lines up
+    // exactly across a step, so nothing visibly jumps.
+    const O = this.origin;
+    O[0] = Math.round(eye[0] / 1000) * 1000;
+    O[1] = 0;
+    O[2] = Math.round(eye[2] / 1000) * 1000;
+    const eyeRel = (this.eyeRel ||= [0, 0, 0]);
+    const tgtRel = (this.tgtRel ||= [0, 0, 0]);
+    for (let k = 0; k < 3; k++) {
+      eyeRel[k] = eye[k] - O[k];
+      tgtRel[k] = tgt[k] - O[k];
+    }
+    mat4.lookAt(this.view, eyeRel, tgtRel, [0, 1, 0]);
     mat4.multiply(this.viewProj, this.proj, this.view);
     const v = this.view;
     this.camRight[0] = v[0];
@@ -449,7 +466,7 @@ export function installWorldRendering(Renderer3D) {
     gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.BLEND);
     this.drawSky(this.pal);
-    this.beginLit(eye, sm, this.pal);
+    this.beginLit(eyeRel, sm, this.pal);
     const U = this.lit.uniforms;
     gl.uniform2f(U.uFog, this.pal.fogNear * this.quality.fogScale, fogFar);
     mat4.identity(this.tmp);

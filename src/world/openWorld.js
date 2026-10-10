@@ -13,6 +13,7 @@ import { OBJECT_KINDS, UNITS_PER_METRE } from './track3d.js';
 import { PROP_SIZE } from '../data/props.js';
 import { ANIMALS } from '../data/animals.js';
 import { buildFlagRaces } from './flagRaces.js';
+import { ensureRoads, nearestRoadPoint, roadPoint } from './endlessRoads.js';
 
 export const CHUNK = 128; // metres per chunk side
 export const CELL = 4; // metres between height samples
@@ -141,9 +142,57 @@ export class OpenWorld {
     this.ramps = [];
     this.landmarks = [];
     this.animals = [];
+    this.rampGrid = new Map();
+    if (endless) {
+      // Roads are built a piece at a time as the car gets near.
+      this.roads = [];
+      this.roadGrid = new Map();
+      this.roadSamples = [];
+      this.roadPieces = new Set();
+      this.flagRaces = [];
+      const [x, z] = roadPoint(this, 0, 0, 30);
+      const [ax, az] = roadPoint(this, 0, 0, 31);
+      this.spawn = { x, z, yaw: Math.atan2(ax - x, -(az - z)) };
+      return;
+    }
     this.buildRoads();
     this.buildFeatures();
     this.flagRaces = buildFlagRaces(this);
+  }
+
+  /** Add road samples to the lookup buckets. */
+  addRoadSamples(samples) {
+    for (const smp of samples) {
+      const k = bucketKey(Math.floor(smp.x / ROAD_BUCKET), Math.floor(smp.z / ROAD_BUCKET));
+      let list = this.roadGrid.get(k);
+      if (!list) this.roadGrid.set(k, (list = []));
+      list.push(smp);
+    }
+    if (this.endless) for (const smp of samples) this.roadSamples.push(smp);
+  }
+
+  /** Road samples in lookup bucket (bx, bz) (buckets are 32 m squares). */
+  roadSamplesInBucket(bx, bz) {
+    return this.roadGrid?.get(bucketKey(bx, bz)) || [];
+  }
+
+  addRamp(r) {
+    this.ramps.push(r);
+    const k = bucketKey(Math.floor(r.x / ROAD_BUCKET), Math.floor(r.z / ROAD_BUCKET));
+    let list = this.rampGrid.get(k);
+    if (!list) this.rampGrid.set(k, (list = []));
+    list.push(r);
+  }
+
+  /** Ramps whose middle is within ~32 m of (x, z). */
+  *rampsNear(x, z) {
+    const bx = Math.floor(x / ROAD_BUCKET);
+    const bz = Math.floor(z / ROAD_BUCKET);
+    for (let gz = bz - 1; gz <= bz + 1; gz++)
+      for (let gx = bx - 1; gx <= bx + 1; gx++) {
+        const list = this.rampGrid.get(bucketKey(gx, gz));
+        if (list) yield* list;
+      }
   }
 
   /**
@@ -174,14 +223,14 @@ export class OpenWorld {
       [14, -26, 7, 4, 1.5],
       [0, 38, 14, 7, 4],
     ])
-      this.ramps.push({ x: px + rx * a + fx * b, z: pz + rz * a + fz * b, yaw: sp.yaw, len, w, h });
+      this.addRamp({ x: px + rx * a + fx * b, z: pz + rz * a + fz * b, yaw: sp.yaw, len, w, h });
     this.stuntPark = { x: px, z: pz };
     // Kickers on the ring road (on one lane, so the other stays smooth).
     const ring = this.roads[0].samples;
     for (let k = 0; k < 7; k++) {
       const smp = ring[Math.floor(((k + 0.5) / 7) * ring.length)];
       const yaw = Math.atan2(smp.tx, -smp.tz);
-      this.ramps.push({ x: smp.x - smp.tz * 2.1, z: smp.z + smp.tx * 2.1, yaw, len: 7, w: 3.4, h: 1.6, road: true });
+      this.addRamp({ x: smp.x - smp.tz * 2.1, z: smp.z + smp.tx * 2.1, yaw, len: 7, w: 3.4, h: 1.6, road: true });
     }
     // Castle: the highest gentle meadow spot a fair way from the start.
     let best = null;
@@ -235,7 +284,7 @@ export class OpenWorld {
 
   /** Extra ground height from ramps at (x, z). */
   rampAt(x, z) {
-    for (const r of this.ramps) {
+    for (const r of this.rampsNear(x, z)) {
       const dx = x - r.x;
       const dz = z - r.z;
       if (Math.abs(dx) > r.len && Math.abs(dz) > r.len) continue;
@@ -248,7 +297,7 @@ export class OpenWorld {
 
   /** Whether (x, z) is within `pad` metres of a ramp, landmark or animal. */
   nearFeature(x, z, pad) {
-    for (const r of this.ramps) if (Math.hypot(x - r.x, z - r.z) < r.len / 2 + pad) return true;
+    for (const r of this.rampsNear(x, z)) if (Math.hypot(x - r.x, z - r.z) < r.len / 2 + pad) return true;
     for (const l of this.landmarks) if (Math.hypot(x - l.x, z - l.z) < l.r + pad) return true;
     for (const a of this.animals) if (Math.hypot(x - a.x, z - a.z) < pad + 2) return true;
     if (this.stuntPark && Math.hypot(x - this.stuntPark.x, z - this.stuntPark.z) < 55) return true;
@@ -338,11 +387,7 @@ export class OpenWorld {
     }
     // Bucket the samples for fast nearest-road lookups.
     this.roadGrid = new Map();
-    for (const smp of samples) {
-      const k = bucketKey(Math.floor(smp.x / ROAD_BUCKET), Math.floor(smp.z / ROAD_BUCKET));
-      if (!this.roadGrid.has(k)) this.roadGrid.set(k, []);
-      this.roadGrid.get(k).push(smp);
-    }
+    this.addRoadSamples(samples);
     this.roadSamples = samples;
     // Start on the first spoke, facing out along it.
     const sp = this.roads[1].samples;
@@ -352,6 +397,7 @@ export class OpenWorld {
   /** Nearest road sample to (x, z) within ~2 buckets: { d, h, s } or null. */
   nearestRoad(x, z) {
     if (!this.roadGrid) return null;
+    if (this.endless) ensureRoads(this, x, z);
     const bx = Math.floor(x / ROAD_BUCKET);
     const bz = Math.floor(z / ROAD_BUCKET);
     // Nearest sample of each road, then the road whose surface is closest
@@ -364,14 +410,18 @@ export class OpenWorld {
         if (!list) continue;
         for (const smp of list) {
           const d = (smp.x - x) ** 2 + (smp.z - z) ** 2;
-          const b = best[smp.road];
-          if (!b || d < b.d2) best[smp.road] = { s: smp, d2: d };
+          let b = null;
+          for (const c of best) if (c.road === smp.road) b = c;
+          if (!b) best.push({ road: smp.road, s: smp, d2: d });
+          else if (d < b.d2) {
+            b.s = smp;
+            b.d2 = d;
+          }
         }
       }
     }
     let out = null;
     for (const b of best) {
-      if (!b) continue;
       // Distance across the road (perpendicular to it), not to the sample.
       const dx = x - b.s.x;
       const dz = z - b.s.z;
@@ -387,6 +437,7 @@ export class OpenWorld {
   roadPointer(x, z) {
     const near = this.nearestRoad(x, z);
     if (near) return { x: near.s.x, z: near.s.z, d: near.d };
+    if (this.endless) return nearestRoadPoint(this, x, z);
     let best = null;
     let bd = Infinity;
     for (const smp of this.roadSamples || []) {
@@ -416,7 +467,9 @@ export class OpenWorld {
    */
   region(x, z) {
     const near = smoothstep(150, 450, Math.hypot(x - this.spawn.x, z - this.spawn.z));
-    return (this.noise3(x * 0.0016, z * 0.0016) + x / (this.radius * 6)) * near;
+    // On the island the desert leans east; the endless world just varies.
+    const lean = this.endless ? 0 : x / (this.radius * 6);
+    return (this.noise3(x * 0.0016, z * 0.0016) + lean) * near;
   }
 
   /**
@@ -549,8 +602,10 @@ export class OpenWorld {
     const n = this.noise;
     // Rolling lowlands with hills rising out of them (only upward, so the
     // inland stays dry apart from a few ponds).
-    const big = n(x * 0.0035, z * 0.0035);
-    const hills = Math.max(0, big + 0.08) * 110 + n(x * 0.012 + 40, z * 0.012 - 9) * 12 + n(x * 0.05, z * 0.05) * 1.2;
+    // Big Land's hills are broader (same height), so its roads stay drivable.
+    const f = this.endless ? 0.62 : 1;
+    const big = n(x * 0.0035 * f, z * 0.0035 * f);
+    const hills = Math.max(0, big + 0.08) * 110 + n(x * 0.012 * f + 40, z * 0.012 * f - 9) * 12 + n(x * 0.05, z * 0.05) * 1.2;
     // Lowlands near the middle (and the start) are gentle; hills grow outward.
     const r = Math.hypot(x, z);
     const gentle = 0.35 + 0.65 * smoothstep(80, 600, r);

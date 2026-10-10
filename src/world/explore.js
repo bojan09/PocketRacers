@@ -51,6 +51,8 @@ export class ExploreMap {
     }
     const ok = raw && raw.v === VERSION;
     this.bits = (ok && typeof raw.island === 'string' && fromBase64(raw.island)) || new Uint8Array(BYTES);
+    // Big Land: farthest from home (km).
+    this.far = ok && Number.isFinite(raw.far) && raw.far > 0 ? raw.far : 0;
     // Best stars (1-3) per flag race.
     this.races = {};
     if (ok && raw.races && typeof raw.races === 'object')
@@ -62,7 +64,7 @@ export class ExploreMap {
   save() {
     if (!this.dirty) return;
     try {
-      this.storage?.setItem(KEY, JSON.stringify({ v: VERSION, island: toBase64(this.bits), races: this.races }));
+      this.storage?.setItem(KEY, JSON.stringify({ v: VERSION, island: toBase64(this.bits), races: this.races, far: Math.round(this.far * 100) / 100 }));
       this.dirty = false;
     } catch {
       /* full or blocked: keep in memory */
@@ -141,6 +143,15 @@ export class ExploreMap {
     this.dirty = true;
     this.save();
     return true;
+  }
+
+  /** Big Land: a new farthest distance from home (km); saved now and then. */
+  recordFar(km) {
+    if (km <= this.far) return;
+    const step = Math.floor(km) > Math.floor(this.far);
+    this.far = km;
+    this.dirty = true;
+    if (step) this.save();
   }
 
   /** Flag races finished (any stars). */

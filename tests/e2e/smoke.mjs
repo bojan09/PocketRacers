@@ -613,7 +613,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
   const { context, page, errors } = await open({ width: 844, height: 390 });
   await check('every map card loads its map and drives', async () => {
     const all = await page.$$eval('.map-card', (c) => c.map((b) => b.dataset.map));
-    assert.deepEqual(all, ['island', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast']);
+    assert.deepEqual(all, ['island', 'bigland', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast']);
     const ids = all.slice(1);
     for (const id of ids) {
       await drive(page, id);
@@ -654,6 +654,22 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     assert.equal(await page.evaluate(() => window.__pocketRacers.worldMode), false);
     await drive(page, 'tropical-coast');
     await home(page);
+  });
+  await check('Big Land: endless roads, distance from home, map', async () => {
+    await drive(page, 'bigland');
+    await page.waitForTimeout(1500);
+    const st = await page.evaluate(() => ({ world: window.__pocketRacers.worldMode, endless: window.__pocketRacers.free.world.endless, speed: window.__pocketRacers.free.player.speed }));
+    assert.ok(st.world && st.endless, 'in Big Land');
+    assert.ok(st.speed > 1000, `drives (${st.speed})`);
+    assert.ok(await page.isVisible('#hud-far'), 'distance pill');
+    assert.match(await page.textContent('#hud-far'), /\d+\.\d km/);
+    assert.ok(await page.isVisible('#minimap'));
+    await page.tap('#minimap');
+    assert.match(await page.textContent('#world-map-pct'), /^\d+\.\d km$/);
+    await page.tap('#btn-go-home');
+    await home(page);
+    assert.ok(!(await page.isVisible('#hud-far')));
+    assert.equal(await page.evaluate(() => window.__pocketRacers.worldMode), false);
   });
   await check('chosen map is remembered', async () => {
     await page.reload();
