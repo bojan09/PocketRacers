@@ -77,7 +77,7 @@ export class ProfilesScreen {
 
 /** Free drive: one picture card per map. */
 export class MapsScreen {
-  constructor({ onPick, onBack, sound, current }) {
+  constructor({ onPick, onBack, sound, current, extras = [] }) {
     Object.assign(this, { onPick, sound, current });
     this.root = $('screen-maps');
     $('maps-back').addEventListener('click', () => {
@@ -85,8 +85,9 @@ export class MapsScreen {
       onBack();
     });
     const grid = $('map-grid');
-    for (const t of TRACKS) {
-      const art = TRACK_ART[t.id];
+    // Open worlds first, then the race maps.
+    for (const t of [...extras, ...TRACKS]) {
+      const art = t.art || TRACK_ART[t.id];
       const b = document.createElement('button');
       b.className = 'map-card';
       b.dataset.map = t.id;

@@ -93,6 +93,16 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > that lean into turns and wheelie on nitro, buses (city, school,
 > double-decker, coach), a fire engine and a cement mixer. Each new type has
 > a garage filter chip and a badge.
+>
+> **Phase 7A — the island (open world, first step):** a 🏝️ Island card in
+> 🗺️ Drive opens a seeded island about 3 km across that you can drive
+> anywhere on. The landscape is built in 128 m chunks around the car as it
+> drives (one per frame, nearest first) and dropped when far away. Free
+> driving uses the same handling, nitro, Super Nitro, jumps and tricks as
+> the tracks; cresting hills at speed launches the car; driving into the sea
+> splashes and brings the car back to the last dry spot. Roads, areas,
+> props, landmarks and the explore map follow in 7B–7F; an endless world in
+> 7G.
 
 ## Tests
 

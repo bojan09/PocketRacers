@@ -9,7 +9,7 @@ import { mulberry32 } from '../core/util.js';
 const CELL = 8; // metres
 const MARGIN = 280;
 
-function valueNoise(seed) {
+export function valueNoise(seed) {
   const rand = mulberry32(seed);
   const SIZE = 256;
   const perm = new Uint8Array(SIZE * 2);

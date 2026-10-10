@@ -37,6 +37,7 @@ import { ANIMALS } from '../data/animals.js';
 import { nitroColour } from '../data/vehicles.js';
 import { PROP_MODELS } from './props.js';
 import { PROP_KINDS } from '../data/props.js';
+import { installWorldRendering } from './worldRenderer.js';
 import { Particles, Weather, FX_FLOATS, RIBBON_SAMPLES } from './particles.js';
 
 // Draw scale of the hidden animals (small ones are drawn bigger).
@@ -1465,3 +1466,5 @@ function normalize(v) {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
 }
+
+installWorldRendering(Renderer3D);

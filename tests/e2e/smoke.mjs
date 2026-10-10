@@ -612,8 +612,9 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
   // Maps: picture cards; every map loads and drives.
   const { context, page, errors } = await open({ width: 844, height: 390 });
   await check('every map card loads its map and drives', async () => {
-    const ids = await page.$$eval('.map-card', (c) => c.map((b) => b.dataset.map));
-    assert.deepEqual(ids, ['sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast']);
+    const all = await page.$$eval('.map-card', (c) => c.map((b) => b.dataset.map));
+    assert.deepEqual(all, ['island', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast']);
+    const ids = all.slice(1);
     for (const id of ids) {
       await drive(page, id);
       await page.waitForTimeout(700);
@@ -621,6 +622,17 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
       assert.ok(await page.evaluate(() => window.__pocketRacers.session.player.speed > 1000), `${id} drives`);
       await home(page);
     }
+  });
+  await check('the island: drive anywhere, then home leaves it', async () => {
+    await drive(page, 'island');
+    await page.waitForTimeout(900);
+    const st = await page.evaluate(() => ({ world: window.__pocketRacers.worldMode, speed: window.__pocketRacers.free.player.speed }));
+    assert.ok(st.world, 'in the open world');
+    assert.ok(st.speed > 1000, `drives (${st.speed})`);
+    await home(page);
+    assert.equal(await page.evaluate(() => window.__pocketRacers.worldMode), false);
+    await drive(page, 'tropical-coast');
+    await home(page);
   });
   await check('chosen map is remembered', async () => {
     await page.reload();

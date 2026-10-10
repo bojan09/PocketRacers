@@ -7,9 +7,11 @@ import { TRAFFIC_MODELS, TRAFFIC_PAINTS } from './data/cars.js';
 import { makeVehicle, nitroColour, VEHICLE_BY_ID } from './data/vehicles.js';
 import { Garage } from './core/garage.js';
 import { GarageScreen } from './ui/garageScreen.js';
-import { TRACK_BY_ID } from './data/tracks/index.js';
+import { TRACK_BY_ID, DEFAULT_TRACK } from './data/tracks/index.js';
 import { buildTrack3D } from './world/track3d.js';
 import { DrivingSession } from './sim/session.js';
+import { OpenWorld } from './world/openWorld.js';
+import { FreeSession } from './sim/freeDrive.js';
 import { Renderer3D } from './render3d/renderer3d.js';
 import { InputManager } from './input/inputManager.js';
 import { tiltSupported } from './input/tilt.js';
@@ -44,6 +46,13 @@ const profiles = new Profiles();
 const garage = new Garage(profiles.storageFor());
 let car = makeVehicle(garage.selected, garage.custom(garage.selected), garage.upgrades(garage.selected));
 const session = new DrivingSession(track, car);
+// Open world (free driving anywhere): built the first time it is chosen.
+const ISLAND = { id: 'island', name: 'Island', art: { sky: ['#4cc9f0', '#c8f1ff'], ground: '#6cc24a', icons: ['🏝️', '⛰️', '🌲'], sun: '☀️' } };
+let world = null;
+let free = null;
+let worldMode = false;
+/** The session being driven right now (track or open world). */
+const active = () => (worldMode ? free : session);
 let renderer;
 try {
   renderer = new Renderer3D(
@@ -218,6 +227,7 @@ function endRace() {
 
 function toTitle() {
   endRace();
+  leaveWorld();
   $('screen-events').hidden = true;
   resultsScreen.close();
   $('screen-badges').hidden = true;
@@ -244,6 +254,7 @@ function toTitle() {
 function useVehicle(id) {
   car = makeVehicle(id, garage.custom(id), garage.upgrades(id));
   session.setCar(car);
+  free?.setCar(car);
   renderer.setVehicle(car);
   audio.setEngine(car.engine);
   $('title-car').textContent = car.name;
@@ -510,20 +521,48 @@ function openProfiles(m = 'pick') {
 
 const mapsScreen = new MapsScreen({
   sound: (k) => audio.ui(k),
-  current: () => settings.track,
+  current: () => (worldMode ? ISLAND.id : settings.track),
+  extras: [ISLAND],
   onBack: toTitle,
   onPick: async (id) => {
     // Ask for tilt permission first, while still inside the tap.
     const scheme = settings.controlScheme;
     const tilt = chooseScheme(scheme, null);
-    settings.track = id;
-    saveSettings(settings);
     mapsScreen.close();
-    loadTrack(id);
+    if (id === ISLAND.id) enterWorld();
+    else {
+      leaveWorld();
+      settings.track = id;
+      saveSettings(settings);
+      loadTrack(id);
+    }
     await tilt;
     showDriving();
   },
 });
+
+/** Drive anywhere: the island open world. */
+function enterWorld() {
+  endRace();
+  if (!world) {
+    world = new OpenWorld();
+    free = new FreeSession(world, car);
+  }
+  free.setCar(car);
+  free.reset();
+  free.steerSensitivity = session.steerSensitivity;
+  free.fun.known = session.fun.known;
+  renderer.setWorld(world, TRACK_BY_ID[DEFAULT_TRACK].palette);
+  worldMode = true;
+}
+
+function leaveWorld() {
+  if (!worldMode) return;
+  worldMode = false;
+  renderer.freeWorldChunks();
+  renderer.camDir = null;
+  session.reset();
+}
 
 function openMaps() {
   mode = 'maps';
@@ -627,7 +666,7 @@ $('btn-grownup').addEventListener('click', () => {
 $('btn-pause').addEventListener('click', pause);
 
 function honk() {
-  if (mode !== 'driving' || !session.honk()) return;
+  if (mode !== 'driving' || !active().honk()) return;
   audio.honk(car.family);
   const b = $('btn-honk');
   b.classList.remove('honking');
@@ -647,7 +686,8 @@ $('btn-restart').addEventListener('click', () => {
     startEvent(raceEvent);
     return;
   }
-  session.reset();
+  active().reset();
+  renderer.camDir = null;
   resume();
 });
 $('btn-menu').addEventListener('click', toTitle);
@@ -709,9 +749,10 @@ const loop = new GameLoop({
   update(dt) {
     if (mode !== 'driving') return;
     session.roam = !race;
-    if (race) race.step(dt, input.read());
+    if (worldMode) free.step(dt, input.read());
+    else if (race) race.step(dt, input.read());
     else session.step(dt, input.read());
-    km += (Math.abs(session.player.speed) * SPEED_TO_KMH * dt) / 3600;
+    km += (Math.abs(active().player.speed) * SPEED_TO_KMH * dt) / 3600;
     if (km >= 0.1) {
       achievements.add('km', km);
       km = 0;
@@ -725,9 +766,12 @@ const loop = new GameLoop({
       hud.tickFps(frameDt, loop.frameMs, settings.showFps);
       return;
     }
-    renderer.render(session, mode === 'driving' ? alpha : 1, frameDt);
-    for (const e of session.events) {
-      renderer.onEvent(e, session);
+    const S = active();
+    if (worldMode) renderer.renderWorld(free, mode === 'driving' ? alpha : 1, frameDt);
+    else renderer.render(session, mode === 'driving' ? alpha : 1, frameDt);
+    for (const e of S.events) {
+      if (worldMode) renderer.worldEvent(e, free);
+      else renderer.onEvent(e, session);
       audio.onEvent(e);
       hud.onEvent(e);
       if (settings.vibration && canVibrate) {
@@ -739,10 +783,10 @@ const loop = new GameLoop({
       trackEvent(e);
       if (e.type === 'finish' || e.type === 'eliminated') resultsTimer = setTimeout(showResults, 1800);
     }
-    session.events.length = 0;
+    S.events.length = 0;
     if (mode === 'driving') {
-      audio.update(session.player, car.handling.maxSpeed, input.state.throttle, frameDt);
-      hud.update(session);
+      audio.update(S.player, car.handling.maxSpeed, input.state.throttle, frameDt);
+      hud.update(S);
       const level = autoQuality?.frame(frameDt * 1000);
       if (level) {
         applyQuality(level);
@@ -788,4 +832,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSe
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, profiles, gate, startEvent, nextEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
+window.__pocketRacers = { session, get free() { return free; }, get worldMode() { return worldMode; }, enterWorld, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, profiles, gate, startEvent, nextEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
