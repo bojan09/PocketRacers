@@ -71,6 +71,8 @@ export const VEHICLES = [
   // ------------------------------------------------------------ truck
   { id: 'flatline', name: 'Flatline', family: 'truck', price: 6500, opts: { cargo: 'flatbed' }, tweak: { maxSpeed: 10200 }, paint: P('#2b6fd6', '#3a3f4b', '#ffd23f', '#c9d3de'), livery: 'clean' },
   { id: 'nordhaul', name: 'Nordhaul 500', family: 'truck', price: 7000, paint: P('#d7263d', '#f4f6fa', '#1b1f3b', '#c9d3de'), livery: 'clean' },
+  { id: 'firetruck', name: 'Fire Hero', family: 'truck', price: 6000, opts: { cargo: 'fire' }, tweak: { maxSpeed: 10600 }, paint: P('#e63946', '#e63946', '#f4f6fa', '#c9d3de'), livery: 'clean' },
+  { id: 'mixer', name: 'Mix Master', family: 'truck', price: 5500, opts: { cargo: 'mixer' }, paint: P('#ffd23f', '#f4f6fa', '#ff8c42', '#1b1f3b'), livery: 'clean' },
   { id: 'rockhauler', name: 'Rock Hauler', family: 'truck', price: 7500, opts: { cargo: 'tipper' }, tweak: { accel: 3600 }, paint: P('#ffbe0b', '#ff8c42', '#1b1f3b', '#1b1f3b'), livery: 'clean' },
   { id: 'tankmaster', name: 'Tankmaster', family: 'truck', price: 8000, opts: { cargo: 'tanker' }, paint: P('#f4f6fa', '#c9d3de', '#ff4d5e', '#c9d3de'), livery: 'clean' },
   { id: 'polarhaul', name: 'Polarhaul 700', family: 'truck', price: 10000, tweak: { maxSpeed: 10800, accel: 3900 }, paint: P('#2ec4b6', '#f4f6fa', '#2b6fd6', '#c9d3de'), livery: 'side' },
@@ -80,6 +82,12 @@ export const VEHICLES = [
   { id: 'mudhopper', name: 'Mud Hopper', family: 'bike', price: 2400, opts: { style: 'dirt' }, tweak: { offroadTop: 0.9, offroadGrip: 1, jumpBoost: 1.2 }, paint: P('#ff8c42', '#2b6fd6', '#ffd23f', '#1b1f3b'), livery: 'side' },
   { id: 'lightning', name: 'Lightning', family: 'bike', price: 6500, opts: { style: 'sport' }, tweak: { maxSpeed: 14000, accel: 7000 }, paint: P('#ff4d5e', '#1b1f3b', '#ffffff', '#1b1f3b'), livery: 'racing' },
   { id: 'cruiser', name: 'Easy Rider', family: 'bike', price: 4000, opts: { style: 'chopper' }, tweak: { maxSpeed: 12200 }, paint: P('#7b5cff', '#1b1f3b', '#ffd23f', '#c9d3de'), livery: 'clean' },
+
+  // ------------------------------------------------------------- buses
+  { id: 'citybus', name: 'City Hopper', family: 'bus', price: 3000, paint: P('#2ec4b6', '#ffd23f', '#ffffff', '#c9d3de'), livery: 'lower' },
+  { id: 'schoolbus', name: 'School Run', family: 'bus', price: 3500, opts: { style: 'school' }, paint: P('#ffbe0b', '#1b1f3b', '#1b1f3b', '#1b1f3b'), livery: 'clean' },
+  { id: 'decker', name: 'Double Decker', family: 'bus', price: 5500, opts: { style: 'double' }, tweak: { centrifugal: 0.26 }, paint: P('#e63946', '#ffd23f', '#ffffff', '#c9d3de'), livery: 'clean' },
+  { id: 'coach', name: 'Holiday Coach', family: 'bus', price: 7500, opts: { style: 'coach' }, tweak: { maxSpeed: 10600, accel: 3600 }, paint: P('#7b5cff', '#f4f6fa', '#ffd23f', '#c9d3de'), livery: 'side' },
 
   // --------------------------------------------------------- big rigs
   { id: 'longhaul', name: 'Long Haul', family: 'rig', price: 5000, paint: P('#2b6fd6', '#f4f6fa', '#ff4d5e', '#c9d3de'), livery: 'clean' },

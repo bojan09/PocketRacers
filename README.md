@@ -85,6 +85,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > beach balls) that fly off for points and combos; trees, rocks and
 > buildings stay solid. In free drive Little Driver no longer pulls the car
 > back onto the road, so children can roam and smash; races keep the pull.
+>
+> **Phase 6 — more vehicles:** tractors with hay or log trailers, big rigs
+> towing box, tanker, log and car-carrier semi-trailers (trailers follow the
+> path of the hitch, so they swing through corners and never jack-knife),
+> motorbikes (scooter, dirt bike, sport bike, chopper) with a helmeted rider
+> that lean into turns and wheelie on nitro, buses (city, school,
+> double-decker, coach), a fire engine and a cement mixer. Each new type has
+> a garage filter chip and a badge.
 
 ## Tests
 

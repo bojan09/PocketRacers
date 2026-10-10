@@ -319,6 +319,8 @@ function showResults() {
     if (r.place === 1 && r.total > 1) achievements.add('wins');
     if (car.family === 'monster') achievements.add('monsterRaces');
     if (car.family === 'truck') achievements.add('truckRaces');
+    const kind = { rig: 'rigRaces', tractor: 'tractorRaces', bus: 'busRaces', bike: 'bikeRaces' }[car.family];
+    if (kind) achievements.add(kind);
   }
   achievements.max('raceStars', career.totalStars);
   const upNext = nextEvent();

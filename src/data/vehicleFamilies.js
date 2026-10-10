@@ -475,6 +475,86 @@ function motorbike(style = 'sport') {
   };
 }
 
+/** Bus: city (flat front), school (short hood), double-decker or coach. */
+function bus(style = 'city') {
+  const school = style === 'school';
+  const tall = style === 'double';
+  const L = style === 'coach' ? 5.5 : 5.2;
+  const H = tall ? 4.2 : style === 'coach' ? 3.2 : 2.95;
+  const cz = school ? -L + 1.35 : -L + 0.04; // where the glasshouse starts
+  const body = school
+    ? [
+        [-L, 1.0, 0.55, 1.28, 5],
+        [-L + 0.12, 1.08, 0.5, 1.34, 6],
+        [-L + 1.2, 1.18, 0.46, 1.4, 7],
+        [-L + 1.4, 1.25, 0.45, 1.42, 8],
+        [L - 0.1, 1.25, 0.45, 1.42, 8],
+        [L, 1.18, 0.5, 1.38, 6],
+      ]
+    : [
+        [-L, 1.18, 0.5, 1.38, 6],
+        [-L + 0.1, 1.25, 0.45, 1.42, 8],
+        [L - 0.1, 1.25, 0.45, 1.42, 8],
+        [L, 1.18, 0.5, 1.38, 6],
+      ];
+  const parts = [
+    // Destination sign, door, bumpers.
+    { box: [0, H - 0.22, cz + 0.02, 0.7, 0.12, 0.02], paint: [1, 0.72, 0.15], emissive: 0.8, mat: 'light' },
+    { box: [1.255, 1.6, school ? -L + 3.0 : cz + 0.75, 0.01, 0.95, 0.42], paint: [0.1, 0.12, 0.18], mat: 'glass' },
+    { box: [0, 0.55, -L - 0.03, 1.2, 0.12, 0.05], paint: 'trim' },
+    { box: [0, 0.55, L + 0.03, 1.2, 0.12, 0.05], paint: 'trim' },
+  ];
+  // Window pillars along both sides.
+  for (let z = cz + 1.5; z < L - 0.4; z += 1.25) parts.push({ box: [1.236, (1.42 + H) / 2, z, 0.02, (H - 1.42) / 2, 0.07], paint: 'body', mirror: true });
+  if (tall) {
+    // Band between the decks, front and sides.
+    parts.push({ box: [1.24, 2.75, (cz + L) / 2, 0.02, 0.18, (L - cz) / 2], paint: 'body', mirror: true });
+    parts.push({ box: [0, 2.75, cz + 0.06, 1.22, 0.18, 0.03], paint: 'body' });
+  }
+  if (style === 'coach') parts.push({ box: [0, H + 0.12, 0.6, 0.8, 0.12, 2.4], paint: 'accent' });
+  if (school) {
+    parts.push(
+      { box: [0, 1.28, -L - 0.01, 0.55, 0.22, 0.02], paint: 'dark' },
+      { box: [1.24, 1.0, 0, 0.012, 0.06, L - 0.4], paint: 'dark', mirror: true },
+      { box: [1.24, 0.75, 0, 0.012, 0.06, L - 0.4], paint: 'dark', mirror: true },
+    );
+  }
+  const front = -L + 1.95; // behind the door
+  return {
+    body,
+    cabin: [
+      [cz, 1.24, 1.24, 1.4, 1.43],
+      [cz + 0.08, 1.25, 1.22, 1.42, H],
+      [L - 0.15, 1.25, 1.22, 1.42, H],
+      [L - 0.08, 1.24, 1.2, 1.42, H - 0.04],
+      [L - 0.03, 1.22, 1.2, 1.42, 1.45],
+    ],
+    cabinShape: [0.12, 0.08],
+    cabinStrips: ['wind', 'side', 'side', 'rear'],
+    mirrors: 'truck',
+    parts,
+    stripeHalf: 0.35,
+    grille: school,
+    rearKit: false,
+    lights: { fy: 0.85, fz: -L, fx: 0.9, fw: 0.16, ry: 0.95, rz: L, rx: 0.95, rearBar: false },
+    exhausts: [[-0.9, 0.5, L + 0.05]],
+    trailY: 0.9,
+    height: H + 0.1,
+    wheels: {
+      radius: 0.5,
+      width: 0.38,
+      rimStyle: 'steel',
+      maxSteer: 0.26,
+      positions: [
+        [-1.0, front],
+        [1.0, front],
+        [-1.0, L - 1.9],
+        [1.0, L - 1.9],
+      ],
+    },
+  };
+}
+
 /**
  * Monster truck: any family's body (pickup, muscle car, SUV, hatch, jeep)
  * lifted onto a monster chassis with giant wheels.
@@ -530,6 +610,31 @@ function monsterTruck(bodyFamily) {
 /** What a cab-over truck carries: box, tanker, tipper or flatbed. */
 function truckCargo(kind) {
   if (kind === 'none') return [];
+  if (kind === 'fire') {
+    const parts = [
+      // Equipment body with shutter lines, ladder on top, blue lights.
+      { box: [0, 2.25, 1.15, 1.25, 0.95, 3.05], paint: 'body', mat: 'paint' },
+      { box: [0, 1.62, 1.15, 1.262, 0.06, 3.0], paint: 'stripe' },
+      { box: [0.45, 3.32, 0.9, 0.04, 0.05, 3.2], paint: 'chrome', mirror: true },
+      { cyl: [0, 3.3, 3.6, 0.35, 0.1, 'y'], paint: 'dark' },
+      { box: [0.62, 3.06, -4.0, 0.16, 0.05, 0.1], paint: [0.25, 0.55, 1], emissive: 0.9, mat: 'light', mirror: true },
+      { box: [0, 3.06, -4.0, 0.42, 0.04, 0.09], paint: [0.9, 0.15, 0.2], emissive: 0.9, mat: 'light' },
+    ];
+    for (let z = -2.1; z <= 3.9; z += 0.4) parts.push({ box: [0, 3.32, z, 0.45, 0.025, 0.025], paint: 'chrome' });
+    for (const z of [-0.6, 0.6, 1.8, 3.0]) parts.push({ box: [1.255, 2.25, z, 0.008, 0.75, 0.012], paint: shadeRgb(0.75), mirror: true });
+    return parts;
+  }
+  if (kind === 'mixer') {
+    return [
+      // Tilted-looking drum (wide at the front, tapering back), chute, tank.
+      { cyl: [0, 2.35, 0.5, 1.12, 1.4, 'z'], paint: 'accent', topR: 0.95, sides: 18 },
+      { cyl: [0, 2.3, 2.6, 0.95, 0.7, 'z'], paint: 'accent', topR: 0.5, sides: 18 },
+      ...[-0.4, 0.5, 1.4, 2.3].map((z, i) => ({ cyl: [0, 2.35 - i * 0.02, z, 1.14 - i * 0.07, 0.05, 'z'], paint: 'stripe', sides: 18 })),
+      { box: [0, 2.0, 3.6, 0.3, 0.06, 0.4], paint: 'trim', top: 0.7 },
+      { box: [0, 1.35, 1.15, 1.0, 0.1, 2.9], paint: 'trim' },
+      { cyl: [0, 2.3, -1.6, 0.4, 0.3, 'z'], paint: 'chrome' },
+    ];
+  }
   if (kind === 'tanker') {
     return [
       { cyl: [0, 2.35, 1.15, 1.15, 2.95, 'z'], paint: 'accent', mat: 'chrome', sides: 18 },
@@ -575,6 +680,7 @@ function truckCargo(kind) {
   ];
 }
 
+const shadeRgb = (k) => [k, k, k];
 const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 
 export const FAMILIES = {
@@ -873,6 +979,15 @@ export const FAMILIES = {
     build: (o = {}) => monsterTruck(o.body || 'pickup'),
   },
 
+  // ------------------------------------------------------------------- bus
+  bus: {
+    label: 'Bus',
+    engine: 'diesel',
+    camera: 2.1,
+    handling: { maxSpeed: 9600, accel: 3300, brake: 11000, grip: 7, steerSpeed: 1.75, steerRamp: 3.8, centrifugal: 0.22, nitroAccel: 2.4, nitroTop: 1.4, offroadTop: 0.5 },
+    build: (o = {}) => bus(o.style),
+  },
+
   // ------------------------------------------------------------------ bike
   bike: {
     label: 'Motorbike',
@@ -1041,7 +1156,7 @@ export const FAMILIES = {
   },
 };
 
-export const FAMILY_ORDER = ['race', 'sports', 'muscle', 'hatch', 'jeep', 'suv', 'pickup', 'monster', 'truck', 'rig', 'tractor', 'bike'];
+export const FAMILY_ORDER = ['race', 'sports', 'muscle', 'hatch', 'jeep', 'suv', 'pickup', 'monster', 'truck', 'rig', 'bus', 'tractor', 'bike'];
 
 export function familyHandling(family, tweak = {}) {
   return { ...BASE_HANDLING, ...FAMILIES[family].handling, ...tweak };

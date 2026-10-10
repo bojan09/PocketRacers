@@ -15,6 +15,7 @@ export const KIT_SLOTS = {
   rig: ['lightbar', 'bullbar'],
   tractor: ['lightbar'],
   bike: [],
+  bus: ['lightbar'],
 };
 
 export const KIT_OPTIONS = {

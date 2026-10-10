@@ -16,7 +16,11 @@ export const ACHIEVEMENTS = [
   { id: 'stars-12', icon: '⭐', name: 'Star Collector', desc: 'Earn 12 race stars', stat: 'raceStars', goal: 12, reward: 1000 },
   { id: 'stars-all', icon: '🌟', name: 'Superstar', desc: 'Earn every race star', stat: 'raceStars', goal: MAX_RACE_STARS, reward: 5000 },
   { id: 'monster', icon: '🦖', name: 'Big Wheels', desc: 'Finish a race in a monster truck', stat: 'monsterRaces', goal: 1, reward: 500 },
-  { id: 'truck', icon: '🚛', name: 'Heavy Hauler', desc: 'Finish a race in a cargo truck', stat: 'truckRaces', goal: 1, reward: 500 },
+  { id: 'truck', icon: '🚚', name: 'Heavy Hauler', desc: 'Finish a race in a cargo truck', stat: 'truckRaces', goal: 1, reward: 500 },
+  { id: 'rig', icon: '🚛', name: 'Long Load', desc: 'Finish a race in a big rig with a trailer', stat: 'rigRaces', goal: 1, reward: 500 },
+  { id: 'tractor', icon: '🚜', name: 'Farm Hand', desc: 'Finish a race on a tractor', stat: 'tractorRaces', goal: 1, reward: 500 },
+  { id: 'bus', icon: '🚌', name: 'Bus Driver', desc: 'Finish a race in a bus', stat: 'busRaces', goal: 1, reward: 500 },
+  { id: 'bike', icon: '🏍️', name: 'Two Wheels', desc: 'Finish a race on a motorbike', stat: 'bikeRaces', goal: 1, reward: 500 },
   // Tricks
   { id: 'jump', icon: '🛫', name: 'Lift Off', desc: 'Jump off a ramp', stat: 'jumps', goal: 1, reward: 150 },
   { id: 'big-air', icon: '🪂', name: 'Sky High', desc: 'Stay in the air for 2 seconds', stat: 'bestAir', goal: 2, reward: 750 },
