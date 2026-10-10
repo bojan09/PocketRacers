@@ -614,7 +614,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
   await check('every map card loads its map and drives', async () => {
     const all = await page.$$eval('.map-card', (c) => c.map((b) => b.dataset.map));
     assert.deepEqual(all, ['island', 'bigland', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast']);
-    const ids = all.slice(1);
+    const ids = all.filter((id) => id !== 'island' && id !== 'bigland'); // race maps (open worlds are checked below)
     for (const id of ids) {
       await drive(page, id);
       await page.waitForTimeout(700);
