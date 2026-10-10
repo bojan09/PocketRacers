@@ -6,11 +6,12 @@
 // Units: position in metres; speed in sim units (240 per metre) like the
 // track session, so the HUD, audio and handling values are shared.
 
-import { approach, clamp } from '../core/util.js';
+import { approach, clamp, mulberry32 } from '../core/util.js';
 import { AIR_GRAVITY, UNITS_PER_METRE } from '../world/track3d.js';
 import { WATER } from '../world/openWorld.js';
 import { FunSystem } from './fun.js';
-import { NITRO_DRAIN, SPIN_RATE, SUPER_TIME } from './session.js';
+import { NITRO_DRAIN, SPIN_RATE, SUPER_TIME, ASSIST } from './session.js';
+import { PROP_POINTS } from '../data/props.js';
 
 const MPU = 1 / UNITS_PER_METRE;
 const MAX_EVENTS = 32;
@@ -87,6 +88,8 @@ export class FreeSession {
     // Scoring reuses the track fun system with an empty, endless "track".
     this.track = { length: 1e12, metresPerUnit: MPU, segmentLength: 1, def: { id: 'open-world' }, starDefs: [], coneDefs: [], propDefs: [], boosts: [] };
     this.fun = new FunSystem(this);
+    this.knocked = new Map(); // prop id -> how it was knocked flying
+    this.nearby = [];
     this.setCar(car);
     this.reset();
   }
@@ -105,6 +108,10 @@ export class FreeSession {
     this.body = { p: this.player, car: this.car, isPlayer: true };
     this.events.length = 0;
     this.fun.reset();
+    this.knocked.clear();
+    this.rand = mulberry32(7);
+    this.stuck = 0;
+    this.hitCooldown = 0;
   }
 
   emit(e) {
@@ -268,8 +275,70 @@ export class FreeSession {
       p.pitch += (pitch - p.pitch) * Math.min(1, dt * 12);
       p.bank += (bank - p.bank) * Math.min(1, dt * 12);
     }
+    this.collide(v, nfx, nfz);
+    if (this.assist) this.watchStuck(input, dt);
     p.lapTime += dt;
     this.fun.step(dt);
+  }
+
+  /**
+   * Trees, rocks and buildings are solid: the car bounces off them. Small
+   * props (hay, crates, fences...) are knocked flying for points.
+   */
+  collide(v, fx, fz) {
+    const p = this.player;
+    if (this.hitCooldown > 0) this.hitCooldown -= 1 / 120;
+    if (p.air > 1.6) return;
+    const R = Math.max(0.6, this.carHalf * 0.95);
+    for (const o of this.world.objectsNear(p.x, p.z, 8, this.nearby)) {
+      const dx = p.x - o.x;
+      const dz = p.z - o.z;
+      const d = Math.hypot(dx, dz) || 1e-3;
+      if (d > R + o.r) continue;
+      if (o.prop) {
+        if (this.knocked.has(o.id)) continue;
+        const speedM = Math.abs(v);
+        this.knocked.set(o.id, { t: this.time, fx, fz, kick: Math.min(48, Math.max(6, speedM * 1.15)), side: (this.rand() - 0.5) * 6, spin: (this.rand() - 0.5) * 12 });
+        p.speed *= 0.95;
+        this.fun.stats.props++;
+        this.fun.award('prop', PROP_POINTS, 'SMASH', { prop: o.kind });
+        this.fun.refill(0.05);
+        continue;
+      }
+      if (o.r <= 0) continue;
+      // Push out of the obstacle; heading into it bounces back.
+      const nx = dx / d;
+      const nz = dz / d;
+      p.x = o.x + nx * (R + o.r);
+      p.z = o.z + nz * (R + o.r);
+      const into = -(fx * nx + fz * nz) * Math.sign(p.speed || 1);
+      if (this.hitCooldown <= 0 && Math.abs(v) > 2) {
+        this.emit({ type: 'hit', what: o.kind, strength: Math.min(1, Math.abs(v) / 30) });
+        this.hitCooldown = 0.3;
+      }
+      if (into > 0.5) p.speed = -p.speed * 0.2;
+      else p.speed *= 0.9;
+      p.latV += (nx * Math.cos(p.yaw) + nz * Math.sin(p.yaw)) * 2;
+    }
+  }
+
+  /** Little Driver: a car wedged against something gets turned free. */
+  watchStuck(input, dt) {
+    const p = this.player;
+    const trying = input.throttle > 0 || input.nitro;
+    this.stuck = !p.airborne && trying && Math.abs(p.speed) < this.car.handling.maxSpeed * 0.08 ? this.stuck + dt : 0;
+    if (this.stuck < ASSIST.stuckTime) return;
+    this.stuck = 0;
+    const back = 4;
+    p.x -= Math.sin(p.yaw) * back;
+    p.z += Math.cos(p.yaw) * back;
+    p.yaw += Math.PI / 2;
+    p.prevX = p.x;
+    p.prevZ = p.z;
+    p.prevYaw = p.yaw;
+    p.y = p.prevY = this.world.ground(p.x, p.z);
+    p.speed = this.car.handling.maxSpeed * 0.12;
+    this.emit({ type: 'rescue' });
   }
 
   land(g) {

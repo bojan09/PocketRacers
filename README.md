@@ -103,6 +103,13 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > splashes and brings the car back to the last dry spot. Roads, areas,
 > props, landmarks and the explore map follow in 7B–7F; an endless world in
 > 7G.
+>
+> **Phase 7B — areas and scenery:** the island has meadows (with houses and
+> barns), forests, an eastern desert, snowy peaks and beaches, each with its
+> own ground colour and scenery placed from the seed (the same every time).
+> Trees, rocks and buildings are solid; hay bales, fences, crates, barrels,
+> gifts and beach balls fly off for points. Little Driver turns a wedged car
+> free, and the camera slides in rather than ending up inside a tree.
 
 ## Tests
 

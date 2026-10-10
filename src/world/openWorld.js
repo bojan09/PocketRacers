@@ -8,10 +8,30 @@
 // World axes as on tracks: x = east, y = up, z = south; metres.
 
 import { valueNoise } from '../render3d/terrain.js';
+import { mulberry32 } from '../core/util.js';
+import { OBJECT_KINDS, UNITS_PER_METRE } from './track3d.js';
+import { PROP_SIZE } from '../data/props.js';
 
 export const CHUNK = 128; // metres per chunk side
 export const CELL = 4; // metres between height samples
 export const WATER = 0; // sea level
+
+const OBJ_CELL = 12; // metres between scenery candidates (jittered)
+export const SNOW_LINE = 52;
+
+/**
+ * What grows in each area: [kind, weight] lists for big scenery, how dense
+ * it is, and which smashable props turn up there.
+ */
+export const BIOMES = {
+  meadow: { density: 0.1, kinds: [['oak', 3], ['bush', 4], ['flowers', 3], ['rock', 1], ['house', 0.25], ['barn', 0.15]], props: ['hay', 'fence', 'crate', 'mailbox'] },
+  forest: { density: 0.4, kinds: [['pine', 5], ['oak', 2], ['bush', 2], ['rock', 0.6]], props: ['crate', 'fence'] },
+  desert: { density: 0.07, kinds: [['cactus', 4], ['desertRock', 2], ['bush', 0.5]], props: ['barrel', 'drum', 'crate'] },
+  snow: { density: 0.22, kinds: [['snowPine', 6], ['rock', 1], ['snowman', 0.4]], props: ['gift', 'crate'] },
+  beach: { density: 0.06, kinds: [['palm', 4], ['umbrella', 1.5], ['hut', 0.2]], props: ['ball', 'barrel'] },
+};
+
+const hashChunk = (cx, cz, seed) => (Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663) ^ Math.imul(seed, 83492791)) >>> 0;
 
 const smoothstep = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -28,7 +48,99 @@ export class OpenWorld {
     this.endless = endless;
     this.noise = valueNoise(seed);
     this.noise2 = valueNoise(seed * 7 + 13);
+    this.noise3 = valueNoise(seed * 3 + 101);
     this.spawn = { x: 0, z: 0, yaw: 0 };
+    this.objectCache = new Map();
+  }
+
+  /** Which area (biome) a point is in. */
+  biome(x, z, h = this.height(x, z)) {
+    if (h > SNOW_LINE) return 'snow';
+    if (h < WATER + 2.2) return 'beach';
+    const n = this.region(x, z);
+    if (n > 0.16) return 'desert';
+    if (n < -0.2) return 'forest';
+    return 'meadow';
+  }
+
+  /**
+   * Large regions: forest and desert patches among the meadows; the desert
+   * leans to the east, forest to the west. > 0.16 desert, < -0.2 forest.
+   * Meadows around the start.
+   */
+  region(x, z) {
+    const near = smoothstep(150, 450, Math.hypot(x - this.spawn.x, z - this.spawn.z));
+    return (this.noise3(x * 0.0016, z * 0.0016) + x / (this.radius * 6)) * near;
+  }
+
+  /**
+   * Scenery and smashable props in chunk (cx, cz), the same every time:
+   * [{ id, kind, x, z, y, yaw, scale, r, prop }]. r is the solid radius in
+   * metres (0 = drive through); prop = knocked flying when hit.
+   */
+  chunkObjects(cx, cz) {
+    const key = `${cx},${cz}`;
+    const cached = this.objectCache.get(key);
+    if (cached) return cached;
+    const rand = mulberry32(hashChunk(cx, cz, this.seed));
+    const out = [];
+    const n = CHUNK / OBJ_CELL;
+    let id = 0;
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const x = cx * CHUNK + (i + 0.15 + rand() * 0.7) * OBJ_CELL;
+        const z = cz * CHUNK + (j + 0.15 + rand() * 0.7) * OBJ_CELL;
+        const pick = rand();
+        const kindRoll = rand();
+        const yaw = rand() * Math.PI * 2;
+        const sc = 0.8 + rand() * 0.45;
+        if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < 45) continue; // clear start
+        const h = this.height(x, z);
+        if (h < WATER + 0.3) continue;
+        const b = BIOMES[this.biome(x, z)];
+        // Smashable props in little groups.
+        if (pick < 0.012) {
+          const kind = b.props[Math.floor(kindRoll * b.props.length)];
+          const count = kind === 'fence' ? 5 : 3;
+          for (let k = 0; k < count; k++) {
+            const px = x + (kind === 'fence' ? Math.cos(yaw) * k * 2.05 : (rand() - 0.5) * 4);
+            const pz = z + (kind === 'fence' ? Math.sin(yaw) * k * 2.05 : (rand() - 0.5) * 4);
+            out.push({ id: `${key}:${id++}`, kind, x: px, z: pz, y: this.ground(px, pz), yaw: kind === 'fence' ? -yaw : rand() * 6.28, scale: 1, r: PROP_SIZE[kind] || 0.4, prop: true });
+          }
+          continue;
+        }
+        if (pick > b.density) continue;
+        if (this.slope(x, z) > 0.7) continue;
+        let total = 0;
+        for (const [, w] of b.kinds) total += w;
+        let roll = kindRoll * total;
+        let kind = b.kinds[0][0];
+        for (const [k, w] of b.kinds) {
+          if ((roll -= w) <= 0) {
+            kind = k;
+            break;
+          }
+        }
+        const def = OBJECT_KINDS[kind];
+        const scale = kind === 'house' || kind === 'barn' || kind === 'hut' ? 1 : sc;
+        const r = def && def.solid ? (def.w * def.solid * scale) / 2 / UNITS_PER_METRE : 0;
+        out.push({ id: `${key}:${id++}`, kind, x, z, y: this.ground(x, z), yaw, scale, r: kind === 'house' || kind === 'barn' ? 4 : kind === 'hut' ? 2.5 : r, prop: false });
+      }
+    }
+    if (this.objectCache.size > 400) this.objectCache.delete(this.objectCache.keys().next().value);
+    this.objectCache.set(key, out);
+    return out;
+  }
+
+  /** Objects whose chunks touch the square of half-size `reach` around (x, z). */
+  objectsNear(x, z, reach, out = []) {
+    out.length = 0;
+    const c0x = Math.floor((x - reach) / CHUNK);
+    const c1x = Math.floor((x + reach) / CHUNK);
+    const c0z = Math.floor((z - reach) / CHUNK);
+    const c1z = Math.floor((z + reach) / CHUNK);
+    for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++) for (const o of this.chunkObjects(cx, cz)) if (Math.abs(o.x - x) < reach && Math.abs(o.z - z) < reach) out.push(o);
+    return out;
   }
 
   /** How much of the ground is land (1) rather than sea (0) at (x, z). */

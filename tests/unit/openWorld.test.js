@@ -107,3 +107,35 @@ test('free drive: cresting a hill at speed jumps, and the landing scores', () =>
   assert.ok(s.events.some((e) => e.type === 'land'), 'landed after a jump');
   assert.ok(s.events.some((e) => e.type === 'score' && (e.kind === 'jump' || e.kind === 'trick')));
 });
+
+test('island scenery: the same every time, all areas present, start kept clear', () => {
+  const a = new OpenWorld();
+  const b = new OpenWorld();
+  assert.deepEqual(a.chunkObjects(2, -3), b.chunkObjects(2, -3));
+  const seen = new Set();
+  for (let z = -1400; z <= 1400; z += 70) for (let x = -1400; x <= 1400; x += 70) if (a.height(x, z) > 0) seen.add(a.biome(x, z));
+  for (const k of ['meadow', 'forest', 'desert', 'snow', 'beach']) assert.ok(seen.has(k), `has ${k}`);
+  for (const o of a.objectsNear(0, 0, 40)) assert.ok(Math.hypot(o.x, o.z) >= 45, 'clear start');
+  for (const o of a.chunkObjects(1, 1)) assert.ok(a.height(o.x, o.z) > 0, 'nothing in the sea');
+});
+
+test('free drive: a tree stops the car; props fly off for points', () => {
+  const W = new OpenWorld();
+  W.objectsNear = (x, z, reach, out = []) => {
+    out.length = 0;
+    out.push({ id: 'tree', kind: 'oak', x: 0, z: -30, y: 6, yaw: 0, scale: 1, r: 1.2, prop: false });
+    out.push({ id: 'hay', kind: 'hay', x: 6, z: -20, y: 6, yaw: 0, scale: 1, r: 0.6, prop: true });
+    return out;
+  };
+  const s = new FreeSession(W, makeVehicle('zippy'));
+  run(s, 3, input());
+  const p = s.player;
+  assert.ok(p.z > -30 + 1.2, 'did not drive through the tree');
+  assert.ok(s.events.some((e) => e.type === 'hit'));
+
+  const t = new FreeSession(W, makeVehicle('zippy'));
+  t.reset({ x: 6, z: 0, yaw: 0 });
+  run(t, 2, input());
+  assert.ok(t.knocked.has('hay'));
+  assert.ok(t.events.some((e) => e.type === 'score' && e.kind === 'prop'));
+});

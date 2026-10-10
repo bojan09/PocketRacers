@@ -7,7 +7,10 @@ import { uploadMesh, deleteMesh } from '../gl/gl.js';
 import { mat4, hexToRgb, transformPoint } from '../gl/math.js';
 import { clamp } from '../core/util.js';
 import { MeshBuilder } from '../gl/meshBuilder.js';
-import { CHUNK, CELL, WATER } from '../world/openWorld.js';
+import { CHUNK, CELL, WATER, SNOW_LINE } from '../world/openWorld.js';
+import { MODEL_BUILDERS } from './models.js';
+import { PROP_MODELS } from './props.js';
+import { mulberry32 } from '../core/util.js';
 import { buildCloudPuffs } from './environment.js';
 import { makeFrame } from '../world/track3d.js';
 
@@ -27,6 +30,9 @@ export function buildChunkMesh(world, cx, cz, pal) {
   const rock = hexToRgb(pal.rockFace || '#8b8f99');
   const sand = hexToRgb(pal.sand || '#e8d49a');
   const snow = [0.96, 0.97, 1];
+  const forest = [0.24, 0.5, 0.22];
+  const desert = [0.9, 0.7, 0.42];
+  const desertDark = [0.8, 0.56, 0.32];
   const noise = world.noise2;
   const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
   const P = [];
@@ -47,9 +53,13 @@ export function buildChunkMesh(world, cx, cz, pal) {
       const fleck = noise(x * 0.08, z * 0.08) + 0.5;
       let c = mix(grass, grassAlt, clamp(patch * 1.3 - 0.15, 0, 1));
       c = mix(c, dry, Math.max(0, fleck - 0.62) * 1.4);
+      // Areas blend into each other: forest darker, desert sandy.
+      const region = world.region(x, z);
+      c = mix(c, forest, clamp((-region - 0.13) / 0.08, 0, 1));
+      c = mix(c, mix(desert, desertDark, fleck), clamp((region - 0.1) / 0.08, 0, 1));
       c = mix(c, rock, clamp((1 - ny / l - 0.2) * 4, 0, 1));
       c = mix(c, sand, clamp((WATER + 2.2 - y) / 2.5, 0, 1));
-      c = mix(c, snow, clamp((y - 75) / 12, 0, 1));
+      c = mix(c, snow, clamp((y - SNOW_LINE + 4) / 8, 0, 1));
       Cl.push(c);
     }
   }
@@ -65,6 +75,24 @@ export function buildChunkMesh(world, cx, cz, pal) {
       mb.triS(P[a], P[b], P[c], N[a], N[b], N[c], Cl[a], Cl[b], Cl[c]);
       mb.triS(P[a], P[d], P[b], N[a], N[d], N[b], Cl[a], Cl[d], Cl[b]);
     }
+  }
+  return mb;
+}
+
+/** Trees, rocks and buildings of a chunk merged into one mesh. */
+export function buildChunkScenery(world, cx, cz, variants) {
+  const mb = new MeshBuilder();
+  const m = mat4.create();
+  const rand = mulberry32((cx * 7919 + cz * 104729) >>> 0);
+  for (const o of world.chunkObjects(cx, cz)) {
+    if (o.prop) continue;
+    const list = variants(o.kind);
+    if (!list) continue;
+    mat4.identity(m);
+    mat4.translate(m, m, o.x, o.y - 0.05, o.z);
+    mat4.rotateY(m, m, o.yaw);
+    if (o.scale !== 1) mat4.scale(m, m, o.scale);
+    mb.append(list[Math.floor(rand() * list.length)], m);
   }
   return mb;
 }
@@ -93,6 +121,14 @@ export function installWorldRendering(Renderer3D) {
       stars: 0,
     };
     this.worldClouds = buildCloudPuffs([0, 0, 0]);
+    // A few variants of every scenery model, shared by all chunks.
+    const vr = mulberry32(99);
+    this.sceneryVariants = {};
+    this.worldVariants = (kind) => {
+      if (!MODEL_BUILDERS[kind]) return null;
+      return (this.sceneryVariants[kind] ||= [0, 1, 2].map(() => MODEL_BUILDERS[kind](vr)));
+    };
+    if (!this.worldPropMeshes) this.worldPropMeshes = Object.fromEntries(Object.entries(PROP_MODELS).map(([k, b]) => [k, uploadMesh(this.gl, b())]));
     const wmb = new MeshBuilder().material(1, 0);
     const wc = hexToRgb(palette.water || '#3fa9e0');
     const E = 6000;
@@ -107,7 +143,10 @@ export function installWorldRendering(Renderer3D) {
   };
 
   R.freeWorldChunks = function () {
-    for (const c of this.worldChunks?.values() || []) deleteMesh(this.gl, c.mesh);
+    for (const c of this.worldChunks?.values() || []) {
+      deleteMesh(this.gl, c.mesh);
+      deleteMesh(this.gl, c.scenery);
+    }
     this.worldChunks?.clear();
   };
 
@@ -126,12 +165,14 @@ export function installWorldRendering(Renderer3D) {
     want.sort((a, b) => a.d - b.d);
     for (const w of want.slice(0, budget)) {
       const mb = buildChunkMesh(this.world, w.cx, w.cz, this.worldPalette);
-      this.worldChunks.set(w.key, { mesh: uploadMesh(this.gl, mb), cx: w.cx, cz: w.cz });
+      const sc = buildChunkScenery(this.world, w.cx, w.cz, this.worldVariants);
+      this.worldChunks.set(w.key, { mesh: uploadMesh(this.gl, mb), scenery: uploadMesh(this.gl, sc), cx: w.cx, cz: w.cz });
     }
     const far = (VIEW_CHUNKS + 2) ** 2;
     for (const [key, c] of this.worldChunks) {
       if ((c.cx - ccx) ** 2 + (c.cz - ccz) ** 2 > far) {
         deleteMesh(this.gl, c.mesh);
+        deleteMesh(this.gl, c.scenery);
         this.worldChunks.delete(key);
       }
     }
@@ -231,6 +272,14 @@ export function installWorldRendering(Renderer3D) {
     eye[0] = pos.x - cd[0] * dist;
     eye[2] = pos.z - cd[2] * dist;
     eye[1] = pos.y - air * 0.35 + height;
+    // Never inside a tree or building: slide in toward the car until clear.
+    const near = W.objectsNear(eye[0], eye[2], 8, (this.camScratch ||= []));
+    for (let step = 0; step < 6; step++) {
+      const blocked = near.some((o) => !o.prop && o.r > 0 && Math.hypot(eye[0] - o.x, eye[2] - o.z) < Math.max(3.2, o.r * 1.6) * o.scale && eye[1] < o.y + 12 * o.scale);
+      if (!blocked) break;
+      eye[0] += (pos.x - eye[0]) * 0.25;
+      eye[2] += (pos.z - eye[2]) * 0.25;
+    }
     const eg = W.ground(eye[0], eye[2]);
     if (eye[1] < eg + 1.5) eye[1] = eg + 1.5;
     const tgt = this.target;
@@ -303,7 +352,10 @@ export function installWorldRendering(Renderer3D) {
     const U = this.lit.uniforms;
     gl.uniform2f(U.uFog, this.pal.fogNear * this.quality.fogScale, fogFar);
     mat4.identity(this.tmp);
-    for (const c of this.worldChunks.values()) if (this.visible(c.mesh, fogFar)) this.drawLit(c.mesh, this.tmp);
+    for (const c of this.worldChunks.values()) {
+      if (this.visible(c.mesh, fogFar)) this.drawLit(c.mesh, this.tmp);
+      if (c.scenery.count && this.visible(c.scenery, fogFar)) this.drawLit(c.scenery, this.tmp);
+    }
     gl.uniform1f(U.uWater, 1);
     mat4.translate(this.tmp, this.tmp, Math.round(eye[0] / 100) * 100, 0, Math.round(eye[2] / 100) * 100);
     this.drawLit(this.worldWater, this.tmp);
@@ -312,6 +364,7 @@ export function installWorldRendering(Renderer3D) {
       const d = this.carDraws[i];
       this.drawCar(d.meshes, d.m, d.spin, d.steer, d.brake);
     }
+    this.drawWorldProps(session, Math.min(fogFar, 160));
 
     // --- Particles, clouds, shadows ---------------------------------------
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, false);
@@ -331,6 +384,36 @@ export function installWorldRendering(Renderer3D) {
     this.pal = savedPal;
     this.cloudPuffs = savedClouds;
     this.env = savedEnv;
+  };
+
+  /** Smashable props near the player, flying off when knocked. */
+  R.drawWorldProps = function (session, reach) {
+    const p = session.player;
+    const m = this.tmp;
+    const now = session.time;
+    const list = this.world.objectsNear(p.x, p.z, reach, (this.propScratch ||= []));
+    for (const o of list) {
+      if (!o.prop) continue;
+      const mesh = this.worldPropMeshes[o.kind];
+      if (!mesh) continue;
+      mat4.identity(m);
+      const k = session.knocked.get(o.id);
+      if (k) {
+        // Flung ahead of the car and to the side, tumbling, then lying still.
+        const t = Math.min(now - k.t, 0.9);
+        const y = Math.max(0, 6.5 * t - 8 * t * t);
+        const sx = -k.fz;
+        const sz = k.fx;
+        mat4.translate(m, m, o.x + (k.fx * k.kick + sx * k.side) * t, o.y + y + (t >= 0.8 ? 0.15 : 0), o.z + (k.fz * k.kick + sz * k.side) * t);
+        mat4.rotateY(m, m, o.yaw);
+        mat4.rotateX(m, m, -Math.min(Math.PI / 2, t * 7));
+        mat4.rotateZ(m, m, k.spin * t * 0.3);
+      } else {
+        mat4.translate(m, m, o.x, o.y, o.z);
+        mat4.rotateY(m, m, o.yaw);
+      }
+      this.drawLit(mesh, m);
+    }
   };
 
   /** Where effects for a free-drive event happen (the player's car). */
@@ -355,6 +438,13 @@ export function installWorldRendering(Renderer3D) {
         const a = (i / 48) * Math.PI * 2;
         this.particles.spawn('sparkle', p.x, p.y + 0.6, p.z, Math.cos(a) * 26, 1 + r() * 2, Math.sin(a) * 26, 0.22, 0.55, 0, this.nitroCol);
       }
+    } else if (e.type === 'score' && e.kind === 'prop') {
+      for (let i = 0; i < 12; i++) this.particles.spawn('dust', p.x, p.y + 0.4, p.z, (r() - 0.5) * 6, 1 + r() * 3, (r() - 0.5) * 6, 0.25 + r() * 0.2, 0.6, 0.8, [0.72, 0.6, 0.45]);
+      if (!this.reduceEffects) this.shake = Math.max(this.shake, 0.12);
+    } else if (e.type === 'hit') {
+      if (!this.reduceEffects) this.shake = Math.max(this.shake, 0.35 * e.strength);
+      this.flash = 0.3 * e.strength;
+      for (let i = 0; i < 14; i++) this.particles.spawn(i % 2 ? 'star' : 'spark', p.x, p.y + 0.8, p.z, (r() - 0.5) * 8, 2 + r() * 5, (r() - 0.5) * 8, 0.08 + r() * 0.1, 0.4 + r() * 0.3);
     } else if (e.type === 'score' && (e.combo >= 4 || e.kind === 'jump' || e.kind === 'trick')) {
       this.confetti(f.pos, p.y + 1.5, 24);
     } else if (e.type === 'boost') this.flash = Math.max(this.flash, 0.12);
