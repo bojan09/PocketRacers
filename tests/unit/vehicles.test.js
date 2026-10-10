@@ -43,8 +43,10 @@ test('every vehicle builds a sane model with every livery and rim', () => {
       assert.ok(b.radius < 6, `${v.id} radius ${b.radius}`);
       // Wheels touch the ground; steering is on the front axle only.
       anchors.wheels.forEach((w, i) => assert.equal(w[1], wheelSize(def.model.wheels, i).radius));
-      assert.ok(anchors.steer.filter(Boolean).length === 2, `${v.id} steer`);
-      assert.ok(anchors.rearWheels.length >= 2);
+      // Motorbikes have one wheel per axle.
+      const perAxle = def.model.bike ? 1 : 2;
+      assert.ok(anchors.steer.filter(Boolean).length === perAxle, `${v.id} steer`);
+      assert.ok(anchors.rearWheels.length >= perAxle);
     }
     // Fits on the road with room to overtake.
     const def = makeVehicle(v.id);

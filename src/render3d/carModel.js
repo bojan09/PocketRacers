@@ -112,11 +112,13 @@ function wheelWells(spec, ride) {
   const { positions } = spec.wheels;
   const minZ = Math.min(...positions.map((p) => p[1]));
   const steer = spec.wheels.maxSteer ?? MAX_STEER;
-  return positions.map(([x, z], i) => {
+  // Wheels on the centre line (motorbikes) have no wells.
+  return positions.flatMap(([x, z], i) => {
+    if (Math.abs(x) < 0.01) return [];
     const { radius: r, width: w } = wheelSize(spec.wheels, i);
     const a = z < minZ + 0.3 ? steer : 0;
     const rr = r + WELL_GAP;
-    return {
+    return [{
       side: Math.sign(x),
       x,
       z,
@@ -125,7 +127,7 @@ function wheelWells(spec, ride) {
       // Inner wall at height dy above the axle: a steered tyre's corner
       // swings inwards by up to (half-chord at that height) * sin(angle).
       xin: (dy) => Math.abs(x) - (w / 2) * Math.cos(a) - Math.sqrt(Math.max(0, rr * rr - dy * dy)) * Math.sin(a) - WELL_DEPTH,
-    };
+    }];
   });
 }
 
@@ -628,6 +630,7 @@ export function buildCarBody(spec, paintHex) {
       rearZ: rz,
       frontZ: front[0],
       wheelScale,
+      bike: !!spec.bike,
       halfWidth: Math.max(...st.map((s) => s[1]), ...spec.wheels.positions.map((p, i) => Math.abs(p[0]) + wheelSize(spec.wheels, i).width / 2)),
       length: rz - front[0],
       height: bodyTop + ride,
@@ -715,6 +718,10 @@ function addPart(mb, part, P) {
       const [x, y, z, rad, half, axis] = part.cyl;
       const cap = part.cap ? (Array.isArray(part.cap) ? part.cap : P[part.cap]) : colour;
       mb.cylinder(x * sx, y, z, rad, half, part.sides || 12, axis, colour, cap, part.topR ?? rad);
+    } else if (part.limb) {
+      // A rounded tube between two points (a rider's arm or leg).
+      const [x0, y0, z0, x1, y1, z1, rad] = part.limb;
+      limb(mb, [x0 * sx, y0, z0], [x1 * sx, y1, z1], rad, colour);
     } else if (part.prism) {
       // A side profile [[y, z], ...] (convex from its first point) extruded
       // across x, e.g. a fin.
@@ -729,6 +736,33 @@ function addPart(mb, part, P) {
       }
     }
   }
+}
+
+/** Tube with rounded ends from a to b. */
+function limb(mb, a, b, rad, colour, sides = 8) {
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(d[0], d[1], d[2]) || 1;
+  const t = d.map((v) => v / len);
+  // Any vector not parallel to the tube, then two perpendiculars.
+  const ref = Math.abs(t[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const u = [t[1] * ref[2] - t[2] * ref[1], t[2] * ref[0] - t[0] * ref[2], t[0] * ref[1] - t[1] * ref[0]];
+  const ul = Math.hypot(...u);
+  for (let k = 0; k < 3; k++) u[k] /= ul;
+  const v = [t[1] * u[2] - t[2] * u[1], t[2] * u[0] - t[0] * u[2], t[0] * u[1] - t[1] * u[0]];
+  const ring = (c) =>
+    Array.from({ length: sides }, (_, i) => {
+      const ang = (i / sides) * Math.PI * 2;
+      const n = [0, 1, 2].map((k) => u[k] * Math.cos(ang) + v[k] * Math.sin(ang));
+      return { p: [0, 1, 2].map((k) => c[k] + n[k] * rad), n };
+    });
+  const A = ring(a);
+  const B = ring(b);
+  for (let i = 0; i < sides; i++) {
+    const j = (i + 1) % sides;
+    mb.triS(A[i].p, B[i].p, B[j].p, A[i].n, B[i].n, B[j].n, colour);
+    mb.triS(A[i].p, B[j].p, A[j].p, A[i].n, B[j].n, A[j].n, colour);
+  }
+  for (const c of [a, b]) mb.sphere(c[0], c[1], c[2], rad, rad, rad, colour, { segs: 8, rings: 5 });
 }
 
 /** One wheel (axis along x), centred at the origin. */

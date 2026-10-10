@@ -344,6 +344,7 @@ export class Renderer3D {
     if (p.airborne) pitch = clamp(Math.atan2(p.vy, Math.max(5, Math.abs(speedM))) * 0.6, -0.3, 0.35);
     else if (p.rampPitch) pitch = p.rampPitch;
     mat4.rotateY(out, out, -p.latVel * 0.08);
+    if (anchors.bike && !p.airborne) mat4.rotateZ(out, out, -clamp(p.steer * 0.55 * Math.min(1, (Math.abs(p.speed) * T.metresPerUnit) / 12), -0.55, 0.55));
     mat4.rotateX(out, out, pitch);
     const roll = p.roll + p.rampRoll;
     // Shoved by Super Nitro: a quick wobble.
@@ -560,8 +561,24 @@ export class Renderer3D {
     mat4.fromBasis(carM, f.R, f.U, [-f.T[0], -f.T[1], -f.T[2]], f.pos);
     if (p.offroad && Math.abs(sp) > 0.05) mat4.translate(carM, carM, 0, (this.rand() - 0.5) * 0.06, 0);
     mat4.rotateY(carM, carM, -slip);
-    mat4.rotateZ(carM, carM, lean);
-    mat4.rotateX(carM, carM, pitch);
+    const pan = this.player.anchors;
+    if (pan.bike) {
+      // Motorbikes lean into turns (more at speed) and pop a wheelie on nitro.
+      const target = p.airborne ? 0 : -clamp(p.steer * 0.62 * Math.min(1, Math.abs(sp) * 1.6) + slip * 0.6, -0.6, 0.6);
+      this.bikeLean = (this.bikeLean || 0) + (target - (this.bikeLean || 0)) * Math.min(1, dt * 7);
+      mat4.rotateZ(carM, carM, this.bikeLean);
+      mat4.rotateX(carM, carM, pitch);
+      const wheelie = p.airborne ? 0 : this.nitroFx * 0.3;
+      if (wheelie > 0.001) {
+        const rz = pan.rearWheels[0][2];
+        mat4.translate(carM, carM, 0, 0, rz);
+        mat4.rotateX(carM, carM, wheelie);
+        mat4.translate(carM, carM, 0, 0, -rz);
+      }
+    } else {
+      mat4.rotateZ(carM, carM, lean);
+      mat4.rotateX(carM, carM, pitch);
+    }
     // Air tricks: spin (yaw) and barrel roll about the middle of the body.
     const roll = p.roll + p.rampRoll;
     if (p.spin || roll) {

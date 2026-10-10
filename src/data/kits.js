@@ -14,6 +14,7 @@ export const KIT_SLOTS = {
   truck: ['lightbar', 'bullbar'],
   rig: ['lightbar', 'bullbar'],
   tractor: ['lightbar'],
+  bike: [],
 };
 
 export const KIT_OPTIONS = {
@@ -155,7 +156,10 @@ export function applyKit(model, v, kit = {}) {
   }
   // Neon underglow: glowing strips under the sills (the light pool on the
   // ground is drawn by the renderer).
-  if (kit.neon && kit.neon !== 'none') {
+  if (kit.neon && kit.neon !== 'none' && v.family === 'bike') {
+    // Motorbikes: just the glow on the ground, no sill strips.
+    m.neon = [1, 3, 5].map((i) => parseInt(kit.neon.slice(i, i + 2), 16) / 255);
+  } else if (kit.neon && kit.neon !== 'none') {
     const z0 = Math.min(...wz) + r * 0.5;
     const z1 = Math.max(...wz) - r * 0.5;
     const mid = bodyAt(st, (z0 + z1) / 2);
@@ -192,6 +196,11 @@ function topAt(m, z) {
  * topper with the vehicle's width.
  */
 function roofSpot(m, v) {
+  if (v.family === 'bike') {
+    // On the rider's helmet.
+    const h = m.parts.find((p) => p.sphere && p.paint === 'stripe');
+    if (h) return { y: h.sphere[1] + h.sphere[4] - 0.03, z: h.sphere[2], k: 0.9 };
+  }
   const hw = Math.max(...m.body.map((s) => s[1]));
   const k = 1.8 * Math.min(1.25, Math.max(0.8, hw / 0.95));
   const c = m.cabin;

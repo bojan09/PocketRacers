@@ -64,6 +64,7 @@ export const ENGINE_PROFILES = {
   v6: { cyl: 6, idle: 800, redline: 6200, shiftUp: 5600, shiftDown: 2800, tops: [0.24, 0.42, 0.6, 0.8, 1], lope: 0.5, filter: [240, 0.26, 800], drive: 2.6, gain: 1 },
   v8truck: { cyl: 8, idle: 700, redline: 6000, shiftUp: 5400, shiftDown: 2600, tops: [0.24, 0.42, 0.6, 0.8, 1], lope: 0.25, filter: [190, 0.22, 650], drive: 3, gain: 1.1 },
   monster: { cyl: 8, idle: 650, redline: 6200, shiftUp: 5600, shiftDown: 2800, tops: [0.3, 0.55, 0.8, 1], lope: 0.25, filter: [160, 0.2, 600], drive: 3.8, gain: 1.25, crackle: true },
+  bike: { cyl: 2, idle: 1200, redline: 11000, shiftUp: 10200, shiftDown: 6000, tops: [0.2, 0.36, 0.52, 0.68, 0.84, 1], lope: 0.7, filter: [420, 0.45, 1600], drive: 2.2, gain: 0.85 },
   diesel: { cyl: 6, idle: 600, redline: 2500, shiftUp: 2250, shiftDown: 1300, tops: [0.08, 0.14, 0.21, 0.29, 0.38, 0.48, 0.59, 0.72, 0.86, 1], lope: 0.5, filter: [150, 0.35, 500], drive: 3.5, gain: 1.25, whistle: true, airBrake: true },
 };
 

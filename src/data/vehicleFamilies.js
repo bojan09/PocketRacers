@@ -345,6 +345,136 @@ function semiTrailer(load) {
   };
 }
 
+/** The motorbike rider, built from rounded limbs. */
+function rider(style, { seatZ, hipY, shY, shZ, barY, barZ }) {
+  const jeans = [0.17, 0.2, 0.3];
+  const scooter = style === 'scooter';
+  const chopper = style === 'chopper';
+  const hip = [0.12, hipY, seatZ - 0.02];
+  const knee = chopper ? [0.2, hipY - 0.02, seatZ - 0.5] : scooter ? [0.17, hipY + 0.02, seatZ - 0.42] : [0.2, hipY + 0.06, seatZ - 0.36];
+  const foot = chopper ? [0.22, 0.48, seatZ - 0.75] : scooter ? [0.15, 0.54, seatZ - 0.42] : [0.2, 0.44, seatZ - 0.18];
+  const shoulder = [0.17, shY - 0.04, shZ];
+  const hand = [0.3, barY + 0.02, barZ];
+  const elbow = [0.25, (shoulder[1] + hand[1]) / 2 - 0.06, (shoulder[2] + hand[2]) / 2 + 0.04];
+  return [
+    { limb: [...hip, ...knee, 0.075], paint: jeans, mirror: true },
+    { limb: [...knee, ...foot, 0.06], paint: jeans, mirror: true },
+    { box: [foot[0], foot[1] - 0.02, foot[2] - 0.05, 0.05, 0.05, 0.11], paint: 'dark', mirror: true },
+    { sphere: [0, (hipY + shY) / 2, (seatZ + shZ) / 2, 0.19, (shY - hipY) / 2 + 0.08, 0.14], paint: 'accent' },
+    { limb: [...shoulder, ...elbow, 0.055], paint: 'accent', mirror: true },
+    { limb: [...elbow, ...hand, 0.048], paint: 'accent', mirror: true },
+    { sphere: [hand[0], hand[1], hand[2], 0.05, 0.05, 0.05], paint: 'dark', mirror: true },
+    { sphere: [0, shY + 0.2, shZ - 0.04, 0.16, 0.17, 0.18], paint: 'stripe' },
+    { sphere: [0, shY + 0.19, shZ - 0.16, 0.12, 0.075, 0.07], paint: [0.1, 0.12, 0.18], mat: 'glass' },
+  ];
+}
+
+/**
+ * Motorbike with a helmeted rider. Wheels sit on the centre line; the body
+ * stays clear above and between them (no wheel wells needed).
+ * Styles: sport, dirt, scooter, chopper.
+ */
+function motorbike(style = 'sport') {
+  const S = {
+    sport: { r: 0.33, w: 0.17, zf: -0.72, zr: 0.7, tread: 'road', rim: 'spokes' },
+    dirt: { r: 0.38, w: 0.15, zf: -0.78, zr: 0.72, tread: 'offroad', rim: 'steel' },
+    scooter: { r: 0.25, w: 0.15, zf: -0.62, zr: 0.6, tread: 'road', rim: 'disc' },
+    chopper: { r: 0.34, w: 0.2, zf: -1.05, zr: 0.75, tread: 'road', rim: 'spokes' },
+  }[style];
+  const { r, zf, zr } = S;
+  const top = (z, wz) => r + Math.sqrt(Math.max(0, r * r - (z - wz) ** 2)) + 0.09; // clear above a wheel (any ride height)
+  let body;
+  if (style === 'scooter') {
+    body = [
+      [zf + 0.1, 0.14, top(zf + 0.1, zf), 1.05, 3],
+      [zf + 0.3, 0.17, top(zf + 0.3, zf), 1.0, 4],
+      [-0.2, 0.17, 0.2, 0.42, 4],
+      [0.15, 0.2, 0.22, 0.5, 4],
+      [0.3, 0.22, top(0.3, zr) + 0.04, 0.85, 5],
+      [0.42, 0.22, top(0.42, zr), 0.85, 5],
+      [0.85, 0.12, 0.6, 0.8, 3],
+    ];
+  } else if (style === 'chopper') {
+    body = [
+      [-0.62, 0.09, 0.62, 0.9, 3],
+      [-0.4, 0.15, 0.4, 0.92, 4],
+      [0.05, 0.13, 0.32, 0.7, 5],
+      [0.38, 0.13, top(0.38, zr), 0.74, 4],
+      [0.55, 0.14, top(0.55, zr), 0.8, 4],
+      [0.75, 0.15, top(0.75, zr), 0.88, 4],
+      [1.1, 0.08, 0.7, 0.8, 3],
+    ];
+  } else {
+    const lift = style === 'dirt' ? 0.12 : 0;
+    body = [
+      [zf + 0.1, 0.08, top(zf + 0.1, zf) + 0.04 + lift, 0.92 + lift, 3],
+      [zf + 0.22, 0.15, top(zf + 0.22, zf) + 0.01 + lift, 1.02 + lift, 4],
+      [-0.25, 0.2, 0.38 + lift, 1.0 + lift, 5],
+      [0.1, 0.17, 0.36 + lift, 0.92 + lift, 5],
+      [zr - 0.36, 0.14, 0.42 + lift, 0.88 + lift, 4],
+      [zr - 0.2, 0.11, top(zr - 0.2, zr) + lift, 0.88 + lift, 3],
+      [zr, 0.09, top(zr, zr) + lift, 0.9 + lift, 3],
+      [zr + 0.18, 0.05, top(zr + 0.18, zr) + lift, 0.88 + lift, 3],
+    ];
+  }
+  const seatY = style === 'chopper' ? 0.76 : style === 'scooter' ? 0.88 : style === 'dirt' ? 1.04 : 0.94;
+  const seatZ = style === 'chopper' ? 0.35 : 0.25;
+  const barZ = style === 'chopper' ? -0.42 : zf + 0.25;
+  const barY = style === 'chopper' ? 1.28 : style === 'scooter' ? 1.12 : style === 'dirt' ? 1.25 : 1.08;
+  // Rider posture: leaning forward on sport bikes, upright otherwise.
+  const hunch = style === 'sport' ? 0.22 : style === 'chopper' ? -0.08 : 0.08;
+  const hipY = seatY + 0.08;
+  const shY = hipY + (style === 'sport' ? 0.36 : 0.48);
+  const shZ = seatZ - 0.05 - hunch;
+  const forkX = S.w / 2 + 0.06;
+  const parts = [
+    // Seat, handlebars, front fork, swingarm, exhaust.
+    { box: [0, seatY - 0.02, seatZ, 0.14, 0.035, 0.26], paint: 'dark' },
+    { box: [0, barY, barZ, 0.34, 0.018, 0.018], paint: 'dark' },
+    { limb: [forkX, r, zf, forkX, barY - 0.02, barZ + 0.02, 0.026], paint: 'chrome', mirror: true },
+    { box: [forkX - 0.01, r + 0.02, (zr + 0.1) / 2 + 0.05, 0.02, 0.03, Math.abs(zr - 0.1) / 2], paint: 'dark', mirror: true },
+    { cyl: [0.2, 0.42, zr - 0.1, 0.055, 0.38, 'z'], paint: 'chrome', cap: 'dark', sides: 10 },
+    // Rider: boots, legs bent to the pegs, body, arms to the bars, helmet.
+    ...rider(style, { seatZ, hipY, shY, shZ, barY, barZ }),
+  ];
+  if (style === 'dirt') {
+    // Tall mudguards and number board.
+    parts.push(
+      { box: [0, top(zf, zf) + 0.02, zf - 0.05, 0.08, 0.015, 0.28], paint: 'body', top: 0.9 },
+      { box: [0, 1.0, zf + 0.12, 0.16, 0.12, 0.015], paint: [0.96, 0.96, 0.92] },
+    );
+  }
+  if (style === 'scooter') {
+    // Leg shield and floorboard.
+    parts.push({ box: [0, 0.5, -0.12, 0.18, 0.02, 0.28], paint: 'dark' });
+  }
+  return {
+    body,
+    parts,
+    bike: true,
+    arches: false,
+    grille: false,
+    rearKit: false,
+    mirrors: false,
+    stripeHalf: 0.08,
+    exhausts: [[0.2, 0.42, zr + 0.28]],
+    lights: { fx: 0, fw: 0.06, fy: body[0][2] + (body[0][3] - body[0][2]) * 0.55, fz: body[0][0], rx: 0, ry: body.at(-1)[2] + 0.04, rz: body.at(-1)[0], rearBar: false },
+    trailY: 0.55,
+    height: shY + 0.37,
+    wheels: {
+      radius: r,
+      width: S.w,
+      rimStyle: S.rim,
+      tread: S.tread === 'offroad' ? 'offroad' : undefined,
+      maxSteer: 0.25,
+      positions: [
+        [0, zf],
+        [0, zr],
+      ],
+    },
+  };
+}
+
 /**
  * Monster truck: any family's body (pickup, muscle car, SUV, hatch, jeep)
  * lifted onto a monster chassis with giant wheels.
@@ -743,6 +873,15 @@ export const FAMILIES = {
     build: (o = {}) => monsterTruck(o.body || 'pickup'),
   },
 
+  // ------------------------------------------------------------------ bike
+  bike: {
+    label: 'Motorbike',
+    engine: 'bike',
+    camera: 0.9,
+    handling: { maxSpeed: 12600, accel: 6400, brake: 15000, grip: 9.5, steerSpeed: 2.3, steerRamp: 4.2, centrifugal: 0.3, nitroAccel: 2, nitroTop: 1.4, offroadTop: 0.5 },
+    build: (o = {}) => motorbike(o.style),
+  },
+
   // ------------------------------------------------------------------- rig
   rig: {
     label: 'Big Rig',
@@ -902,7 +1041,7 @@ export const FAMILIES = {
   },
 };
 
-export const FAMILY_ORDER = ['race', 'sports', 'muscle', 'hatch', 'jeep', 'suv', 'pickup', 'monster', 'truck', 'rig', 'tractor'];
+export const FAMILY_ORDER = ['race', 'sports', 'muscle', 'hatch', 'jeep', 'suv', 'pickup', 'monster', 'truck', 'rig', 'tractor', 'bike'];
 
 export function familyHandling(family, tweak = {}) {
   return { ...BASE_HANDLING, ...FAMILIES[family].handling, ...tweak };
@@ -921,6 +1060,10 @@ export function scaleModel(m, [sx, sy, sz]) {
     if (p.sphere) {
       const [x, y, z, rx, ry, rz] = p.sphere;
       return { ...p, sphere: [x * sx, y * sy, z * sz, rx * sx, ry * sy, rz * sz] };
+    }
+    if (p.limb) {
+      const [x0, y0, z0, x1, y1, z1, r] = p.limb;
+      return { ...p, limb: [x0 * sx, y0 * sy, z0 * sz, x1 * sx, y1 * sy, z1 * sz, r * sx] };
     }
     if (p.prism) {
       const [x, hx, profile] = p.prism;

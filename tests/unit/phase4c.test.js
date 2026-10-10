@@ -25,8 +25,8 @@ const memory = () => {
   const m = new Map();
   return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
 };
-const partTop = (p) => (p.box ? p.box[1] + p.box[4] : p.sphere ? p.sphere[1] + p.sphere[4] : p.cyl ? p.cyl[1] + p.cyl[4] : Math.max(...p.prism[2].map((q) => q[0])));
-const partBottom = (p) => (p.box ? p.box[1] - p.box[4] : p.sphere ? p.sphere[1] - p.sphere[4] : p.cyl ? p.cyl[1] - p.cyl[4] : Math.min(...p.prism[2].map((q) => q[0])));
+const partTop = (p) => (p.box ? p.box[1] + p.box[4] : p.sphere ? p.sphere[1] + p.sphere[4] : p.cyl ? p.cyl[1] + p.cyl[4] : p.limb ? Math.max(p.limb[1], p.limb[4]) + p.limb[6] : Math.max(...p.prism[2].map((q) => q[0])));
+const partBottom = (p) => (p.box ? p.box[1] - p.box[4] : p.sphere ? p.sphere[1] - p.sphere[4] : p.cyl ? p.cyl[1] - p.cyl[4] : p.limb ? Math.min(p.limb[1], p.limb[4]) - p.limb[6] : Math.min(...p.prism[2].map((q) => q[0])));
 
 test('roof toppers: on every vehicle they sit on top, touching the roof', () => {
   for (const v of VEHICLES) {
