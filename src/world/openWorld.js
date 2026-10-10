@@ -18,6 +18,9 @@ export const CELL = 4; // metres between height samples
 export const WATER = 0; // sea level
 
 const OBJ_CELL = 12; // metres between scenery candidates (jittered)
+const PROP_CHANCE = 0.03; // share of candidates that become a group of props
+/** Small scenery a car knocks flying for points (trees, rocks and buildings stay solid). */
+export const KNOCKABLE = new Set(['cactus', 'bush', 'snowman', 'umbrella']);
 export const SNOW_LINE = 52;
 
 /**
@@ -325,6 +328,22 @@ export class OpenWorld {
     return { d: along > ROAD_STEP ? Math.sqrt(bd) : across, h: best.h, s: best };
   }
 
+  /** Nearest point on any road, however far: { x, z, d } (null with no roads). */
+  roadPointer(x, z) {
+    const near = this.nearestRoad(x, z);
+    if (near) return { x: near.s.x, z: near.s.z, d: near.d };
+    let best = null;
+    let bd = Infinity;
+    for (const smp of this.roadSamples || []) {
+      const d = (smp.x - x) ** 2 + (smp.z - z) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = smp;
+      }
+    }
+    return best && { x: best.x, z: best.z, d: Math.sqrt(bd) };
+  }
+
   /** Which area (biome) a point is in. */
   biome(x, z, h = this.height(x, z)) {
     if (h > SNOW_LINE) return 'snow';
@@ -368,23 +387,26 @@ export class OpenWorld {
         const sc = 0.8 + rand() * 0.45;
         if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < 45) continue; // clear start
         const road = this.nearestRoad(x, z);
-        if (road && road.d < ROAD_HALF + (pick < 0.012 ? 3 : 4.5)) continue; // roads stay clear
+        // Props may line the road verges; bigger scenery stays further back.
+        if (road && road.d < ROAD_HALF + (pick < PROP_CHANCE ? 1 : 4.5)) continue;
         if (this.nearFeature(x, z, 8)) continue;
         const h = this.height(x, z);
         if (h < WATER + 0.3) continue;
         const b = BIOMES[this.biome(x, z)];
         // Smashable props in little groups.
-        if (pick < 0.012) {
+        if (pick < PROP_CHANCE) {
           const kind = b.props[Math.floor(kindRoll * b.props.length)];
           const count = kind === 'fence' ? 5 : 3;
           for (let k = 0; k < count; k++) {
             const px = x + (kind === 'fence' ? Math.cos(yaw) * k * 2.05 : (rand() - 0.5) * 4);
             const pz = z + (kind === 'fence' ? Math.sin(yaw) * k * 2.05 : (rand() - 0.5) * 4);
+            const r2 = this.nearestRoad(px, pz);
+            if (r2 && r2.d < ROAD_HALF + 0.8) continue; // never on the road itself
             out.push({ id: `${key}:${id++}`, kind, x: px, z: pz, y: this.ground(px, pz), yaw: kind === 'fence' ? -yaw : rand() * 6.28, scale: 1, r: PROP_SIZE[kind] || 0.4, prop: true });
           }
           continue;
         }
-        if (pick > b.density) continue;
+        if (pick > b.density + PROP_CHANCE) continue;
         if (this.slope(x, z) > 0.7) continue;
         let total = 0;
         for (const [, w] of b.kinds) total += w;
@@ -399,7 +421,12 @@ export class OpenWorld {
         const def = OBJECT_KINDS[kind];
         const scale = kind === 'house' || kind === 'barn' || kind === 'hut' ? 1 : sc;
         const r = def && def.solid ? (def.w * def.solid * scale) / 2 / UNITS_PER_METRE : 0;
-        out.push({ id: `${key}:${id++}`, kind, x, z, y: this.ground(x, z), yaw, scale, r: kind === 'house' || kind === 'barn' ? 4 : kind === 'hut' ? 2.5 : r, prop: false });
+        if (KNOCKABLE.has(kind)) {
+          // Knocked flying like a prop; `variant` keeps its look when it flies.
+          out.push({ id: `${key}:${id}`, kind, x, z, y: this.ground(x, z), yaw, scale, r: Math.max(0.4, ((def?.w || 500) * 0.4 * scale) / 2 / UNITS_PER_METRE), prop: true, scenery: true, variant: id++ % 3 });
+          continue;
+        }
+        out.push({ id: `${key}:${id}`, kind, x, z, y: this.ground(x, z), yaw, scale, r: kind === 'house' || kind === 'barn' ? 4 : kind === 'hut' ? 2.5 : r, prop: false, variant: id++ % 3 });
       }
     }
     for (const l of this.landmarks) {

@@ -18,6 +18,7 @@ const MPU = 1 / UNITS_PER_METRE;
 const MAX_EVENTS = 32;
 const SUPER_TOP = 1.12;
 const TAKEOFF = 5; // m/s the ground must fall away faster than the car to leave it
+const STUCK_MOVE = 3; // metres the car must cover to count as moving
 const SLOPE_PULL = 9; // m/s^2 per unit of slope (arcade-scaled gravity)
 // Surface grip and top-speed share: roads are fastest.
 const SURFACE = {
@@ -115,6 +116,7 @@ export class FreeSession {
     this.met = new Set(); // animals greeted (until driven away from)
     this.animalHop = {};
     this.stuck = 0;
+    this.anchor = null;
     this.hitCooldown = 0;
   }
 
@@ -306,7 +308,7 @@ export class FreeSession {
       if (o.prop) {
         if (this.knocked.has(o.id)) continue;
         const speedM = Math.abs(v);
-        this.knocked.set(o.id, { t: this.time, fx, fz, kick: Math.min(48, Math.max(6, speedM * 1.15)), side: (this.rand() - 0.5) * 6, spin: (this.rand() - 0.5) * 12 });
+        this.knocked.set(o.id, { t: this.time, fx, fz, kick: Math.min(48, Math.max(6, speedM * 1.15)), side: (this.rand() - 0.5) * 6, spin: (this.rand() - 0.5) * 12, scenery: !!o.scenery });
         p.speed *= 0.95;
         this.fun.stats.props++;
         this.fun.award('prop', PROP_POINTS, 'SMASH', { prop: o.kind });
@@ -349,22 +351,45 @@ export class FreeSession {
     }
   }
 
-  /** Little Driver: a car wedged against something gets turned free. */
+  /**
+   * Little Driver: a car that has hardly moved for a while although it is
+   * trying to drive (wedged against a tree, or a hill too steep) is turned
+   * to face away from what blocks it. Slow driving still counts as moving.
+   */
   watchStuck(input, dt) {
     const p = this.player;
-    const trying = input.throttle > 0 || input.nitro;
-    this.stuck = !p.airborne && trying && Math.abs(p.speed) < this.car.handling.maxSpeed * 0.08 ? this.stuck + dt : 0;
+    const trying = (input.throttle > 0 || input.nitro) && !p.airborne;
+    if (!trying || !this.anchor || Math.hypot(p.x - this.anchor.x, p.z - this.anchor.z) > STUCK_MOVE) {
+      this.anchor = { x: p.x, z: p.z };
+      this.stuck = 0;
+      return;
+    }
+    this.stuck += dt;
     if (this.stuck < ASSIST.stuckTime) return;
+    this.anchor = null;
     this.stuck = 0;
-    const back = 4;
-    p.x -= Math.sin(p.yaw) * back;
-    p.z += Math.cos(p.yaw) * back;
-    p.yaw += Math.PI / 2;
-    p.prevX = p.x;
-    p.prevZ = p.z;
-    p.prevYaw = p.yaw;
-    p.y = p.prevY = this.world.ground(p.x, p.z);
+    // Away from the nearest solid thing; with nothing near, downhill.
+    let ax = 0;
+    let az = 0;
+    let best = Infinity;
+    for (const o of this.world.objectsNear(p.x, p.z, 8, this.nearby)) {
+      if (o.prop || o.r <= 0) continue;
+      const d = Math.hypot(p.x - o.x, p.z - o.z) - o.r;
+      if (d < best && d < 3) {
+        best = d;
+        ax = p.x - o.x;
+        az = p.z - o.z;
+      }
+    }
+    if (best === Infinity) {
+      const W = this.world;
+      ax = W.ground(p.x - 2, p.z) - W.ground(p.x + 2, p.z);
+      az = W.ground(p.x, p.z - 2) - W.ground(p.x, p.z + 2);
+    }
+    if (Math.hypot(ax, az) < 1e-3) return;
+    p.yaw = p.prevYaw = Math.atan2(ax, -az);
     p.speed = this.car.handling.maxSpeed * 0.12;
+    p.latV = 0;
     this.emit({ type: 'rescue' });
   }
 
@@ -383,9 +408,8 @@ export class FreeSession {
     const turn = Math.PI * 2;
     p.spin -= Math.round(p.spin / turn) * turn;
     if (Math.abs(p.spin) > 0.6) p.speed *= 0.93;
-    // Landing facing a new way: keep driving that way.
-    p.yaw += p.spin;
-    p.spin = 0;
+    // The car keeps going the way it flew; what is left of a spin straightens
+    // out on the ground (steering in the air is a trick, not a turn).
     p.spinVel = 0;
   }
 

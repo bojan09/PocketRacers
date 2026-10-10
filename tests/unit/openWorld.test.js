@@ -203,3 +203,85 @@ test('free drive: finding an island animal gives a sticker once', () => {
   assert.ok(s.events.some((e) => e.type === 'score' && e.kind === 'animal'));
   assert.ok(s.fun.known.has(a.id));
 });
+
+test('free drive: steering in the air is a trick; the car lands still heading the same way', () => {
+  const W = new OpenWorld();
+  W.height = (x, z) => (z > -20 ? 6 : z > -35 ? 6 + (-20 - z) * 0.35 : 0);
+  W.objectsNear = (x, z, reach, out = []) => ((out.length = 0), out);
+  const s = new FreeSession(W, makeVehicle('zippy'));
+  s.reset({ x: 0, z: 0, yaw: 0 });
+  // Straight to the lip, then hold right through the air.
+  run(s, 6, (t) => input({ nitro: true, steer: s.player.airborne ? 1 : 0 }));
+  assert.ok(s.events.some((e) => e.type === 'land'), 'jumped');
+  assert.ok(Math.abs(s.player.yaw) < 0.05, `heading kept (yaw ${s.player.yaw.toFixed(2)})`);
+  assert.ok(s.player.z < -40, 'kept driving the same way');
+});
+
+test('Little Driver: slow climbing is left alone; a car wedged on a tree is turned away from it', () => {
+  // A long steep hill: slow going, but moving.
+  const hill = new OpenWorld();
+  hill.height = (x, z) => 6 + Math.max(0, -z) * 0.45;
+  hill.objectsNear = (x, z, reach, out = []) => ((out.length = 0), out);
+  hill.roadGrid = new Map();
+  const s = new FreeSession(hill, makeVehicle('zippy'));
+  s.assist = true;
+  s.reset({ x: 0, z: 0, yaw: 0 });
+  run(s, 8, input());
+  assert.ok(!s.events.some((e) => e.type === 'rescue'), 'no take-over while climbing');
+
+  // Nose against a tree straight ahead.
+  const W = new OpenWorld();
+  W.objectsNear = (x, z, reach, out = []) => {
+    out.length = 0;
+    out.push({ id: 'tree', kind: 'oak', x: 0, z: -8, y: 6, yaw: 0, scale: 1, r: 1.2, prop: false });
+    return out;
+  };
+  const t = new FreeSession(W, makeVehicle('zippy'));
+  t.assist = true;
+  t.reset({ x: 0.2, z: 0, yaw: 0 });
+  run(t, 4, input());
+  assert.equal(t.events.filter((e) => e.type === 'rescue').length, 1, 'freed once');
+  const p = t.player;
+  // Now facing away from the tree (forward = (sin yaw, -cos yaw)).
+  const away = Math.sin(p.yaw) * (p.x - 0) - Math.cos(p.yaw) * (p.z + 8);
+  assert.ok(away > 0, 'faces away from the tree');
+  run(t, 2, input());
+  assert.ok(Math.hypot(p.x, p.z + 8) > 6, 'drove off');
+});
+
+test('island: cacti and bushes knock over for points; props line the roads; arrow finds the road', () => {
+  const W = new OpenWorld();
+  let knockable = 0;
+  let roadside = 0;
+  for (let cz = -6; cz < 6; cz++)
+    for (let cx = -6; cx < 6; cx++)
+      for (const o of W.chunkObjects(cx, cz)) {
+        if (o.scenery) {
+          knockable++;
+          assert.ok(o.prop && o.r > 0 && ['cactus', 'bush', 'snowman', 'umbrella'].includes(o.kind));
+        }
+        if (o.prop && !o.scenery) {
+          const r = W.nearestRoad(o.x, o.z);
+          if (r && r.d < 9) roadside++;
+        }
+        if (['oak', 'pine', 'rock', 'house'].includes(o.kind)) assert.ok(!o.prop, `${o.kind} stays solid`);
+      }
+  assert.ok(knockable > 100, `knockable scenery (${knockable})`);
+  assert.ok(roadside > 10, `props beside the roads (${roadside})`);
+
+  const cactus = { id: 'c', kind: 'cactus', x: 0, z: -20, y: 6, yaw: 0, scale: 1, r: 0.45, prop: true, scenery: true };
+  const F = new OpenWorld();
+  F.objectsNear = (x, z, reach, out = []) => ((out.length = 0), out.push(cactus), out);
+  const s = new FreeSession(F, makeVehicle('zippy'));
+  s.reset({ x: 0, z: 0, yaw: 0 });
+  run(s, 2, input());
+  assert.ok(s.knocked.get('c')?.scenery, 'cactus knocked flying');
+  assert.ok(s.player.z < -25, 'drove straight through');
+  assert.ok(s.events.some((e) => e.type === 'score' && e.kind === 'prop'));
+
+  // The road arrow: nearest road from far away, and from right beside it.
+  const smp = W.roadSamples[100];
+  const far = W.roadPointer(smp.x + 300, smp.z + 300);
+  assert.ok(far && far.d > 0 && far.d <= Math.hypot(300, 300));
+  assert.ok(W.roadPointer(smp.x, smp.z).d < 1);
+});

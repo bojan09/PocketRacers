@@ -209,6 +209,43 @@ button {
   touch-action: none;
 }
 
+/* Off the road on the island: a big arrow pointing back to it. */
+.road-arrow {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  width: 84px;
+  margin-left: -42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 0 rgba(27, 31, 59, 0.35));
+}
+.road-arrow svg {
+  width: 64px;
+  height: 64px;
+  fill: #ffbe0b;
+  stroke: #fff;
+  stroke-width: 4;
+  stroke-linejoin: round;
+  animation: road-arrow-pulse 1.2s ease-in-out infinite;
+}
+.road-arrow span {
+  font-size: 22px;
+  margin-top: -2px;
+}
+@keyframes road-arrow-pulse {
+  50% {
+    transform: scale(1.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .road-arrow svg {
+    animation: none;
+  }
+}
+
 .world-map {
   position: absolute;
   inset: 0;

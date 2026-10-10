@@ -570,6 +570,22 @@ function enterWorld() {
   $('minimap').hidden = false;
 }
 
+/** Off the road on the island: point the way back to it (shown past 16 m, hidden within 10 m). */
+const roadArrowEl = $('road-arrow');
+function roadArrow() {
+  const p = free.player;
+  const r = world.roadPointer(p.x, p.z);
+  const show = !!r && r.d > (roadArrowEl.hidden ? 16 : 10);
+  if (roadArrowEl.hidden === show) roadArrowEl.hidden = !show;
+  if (!show) return;
+  // Angle from straight ahead to the road, clockwise (right) positive.
+  const dx = r.x - p.x;
+  const dz = r.z - p.z;
+  const ahead = dx * Math.sin(p.yaw) - dz * Math.cos(p.yaw);
+  const right = dx * Math.cos(p.yaw) + dz * Math.sin(p.yaw);
+  roadArrowEl.firstElementChild.style.rotate = `${Math.atan2(right, ahead).toFixed(3)}rad`;
+}
+
 function leaveWorld() {
   if (!worldMode) return;
   worldMode = false;
@@ -577,6 +593,7 @@ function leaveWorld() {
   explore.save();
   $('hud').classList.remove('world');
   $('minimap').hidden = true;
+  $('road-arrow').hidden = true;
   renderer.freeWorldChunks();
   renderer.camDir = null;
   session.reset();
@@ -860,7 +877,10 @@ const loop = new GameLoop({
     if (mode === 'driving') {
       audio.update(S.player, car.handling.maxSpeed, input.state.throttle, frameDt);
       hud.update(S);
-      if (worldMode) minimap.drawSmall(free.player, (id) => free.fun.known.has(id), carColour(), frameDt);
+      if (worldMode) {
+        minimap.drawSmall(free.player, (id) => free.fun.known.has(id), carColour(), frameDt);
+        roadArrow();
+      }
       const level = autoQuality?.frame(frameDt * 1000);
       if (level) {
         applyQuality(level);

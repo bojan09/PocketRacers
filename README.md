@@ -130,6 +130,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > how much is uncovered, found animals, landmarks seen and a 🏠 button that
 > drives you straight home. Each player's map is saved separately; badges
 > for uncovering 25% and 80%.
+>
+> **Island fixes:** off the road, a big arrow at the top points back to the
+> nearest road. Cacti, bushes, snowmen and beach umbrellas now knock over for
+> points (trees, rocks and buildings stay solid), and more smashable props
+> line the roads. Steering in the air over a dune is a trick again, not a
+> turn: the car lands heading the way it flew. Little Driver only steps in
+> when the car has really stopped moving, and turns it away from what blocks
+> it.
 
 ## Tests
 

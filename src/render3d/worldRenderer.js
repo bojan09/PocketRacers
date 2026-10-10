@@ -80,20 +80,22 @@ export function buildChunkMesh(world, cx, cz, pal) {
   return mb;
 }
 
-/** Trees, rocks and buildings of a chunk merged into one mesh. */
-export function buildChunkScenery(world, cx, cz, variants) {
+/**
+ * Trees, rocks and buildings of a chunk merged into one mesh, with the
+ * knockable scenery (cacti, bushes...) still standing; `knocked` = ids to leave out.
+ */
+export function buildChunkScenery(world, cx, cz, variants, knocked) {
   const mb = new MeshBuilder();
   const m = mat4.create();
-  const rand = mulberry32((cx * 7919 + cz * 104729) >>> 0);
   for (const o of world.chunkObjects(cx, cz)) {
-    if (o.prop) continue;
+    if (o.prop && (!o.scenery || knocked?.has(o.id))) continue;
     const list = variants(o.kind);
     if (!list) continue;
     mat4.identity(m);
     mat4.translate(m, m, o.x, o.y - 0.05, o.z);
     mat4.rotateY(m, m, o.yaw);
     if (o.scale !== 1) mat4.scale(m, m, o.scale);
-    mb.append(list[Math.floor(rand() * list.length)], m);
+    mb.append(list[(o.variant || 0) % list.length], m);
     if (o.kind === 'windmill') {
       mat4.translate(m, m, 0, 10.5, 2.0);
       mb.append(variants('windmillSails')[0], m);
@@ -204,6 +206,7 @@ export function installWorldRendering(Renderer3D) {
     if (this.worldWater) deleteMesh(this.gl, this.worldWater);
     this.worldWater = uploadMesh(this.gl, wmb);
     this.trailCount = 0;
+    this.sceneryHidden = new Set(); // knocked scenery left out of the chunk meshes
     this.particles?.clear();
     this.camDir = null;
     // Build what is around the start straight away.
@@ -233,7 +236,7 @@ export function installWorldRendering(Renderer3D) {
     want.sort((a, b) => a.d - b.d);
     for (const w of want.slice(0, budget)) {
       const mb = buildChunkMesh(this.world, w.cx, w.cz, this.worldPalette);
-      const sc = buildChunkScenery(this.world, w.cx, w.cz, this.worldVariants);
+      const sc = buildChunkScenery(this.world, w.cx, w.cz, this.worldVariants, this.sceneryHidden);
       this.worldChunks.set(w.key, { mesh: uploadMesh(this.gl, mb), scenery: uploadMesh(this.gl, sc), cx: w.cx, cz: w.cz });
     }
     const far = (VIEW_CHUNKS + 2) ** 2;
@@ -310,6 +313,7 @@ export function installWorldRendering(Renderer3D) {
     }
     this.wheelSpin -= (speedM / (this.carDef.model.wheels.radius || 0.34)) * dt;
     this.streamWorld(pos.x, pos.z);
+    this.syncKnockedScenery(session);
 
     // A frame (position + basis) for effects and shadows.
     const f = this.worldFrame || (this.worldFrame = makeFrame());
@@ -455,6 +459,44 @@ export function installWorldRendering(Renderer3D) {
     this.env = savedEnv;
   };
 
+  /**
+   * Knocked scenery comes out of its chunk's merged mesh (and goes back after
+   * a fresh start): rebuild the scenery of chunks whose pieces changed.
+   */
+  R.syncKnockedScenery = function (session) {
+    const H = this.sceneryHidden;
+    const dirty = new Set();
+    for (const [id, k] of session.knocked) {
+      if (!k.scenery || H.has(id)) continue;
+      H.add(id);
+      dirty.add(id.slice(0, id.lastIndexOf(':')));
+    }
+    if (H.size > session.knocked.size || dirty.size)
+      for (const id of H)
+        if (!session.knocked.has(id)) {
+          H.delete(id);
+          dirty.add(id.slice(0, id.lastIndexOf(':')));
+        }
+    for (const key of dirty) {
+      const c = this.worldChunks.get(key);
+      if (!c) continue;
+      deleteMesh(this.gl, c.scenery);
+      c.scenery = uploadMesh(this.gl, buildChunkScenery(this.world, c.cx, c.cz, this.worldVariants, H));
+    }
+  };
+
+  /** GPU mesh of one scenery variant, for drawing it on its own (flying). */
+  R.knockMesh = function (o) {
+    const key = `${o.kind}:${o.variant || 0}`;
+    const cache = (this.worldKnockMeshes ||= {});
+    if (!cache[key]) {
+      const list = this.worldVariants(o.kind);
+      if (!list) return null;
+      cache[key] = uploadMesh(this.gl, list[(o.variant || 0) % list.length]);
+    }
+    return cache[key];
+  };
+
   /** Smashable props near the player, flying off when knocked. */
   R.drawWorldProps = function (session, reach) {
     const p = session.player;
@@ -463,10 +505,11 @@ export function installWorldRendering(Renderer3D) {
     const list = this.world.objectsNear(p.x, p.z, reach, (this.propScratch ||= []));
     for (const o of list) {
       if (!o.prop) continue;
-      const mesh = this.worldPropMeshes[o.kind];
+      const k = session.knocked.get(o.id);
+      if (o.scenery && !k) continue; // still standing: part of the chunk mesh
+      const mesh = o.scenery ? this.knockMesh(o) : this.worldPropMeshes[o.kind];
       if (!mesh) continue;
       mat4.identity(m);
-      const k = session.knocked.get(o.id);
       if (k) {
         // Flung ahead of the car and to the side, tumbling, then lying still.
         const t = Math.min(now - k.t, 0.9);
@@ -477,6 +520,7 @@ export function installWorldRendering(Renderer3D) {
         mat4.rotateY(m, m, o.yaw);
         mat4.rotateX(m, m, -Math.min(Math.PI / 2, t * 7));
         mat4.rotateZ(m, m, k.spin * t * 0.3);
+        if (o.scale !== 1) mat4.scale(m, m, o.scale);
       } else {
         mat4.translate(m, m, o.x, o.y, o.z);
         mat4.rotateY(m, m, o.yaw);
