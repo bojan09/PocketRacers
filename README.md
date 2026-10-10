@@ -131,7 +131,7 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > drives you straight home. Each player's map is saved separately; badges
 > for uncovering 25% and 80%.
 >
-> **Island fixes:** off the road, a big arrow at the top points back to the
+> **Island fixes:** after 15 s off the road, a big arrow at the top points to the
 > nearest road. Cacti, bushes, snowmen and beach umbrellas now knock over for
 > points (trees, rocks and buildings stay solid), and more smashable props
 > line the roads. Steering in the air over a dune is a trick again, not a

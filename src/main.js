@@ -570,12 +570,20 @@ function enterWorld() {
   $('minimap').hidden = false;
 }
 
-/** Off the road on the island: point the way back to it (shown past 16 m, hidden within 10 m). */
+/**
+ * Off the road on the island: after 15 s away from it (more than 16 m), an
+ * arrow points the way back; it goes once the car is within 10 m again.
+ */
+const ROAD_ARROW_DELAY = 15;
 const roadArrowEl = $('road-arrow');
+let offRoadSince = null;
 function roadArrow() {
   const p = free.player;
   const r = world.roadPointer(p.x, p.z);
-  const show = !!r && r.d > (roadArrowEl.hidden ? 16 : 10);
+  // Driving time (free.time stops while paused or the map is open).
+  if (!r || r.d < 10 || free.time < offRoadSince) offRoadSince = null;
+  else if (offRoadSince === null && r.d > 16) offRoadSince = free.time;
+  const show = offRoadSince !== null && free.time - offRoadSince >= ROAD_ARROW_DELAY;
   if (roadArrowEl.hidden === show) roadArrowEl.hidden = !show;
   if (!show) return;
   // Angle from straight ahead to the road, clockwise (right) positive.
