@@ -138,6 +138,15 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > turn: the car lands heading the way it flew. Little Driver only steps in
 > when the car has really stopped moving, and turns it away from what blocks
 > it.
+>
+> **Phase 7F — flag races:** four checkered start arches on the island's
+> roads (the first just ahead of the start). Driving through one starts a
+> solo race through gates to a finish arch; a pill shows gates and time, an
+> arrow and a ring on the map point to the next gate. Finishing always pays
+> points; a quick time earns up to 3 stars, judged against the vehicle's own
+> top speed so slow vehicles can get 3 too. Best stars are kept per player;
+> a 🏁 badge for finishing all four. Roads now hold the car over their
+> crests (ramps still launch it) so races are not lost flying off a bend.
 
 ## Tests
 

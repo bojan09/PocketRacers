@@ -29,6 +29,7 @@ export class Minimap {
     this.big = big;
     this.world = null;
     this.timer = 0;
+    this.target = null; // next flag-race gate, ringed on the maps
   }
 
   /** Draw the island once, and the clouds from what this player has seen. */
@@ -90,6 +91,7 @@ export class Minimap {
     const seen = (x, z) => E.seen(E.cell(x), E.cell(z));
     for (const l of W.landmarks) if (ICONS[l.kind] && seen(l.x, l.z)) out.push({ x: l.x, z: l.z, icon: ICONS[l.kind] });
     if (W.stuntPark && seen(W.stuntPark.x, W.stuntPark.z)) out.push({ x: W.stuntPark.x, z: W.stuntPark.z, icon: '🤸' });
+    for (const r of W.flagRaces || []) if (seen(r.gates[0].x, r.gates[0].z)) out.push({ x: r.gates[0].x, z: r.gates[0].z, icon: '🏁' });
     for (const a of W.animals) {
       if (found(a.id)) out.push({ x: a.x, z: a.z, icon: a.icon });
       else if (seen(a.x, a.z)) out.push({ x: a.x, z: a.z, icon: '❔' });
@@ -146,6 +148,11 @@ export class Minimap {
       const [u, v] = at(m.x, m.z);
       if (Math.hypot(u - R, v - R) < R - 10 * dpr) g.fillText(m.icon, u, v);
     }
+    // The next gate of a flag race.
+    if (this.target) {
+      const [tu, tv] = at(this.target.x, this.target.z);
+      if (Math.hypot(tu - R, tv - R) < R - 8 * dpr) this.drawTarget(g, tu, tv, dpr);
+    }
     // Home: inside the map, or on the rim pointing the way.
     const home = this.world.spawn;
     let [u, v] = at(home.x, home.z);
@@ -200,6 +207,7 @@ export class Minimap {
     for (const m of this.markers(found)) g.fillText(m.icon, ...at(m.x, m.z));
     g.font = `${Math.round(26 * dpr)}px sans-serif`;
     g.fillText('🏠', ...at(this.world.spawn.x, this.world.spawn.z));
+    if (this.target) this.drawTarget(g, ...at(this.target.x, this.target.z), dpr * 1.3);
     const [u, v] = at(p.x, p.z);
     this.drawCar(g, u, v, p.yaw, colour, dpr * 1.3);
   }
@@ -210,6 +218,14 @@ export class Minimap {
     g.imageSmoothingEnabled = true;
     g.drawImage(this.base, -H, -H, EXPLORE_SPAN, EXPLORE_SPAN);
     g.drawImage(this.fog, -H, -H, EXPLORE_SPAN, EXPLORE_SPAN);
+  }
+
+  drawTarget(g, u, v, k) {
+    g.strokeStyle = '#ffbe0b';
+    g.lineWidth = 3 * k;
+    g.beginPath();
+    g.arc(u, v, 6 * k, 0, Math.PI * 2);
+    g.stroke();
   }
 
   drawCar(g, u, v, yaw, colour, k) {

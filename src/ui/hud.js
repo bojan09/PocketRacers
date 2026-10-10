@@ -157,6 +157,20 @@ export class Hud {
       this.popup(`${e.label}! +${e.points}`, e.combo > 1 ? `×${e.combo}` : '', big || e.combo >= 4);
       return;
     }
+    if (e.type === 'flagStart') {
+      this.toast(`${e.icon} ${e.name}: drive through the gates!`, 2400);
+      return;
+    }
+    if (e.type === 'flagFinish') {
+      this.popup('⭐'.repeat(e.stars), formatTime(e.time), true);
+      this.toast(e.best ? `${e.icon} ${e.name}: new best!` : `${e.icon} ${e.name} · ${formatTime(e.time)}`, 2600);
+      return;
+    }
+    if (e.type === 'flagLost') {
+      this.toast('🏁 Race over: drive through a flag to try again', 2600);
+      return;
+    }
+    if (e.type === 'score' && e.kind === 'flag') return; // the stars popup says it
     if (e.type === 'rescue') {
       this.popup('🛟', '', true);
       return;

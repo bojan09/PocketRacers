@@ -41,6 +41,7 @@ export const ACHIEVEMENTS = [
   { id: 'zoo', icon: '🦁', name: 'Zookeeper', desc: 'Find every hidden animal', stat: 'animals', goal: ANIMALS.length, reward: 3000 },
   { id: 'island-25', icon: '🧭', name: 'Island Explorer', desc: 'Uncover a quarter of the island map', stat: 'islandMap', goal: 25, reward: 1000 },
   { id: 'island-80', icon: '🏝️', name: 'Map Maker', desc: 'Uncover most of the island map', stat: 'islandMap', goal: 80, reward: 5000 },
+  { id: 'island-flags', icon: '🏁', name: 'Flag Chaser', desc: 'Finish every flag race on the island', stat: 'islandFlags', goal: 4, reward: 3000 },
   { id: 'explorer', icon: '🗺️', name: 'Explorer', desc: 'Drive on every map', stat: 'maps', goal: TRACKS.length, reward: 1000 },
   { id: 'cars-5', icon: '🚗', name: 'Collector', desc: 'Own 5 vehicles', stat: 'owned', goal: 5, reward: 750 },
   { id: 'cars-15', icon: '🏎️', name: 'Big Garage', desc: 'Own 15 vehicles', stat: 'owned', goal: 15, reward: 3000 },

@@ -215,6 +215,10 @@ export class GameAudio {
     else if (e.type === 'super') this.superBoost();
     else if (e.type === 'superReady') this.chime(true);
     else if (e.type === 'animal') this.ui(e.first ? 'buy' : 'open');
+    else if (e.type === 'flagStart') this.chime(true);
+    else if (e.type === 'gate') this.blip(1046, 1);
+    else if (e.type === 'flagFinish') this.fanfare(4 - e.stars);
+    else if (e.type === 'flagLost') this.ui('nope');
     else if (e.type === 'finish' && e.place <= 3) this.fanfare(e.place);
     else if (e.type === 'score') {
       if (e.kind === 'star') this.blip(1320, e.combo);

@@ -13,6 +13,7 @@ import { FunSystem } from './fun.js';
 import { NITRO_DRAIN, SPIN_RATE, SUPER_TIME, ASSIST } from './session.js';
 import { PROP_POINTS } from '../data/props.js';
 import { ANIMAL_POINTS } from '../data/animals.js';
+import { FlagRacer } from '../world/flagRaces.js';
 
 const MPU = 1 / UNITS_PER_METRE;
 const MAX_EVENTS = 32;
@@ -117,6 +118,7 @@ export class FreeSession {
     this.animalHop = {};
     this.stuck = 0;
     this.anchor = null;
+    this.flag = new FlagRacer(this);
     this.hitCooldown = 0;
   }
 
@@ -245,7 +247,9 @@ export class FreeSession {
       // Follow the ground; leave it when it drops away faster than gravity
       // can pull the car down (cresting a hill at speed).
       const climb = (g - p.y) / dt;
-      if (p.vy - climb > TAKEOFF && Math.abs(v) > 10) {
+      // Roads hold the car over their crests (ramps on them still launch it).
+      const hug = p.surface === 'road' && !(W.rampAt(p.prevX, p.prevZ) > 0);
+      if (!hug && p.vy - climb > TAKEOFF && Math.abs(v) > 10) {
         p.airborne = true;
         p.airTime = 0;
         p.y += p.vy * dt;
@@ -286,6 +290,7 @@ export class FreeSession {
     }
     this.collide(v, nfx, nfz);
     this.meetAnimals();
+    this.flag.step();
     if (this.assist) this.watchStuck(input, dt);
     p.lapTime += dt;
     this.fun.step(dt);
@@ -430,6 +435,8 @@ export class FreeSession {
 
   /** Back to the start (from the island map), keeping score and finds. */
   goHome() {
+    if (this.flag.race) this.emit({ type: 'flagLost', id: this.flag.race.id });
+    this.flag.cancel();
     const sp = this.world.spawn;
     const p = this.player;
     p.safeX = sp.x;

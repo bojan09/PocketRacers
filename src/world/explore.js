@@ -49,7 +49,12 @@ export class ExploreMap {
     } catch {
       /* unreadable: start fresh */
     }
-    this.bits = (raw && raw.v === VERSION && typeof raw.island === 'string' && fromBase64(raw.island)) || new Uint8Array(BYTES);
+    const ok = raw && raw.v === VERSION;
+    this.bits = (ok && typeof raw.island === 'string' && fromBase64(raw.island)) || new Uint8Array(BYTES);
+    // Best stars (1-3) per flag race.
+    this.races = {};
+    if (ok && raw.races && typeof raw.races === 'object')
+      for (const [id, st] of Object.entries(raw.races)) if (Number.isInteger(st) && st >= 1 && st <= 3) this.races[id] = st;
     this.dirty = false;
     this.count = this.land ? this.countLand() : 0;
   }
@@ -57,7 +62,7 @@ export class ExploreMap {
   save() {
     if (!this.dirty) return;
     try {
-      this.storage?.setItem(KEY, JSON.stringify({ v: VERSION, island: toBase64(this.bits) }));
+      this.storage?.setItem(KEY, JSON.stringify({ v: VERSION, island: toBase64(this.bits), races: this.races }));
       this.dirty = false;
     } catch {
       /* full or blocked: keep in memory */
@@ -127,6 +132,20 @@ export class ExploreMap {
       }
     if (out.length) this.dirty = true;
     return out;
+  }
+
+  /** A flag race finished with `stars`: true when it beats this player's best. */
+  recordRace(id, stars) {
+    if ((this.races[id] || 0) >= stars) return false;
+    this.races[id] = stars;
+    this.dirty = true;
+    this.save();
+    return true;
+  }
+
+  /** Flag races finished (any stars). */
+  get racesDone() {
+    return Object.keys(this.races).length;
   }
 
   /** Share of the island's land uncovered, in whole percent (0..100). */

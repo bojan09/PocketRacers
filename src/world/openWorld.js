@@ -12,6 +12,7 @@ import { mulberry32 } from '../core/util.js';
 import { OBJECT_KINDS, UNITS_PER_METRE } from './track3d.js';
 import { PROP_SIZE } from '../data/props.js';
 import { ANIMALS } from '../data/animals.js';
+import { buildFlagRaces } from './flagRaces.js';
 
 export const CHUNK = 128; // metres per chunk side
 export const CELL = 4; // metres between height samples
@@ -106,6 +107,7 @@ export class OpenWorld {
     this.animals = [];
     this.buildRoads();
     this.buildFeatures();
+    this.flagRaces = buildFlagRaces(this);
   }
 
   /**

@@ -106,6 +106,34 @@ export function buildChunkScenery(world, cx, cz, variants, knocked) {
   return mb;
 }
 
+/**
+ * A race arch across the road: two posts and a banner. Local x across the
+ * road, y up. Checkered for start/finish, bright stripes for gates.
+ */
+export function buildArch(checkered) {
+  const mb = new MeshBuilder().material(0.3, 0.2);
+  const half = ROAD_HALF + 1.6;
+  const top = 5.2;
+  const post = checkered ? [0.95, 0.95, 0.98] : [1, 0.82, 0.2];
+  for (const x of [-half, half]) mb.box(x, top / 2 - 1, 0, 0.22, top / 2 + 1, 0.22, post);
+  const n = 14;
+  const w = (half * 2) / n;
+  for (let i = 0; i < n; i++)
+    for (let row = 0; row < 2; row++) {
+      const dark = (i + row) % 2 === 0;
+      const c = checkered ? (dark ? [0.1, 0.1, 0.14] : [0.97, 0.97, 1]) : dark ? [0.16, 0.75, 0.95] : [1, 1, 1];
+      mb.box(-half + w * (i + 0.5), top - 0.25 - row * 0.5, 0, w / 2, 0.25, 0.08, c, checkered ? 0 : 0.25);
+    }
+  if (checkered) {
+    // Little flags on the posts.
+    for (const x of [-half, half]) {
+      mb.box(x, top + 0.8, 0, 0.05, 0.8, 0.05, [0.4, 0.4, 0.45]);
+      mb.box(x + Math.sign(x) * 0.45, top + 1.3, 0, 0.4, 0.28, 0.03, [0.95, 0.25, 0.3]);
+    }
+  }
+  return mb;
+}
+
 /** Ramps: a curved wedge in yellow and red stripes, rising to a lip. */
 function addRamps(mb, world, cx, cz) {
   const x0 = cx * CHUNK;
@@ -207,6 +235,7 @@ export function installWorldRendering(Renderer3D) {
     this.worldWater = uploadMesh(this.gl, wmb);
     this.trailCount = 0;
     this.sceneryHidden = new Set(); // knocked scenery left out of the chunk meshes
+    if (!this.worldArches) this.worldArches = { flag: uploadMesh(this.gl, buildArch(true)), gate: uploadMesh(this.gl, buildArch(false)) };
     this.particles?.clear();
     this.camDir = null;
     // Build what is around the start straight away.
@@ -438,6 +467,7 @@ export function installWorldRendering(Renderer3D) {
     }
     this.drawWorldProps(session, Math.min(fogFar, 160));
     this.drawWorldAnimals(session, Math.min(fogFar, 220));
+    this.drawWorldFlags(session, fogFar);
 
     // --- Particles, clouds, shadows ---------------------------------------
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, false);
@@ -527,6 +557,30 @@ export function installWorldRendering(Renderer3D) {
       }
       this.drawLit(mesh, m);
     }
+  };
+
+  /**
+   * Flag races: every start arch; during a race the next two gates (bobbing a
+   * little to catch the eye) and the finish.
+   */
+  R.drawWorldFlags = function (session, reach) {
+    const m = this.tmp;
+    const W = this.world;
+    const arch = (g, mesh, bob = 0) => {
+      const y = W.ground(g.x, g.z);
+      if (!this.near([g.x, y, g.z], reach)) return;
+      mat4.identity(m);
+      mat4.translate(m, m, g.x, y + bob, g.z);
+      mat4.rotateY(m, m, Math.atan2(-g.tx, -g.tz));
+      this.drawLit(this.worldArches[mesh], m);
+    };
+    const F = session.flag;
+    for (const r of W.flagRaces || []) if (r !== F?.race) arch(r.gates[0], 'flag');
+    if (!F?.race) return;
+    const G = F.race.gates;
+    const bob = Math.abs(Math.sin(this.time * 3)) * 0.25;
+    for (let k = F.next; k < Math.min(G.length - 1, F.next + 2); k++) arch(G[k], 'gate', k === F.next ? bob : 0);
+    arch(G[G.length - 1], 'flag');
   };
 
   /** The island's hidden animals: breathing, hopping, sparkling until found. */

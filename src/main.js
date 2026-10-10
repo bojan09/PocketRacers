@@ -18,7 +18,7 @@ import { Renderer3D } from './render3d/renderer3d.js';
 import { InputManager } from './input/inputManager.js';
 import { tiltSupported } from './input/tilt.js';
 import { GameAudio } from './audio/audio.js';
-import { Hud } from './ui/hud.js';
+import { Hud, formatTime } from './ui/hud.js';
 import { mountTuningPanel } from './ui/tuning.js';
 import { Progress } from './core/progress.js';
 import { Race } from './sim/race.js';
@@ -579,11 +579,19 @@ const roadArrowEl = $('road-arrow');
 let offRoadSince = null;
 function roadArrow() {
   const p = free.player;
-  const r = world.roadPointer(p.x, p.z);
+  const F = free.flag;
+  let r = world.roadPointer(p.x, p.z);
   // Driving time (free.time stops while paused or the map is open).
   if (!r || r.d < 10 || free.time < offRoadSince) offRoadSince = null;
   else if (offRoadSince === null && r.d > 16) offRoadSince = free.time;
-  const show = offRoadSince !== null && free.time - offRoadSince >= ROAD_ARROW_DELAY;
+  let show = offRoadSince !== null && free.time - offRoadSince >= ROAD_ARROW_DELAY;
+  // In a flag race it always points at the next gate.
+  if (F.race) {
+    r = F.race.gates[F.next];
+    show = true;
+  }
+  const icon = F.race ? '🏁' : '🛣️';
+  if (roadArrowEl.lastElementChild.textContent !== icon) roadArrowEl.lastElementChild.textContent = icon;
   if (roadArrowEl.hidden === show) roadArrowEl.hidden = !show;
   if (!show) return;
   // Angle from straight ahead to the road, clockwise (right) positive.
@@ -594,6 +602,23 @@ function roadArrow() {
   roadArrowEl.firstElementChild.style.rotate = `${Math.atan2(right, ahead).toFixed(3)}rad`;
 }
 
+/** Gates passed and time while a flag race is on. */
+const flagPill = $('hud-flag');
+let flagShown = '';
+function flagHud() {
+  const F = free.flag;
+  const on = !!F.race;
+  if (flagPill.hidden === on) flagPill.hidden = !on;
+  minimap.target = on ? F.race.gates[F.next] : null;
+  if (!on) return;
+  const text = `${F.next - 1}/${F.race.gates.length - 1}|${formatTime(F.time || 0.001).slice(0, -1)}`;
+  if (text === flagShown) return;
+  flagShown = text;
+  const [gates, time] = text.split('|');
+  $('hud-flag-gates').textContent = gates;
+  $('hud-flag-time').textContent = time;
+}
+
 function leaveWorld() {
   if (!worldMode) return;
   worldMode = false;
@@ -602,6 +627,7 @@ function leaveWorld() {
   $('hud').classList.remove('world');
   $('minimap').hidden = true;
   $('road-arrow').hidden = true;
+  flagPill.hidden = true;
   renderer.freeWorldChunks();
   renderer.camDir = null;
   session.reset();
@@ -868,6 +894,10 @@ const loop = new GameLoop({
     if (worldMode) renderer.renderWorld(free, mode === 'driving' ? alpha : 1, frameDt);
     else renderer.render(session, mode === 'driving' ? alpha : 1, frameDt);
     for (const e of S.events) {
+      if (e.type === 'flagFinish') {
+        e.best = explore.recordRace(e.id, e.stars);
+        achievements.max('islandFlags', explore.racesDone);
+      }
       if (worldMode) renderer.worldEvent(e, free);
       else renderer.onEvent(e, session);
       audio.onEvent(e);
@@ -887,6 +917,7 @@ const loop = new GameLoop({
       hud.update(S);
       if (worldMode) {
         minimap.drawSmall(free.player, (id) => free.fun.known.has(id), carColour(), frameDt);
+        flagHud();
         roadArrow();
       }
       const level = autoQuality?.frame(frameDt * 1000);
