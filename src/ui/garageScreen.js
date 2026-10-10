@@ -26,7 +26,7 @@ const STATS = [
   ['offroad', 'Off-road'],
 ];
 // Picture filter chips: kids pick by icon, the small label is for grown-ups.
-const FAMILY_ICON = { all: '⭐', race: '🏎️', sports: '🚗', muscle: '🔥', hatch: '🚘', jeep: '⛰️', suv: '🚙', pickup: '🛻', monster: '🦖', truck: '🚛' };
+const FAMILY_ICON = { all: '⭐', race: '🏎️', sports: '🚗', muscle: '🔥', hatch: '🚘', jeep: '⛰️', suv: '🚙', pickup: '🛻', monster: '🦖', truck: '🚚', rig: '🚛', tractor: '🚜' };
 const SPIN_SPEED = 0.35; // rad/s while idle
 const START_YAW = Math.PI - 0.65; // front three-quarter view
 

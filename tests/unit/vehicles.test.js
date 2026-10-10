@@ -4,7 +4,7 @@ import { VEHICLES, makeVehicle, vehicleStats, resolveLook, VEHICLE_BY_ID, LIVERI
 import { kitSlots, KIT_OPTIONS } from '../../src/data/kits.js';
 import { FAMILIES } from '../../src/data/vehicleFamilies.js';
 import { ENGINE_PROFILES, Gearbox } from '../../src/audio/engine.js';
-import { buildCarBody, buildWheel } from '../../src/render3d/carModel.js';
+import { buildCarBody, buildWheel, wheelSize } from '../../src/render3d/carModel.js';
 import { Garage, sanitizeGarage, freshGarage } from '../../src/core/garage.js';
 import { Progress } from '../../src/core/progress.js';
 import { TRAFFIC_MODELS, TRAFFIC_PAINTS } from '../../src/data/cars.js';
@@ -42,7 +42,7 @@ test('every vehicle builds a sane model with every livery and rim', () => {
       const b = body.bounds();
       assert.ok(b.radius < 6, `${v.id} radius ${b.radius}`);
       // Wheels touch the ground; steering is on the front axle only.
-      for (const w of anchors.wheels) assert.equal(w[1], def.model.wheels.radius);
+      anchors.wheels.forEach((w, i) => assert.equal(w[1], wheelSize(def.model.wheels, i).radius));
       assert.ok(anchors.steer.filter(Boolean).length === 2, `${v.id} steer`);
       assert.ok(anchors.rearWheels.length >= 2);
     }

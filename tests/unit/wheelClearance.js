@@ -2,6 +2,7 @@
 // space a front tyre sweeps while steering.
 
 import { FLOATS_PER_VERTEX } from '../../src/gl/meshBuilder.js';
+import { wheelSize } from '../../src/render3d/carModel.js';
 
 const STEER_SAMPLES = [-1, -0.5, 0, 0.5, 1];
 
@@ -9,14 +10,17 @@ const STEER_SAMPLES = [-1, -0.5, 0, 0.5, 1];
  * @returns {Array<{wheel:number, point:number[]}>} body points inside a tyre
  */
 export function tyreIntersections(spec, bodyMesh, anchors, margin = 0.004) {
-  const r = spec.wheels.radius - margin;
-  const hw = spec.wheels.width / 2 - margin;
   const d = bodyMesh.array();
   const hits = [];
-  const wheels = anchors.wheels.map((w, i) => ({ w, angles: anchors.steer[i] ? STEER_SAMPLES.map((k) => k * anchors.maxSteer) : [0] }));
+  const wheels = anchors.wheels.map((w, i) => ({
+    w,
+    r: wheelSize(spec.wheels, i).radius - margin,
+    hw: wheelSize(spec.wheels, i).width / 2 - margin,
+    angles: anchors.steer[i] ? STEER_SAMPLES.map((k) => k * anchors.maxSteer) : [0],
+  }));
   const inside = (p) => {
     for (let i = 0; i < wheels.length; i++) {
-      const { w, angles } = wheels[i];
+      const { w, r, hw, angles } = wheels[i];
       const px = p[0] - w[0];
       const py = p[1] - w[1];
       const pz = p[2] - w[2];

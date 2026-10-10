@@ -119,7 +119,7 @@ export class Renderer3D {
     this.lightProj = mat4.create();
     this.lightVP = mat4.create();
     this.shadowCenter = [0, 0, 0];
-    this.carDraws = Array.from({ length: 16 }, () => ({ meshes: null, m: mat4.create(), spin: 0, steer: 0, brake: false }));
+    this.carDraws = Array.from({ length: 32 }, () => ({ meshes: null, m: mat4.create(), spin: 0, steer: 0, brake: false }));
     this.carDrawCount = 0;
     this.wheelM = mat4.create();
     this.frame = makeFrame();
@@ -230,20 +230,103 @@ export class Renderer3D {
     for (const m of [...this.chunks, ...this.terrainTiles, this.water, this.mountains, this.sails, this.starMesh, this.coneMesh, ...Object.values(this.animalMeshes), ...Object.values(this.propMeshes)]) deleteMesh(gl, m);
   }
 
+  /** GPU meshes for a vehicle (and the trailer it tows, if any). */
+  vehicleMeshes(def) {
+    const gl = this.gl;
+    const body = buildCarBody(def.model, def.paint);
+    const m = { body: uploadMesh(gl, body.body), brake: uploadMesh(gl, body.brake), wheel: uploadMesh(gl, buildWheel(def.model, def.paint)), anchors: body.anchors, spin: 0 };
+    const tow = def.model.tow;
+    if (tow) {
+      const paint = { ...def.paint, livery: 'clean' };
+      const tb = buildCarBody(tow.trailer, paint);
+      m.trailer = {
+        body: uploadMesh(gl, tb.body),
+        brake: uploadMesh(gl, tb.brake),
+        wheel: uploadMesh(gl, buildWheel(tow.trailer, paint)),
+        anchors: tb.anchors,
+        hitch: tow.hitch,
+        // Distance from the hitch to the middle of the trailer's axles.
+        L: tow.trailer.wheels.positions.reduce((a, q) => a + q[1], 0) / tow.trailer.wheels.positions.length,
+        length: tb.anchors.length,
+        hist: [],
+      };
+    }
+    return m;
+  }
+
+  freeVehicleMeshes(m) {
+    if (!m) return;
+    for (const k of ['body', 'brake', 'wheel']) deleteMesh(this.gl, m[k]);
+    if (m.trailer) this.freeVehicleMeshes(m.trailer);
+  }
+
+  /**
+   * Trailer pose: the hitch is fixed to the tow vehicle and the trailer's
+   * axle follows the path the hitch has travelled, so it swings through
+   * corners and can never jack-knife.
+   */
+  towMatrix(t, carM, out, fresh = false) {
+    const h = transformPoint(this.towH || (this.towH = [0, 0, 0]), carM, [0, t.hitch[0], t.hitch[1]]);
+    const hist = t.hist;
+    if (fresh) hist.length = 0;
+    const last = hist[0];
+    const gap = last ? Math.hypot(h[0] - last[0], h[1] - last[1], h[2] - last[2]) : 0;
+    if (gap > 6) hist.length = 0; // restart or rescue: don't drag across the map
+    if (!hist.length || gap > 0.12) {
+      hist.unshift([h[0], h[1], h[2]]);
+      if (hist.length > 200) hist.pop();
+    }
+    let need = t.L;
+    let prev = h;
+    let axle = null;
+    for (const q of hist) {
+      const d = Math.hypot(q[0] - prev[0], q[1] - prev[1], q[2] - prev[2]);
+      if (d > 1e-4 && d >= need) {
+        const k = need / d;
+        axle = [prev[0] + (q[0] - prev[0]) * k, prev[1] + (q[1] - prev[1]) * k, prev[2] + (q[2] - prev[2]) * k];
+        break;
+      }
+      need -= d;
+      prev = q;
+    }
+    if (!axle) {
+      // Not enough path yet: straight out behind the vehicle.
+      const bl = Math.hypot(carM[8], carM[9], carM[10]) || 1;
+      axle = [prev[0] + (carM[8] / bl) * need, prev[1] + (carM[9] / bl) * need, prev[2] + (carM[10] / bl) * need];
+    }
+    const fwd = norm3([h[0] - axle[0], h[1] - axle[1], h[2] - axle[2]]);
+    const up0 = norm3([carM[4], carM[5], carM[6]]);
+    const right = norm3(cross3(fwd, up0));
+    const up = cross3(right, fwd);
+    const y = t.hitch[0];
+    mat4.fromBasis(out, right, up, [-fwd[0], -fwd[1], -fwd[2]], [h[0] - up[0] * y, h[1] - up[1] * y, h[2] - up[2] * y]);
+    return out;
+  }
+
+  /** Queue a vehicle's trailer behind draw `d` (racers and the player). */
+  queueTrailer(meshes, d) {
+    const t = meshes.trailer;
+    if (!t || this.carDrawCount >= this.carDraws.length) return;
+    const td = this.carDraws[this.carDrawCount++];
+    td.meshes = t;
+    this.towMatrix(t, d.m, td.m);
+    td.spin = d.spin;
+    td.steer = 0;
+    td.brake = d.brake;
+    if (!this.shadowsOn) {
+      const sf = this.trailerShadowFrame || (this.trailerShadowFrame = makeFrame());
+      sf.R = [td.m[0], td.m[1], td.m[2]];
+      sf.U = [td.m[4], td.m[5], td.m[6]];
+      sf.T = [-td.m[8], -td.m[9], -td.m[10]];
+      transformPoint(sf.pos, td.m, [0, 0, t.L]);
+      this.addShadow(sf, t.anchors.halfWidth * 1.2, t.length * 0.55, 0.45);
+    }
+  }
+
   /** Meshes for AI racers (rebuilt per race). */
   setRacers(racers) {
-    const gl = this.gl;
-    for (const m of this.racerMeshes || []) for (const k of ['body', 'brake', 'wheel']) deleteMesh(gl, m[k]);
-    this.racerMeshes = racers.map((r) => {
-      const body = buildCarBody(r.car.model, r.car.paint);
-      return {
-        body: uploadMesh(gl, body.body),
-        brake: uploadMesh(gl, body.brake),
-        wheel: uploadMesh(gl, buildWheel(r.car.model, r.car.paint)),
-        anchors: body.anchors,
-        spin: 0,
-      };
-    });
+    for (const m of this.racerMeshes || []) this.freeVehicleMeshes(m);
+    this.racerMeshes = racers.map((r) => this.vehicleMeshes(r.car));
   }
 
   /** World matrix for a racer body (air, ramp pitch, spin and roll). */
@@ -278,17 +361,10 @@ export class Renderer3D {
 
   /** Build (or rebuild after a garage change) the player's vehicle meshes. */
   setVehicle(def) {
-    const gl = this.gl;
-    if (this.player) for (const k of ['body', 'brake', 'wheel']) deleteMesh(gl, this.player[k]);
+    this.freeVehicleMeshes(this.player);
     this.carDef = def;
     this.nitroCol = def.paint ? nitroColour(def.paint) : [0.4, 0.8, 1];
-    const body = buildCarBody(def.model, def.paint);
-    this.player = {
-      body: uploadMesh(gl, body.body),
-      brake: uploadMesh(gl, body.brake),
-      wheel: uploadMesh(gl, buildWheel(def.model, def.paint)),
-      anchors: body.anchors,
-    };
+    this.player = this.vehicleMeshes(def);
   }
 
   resize() {
@@ -597,6 +673,7 @@ export class Renderer3D {
       d.spin = meshes.spin;
       d.steer = r.p.steer * meshes.anchors.maxSteer;
       d.brake = r.p.braking;
+      this.queueTrailer(meshes, d);
       if (!this.shadowsOn || rair > 0) {
         const lift = rf.pos;
         for (let k = 0; k < 3; k++) lift[k] -= rf.U[k] * rair;
@@ -616,6 +693,7 @@ export class Renderer3D {
     pd.spin = this.wheelSpin;
     pd.steer = p.steer * this.player.anchors.maxSteer;
     pd.brake = p.braking || p.speed < -10;
+    this.queueTrailer(this.player, pd);
     // A soft contact shadow under every car, darker when real shadows are off.
     const shadowFade = 1 / (1 + air * 0.6);
     const sf = this.shadowFrame || (this.shadowFrame = makeFrame());
@@ -751,12 +829,15 @@ export class Renderer3D {
     if (!this.studio) this.studio = this.buildStudio();
     const pal = this.studio.pal;
     const a = this.player.anchors;
-    const size = Math.max(a.length, a.halfWidth * 2.2, a.height * 1.5);
+    const tr = this.player.trailer;
+    const size = Math.max(a.length + (tr ? tr.length * 0.9 : 0), a.halfWidth * 2.2, a.height * 1.5);
 
-    // Vehicle on the turntable (centred on its wheelbase).
+    // Vehicle on the turntable (centred on its wheelbase; with a trailer,
+    // the pair is centred).
     const carM = this.model;
     mat4.identity(carM);
     mat4.rotateY(carM, carM, yaw);
+    if (tr) mat4.translate(carM, carM, 0, 0, -(tr.hitch[1] + tr.length) * 0.45);
     this.wheelSpin = 0;
 
     // Fixed camera, slightly above; the vehicle turns.
@@ -791,6 +872,14 @@ export class Renderer3D {
     pd.steer = Math.min(0.25, this.player.anchors.maxSteer);
     pd.brake = false;
     this.carDrawCount = 1;
+    if (tr) {
+      const td = this.carDraws[this.carDrawCount++];
+      td.meshes = tr;
+      this.towMatrix(tr, carM, td.m, true);
+      td.spin = 0;
+      td.steer = 0;
+      td.brake = false;
+    }
 
     this.shadowsOn = false;
     const sm = this.quality.shadow && !this.reduceShadows ? this.getShadowMap(this.quality.shadow) : null;
@@ -817,6 +906,7 @@ export class Renderer3D {
     mat4.rotateY(this.tmp, this.tmp, yaw);
     this.drawLit(this.studio.table, this.tmp);
     this.drawCar(pd.meshes, pd.m, 0, pd.steer, false);
+    if (tr) this.drawCar(tr, this.carDraws[1].m, 0, 0, false);
 
     // Soft contact shadow (the only shadow on Low quality).
     this.shadows.length = 0;
@@ -1027,10 +1117,12 @@ export class Renderer3D {
     for (let i = 0; i < this.carDrawCount; i++) {
       const d = this.carDraws[i];
       draw(d.meshes.body, d.m);
-      for (const a of d.meshes.anchors.wheels) {
+      const ws = d.meshes.anchors.wheelScale;
+      d.meshes.anchors.wheels.forEach((a, k) => {
         mat4.translate(this.wheelM, d.m, a[0], a[1], a[2]);
+        if (ws) mat4.scale(this.wheelM, this.wheelM, ws[k][0], ws[k][1], ws[k][2]);
         draw(d.meshes.wheel, this.wheelM);
-      }
+      });
     }
     gl.disable(gl.POLYGON_OFFSET_FILL);
   }
@@ -1146,10 +1238,14 @@ export class Renderer3D {
     this.drawLit(meshes.body, carM);
     if (braking && meshes.brake) this.drawLit(meshes.brake, carM);
     const w = this.wheelM;
+    const ws = meshes.anchors.wheelScale;
     meshes.anchors.wheels.forEach((a, i) => {
       mat4.translate(w, carM, a[0], a[1], a[2]);
       if (steerAngle && meshes.anchors.steer[i]) mat4.rotateY(w, w, -steerAngle);
-      mat4.rotateX(w, w, spin);
+      const k = ws ? ws[i] : null;
+      // Bigger wheels turn slower for the same ground speed.
+      mat4.rotateX(w, w, k ? spin / k[1] : spin);
+      if (k && (k[0] !== 1 || k[1] !== 1)) mat4.scale(w, w, k[0], k[1], k[2]);
       this.drawLit(meshes.wheel, w);
     });
   }
@@ -1337,6 +1433,15 @@ export class Renderer3D {
       this.flash = Math.max(0, this.flash - dt * 2);
     }
   }
+}
+
+function norm3(v) {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+function cross3(a, b) {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
 function normalize(v) {

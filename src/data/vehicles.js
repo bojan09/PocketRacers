@@ -4,7 +4,7 @@
 // invented; no real makes, models or badges.
 
 import { FAMILIES, familyHandling, scaleModel } from './vehicleFamilies.js';
-import { LIVERIES, RIM_STYLES } from '../render3d/carModel.js';
+import { LIVERIES, RIM_STYLES, wheelSize } from '../render3d/carModel.js';
 import { applyKit, KIT_OPTIONS, NEON_COLOURS, TINTS } from './kits.js';
 
 const UNITS_PER_METRE = 240;
@@ -75,6 +75,17 @@ export const VEHICLES = [
   { id: 'tankmaster', name: 'Tankmaster', family: 'truck', price: 8000, opts: { cargo: 'tanker' }, paint: P('#f4f6fa', '#c9d3de', '#ff4d5e', '#c9d3de'), livery: 'clean' },
   { id: 'polarhaul', name: 'Polarhaul 700', family: 'truck', price: 10000, tweak: { maxSpeed: 10800, accel: 3900 }, paint: P('#2ec4b6', '#f4f6fa', '#2b6fd6', '#c9d3de'), livery: 'side' },
   { id: 'goliath', name: 'Goliath', family: 'truck', price: 13000, opts: { cargo: 'tanker' }, tweak: { maxSpeed: 11200, accel: 4200 }, paint: P('#1b1f3b', '#ffd23f', '#ffd23f', '#ffd23f'), livery: 'side' },
+  // --------------------------------------------------------- big rigs
+  { id: 'longhaul', name: 'Long Haul', family: 'rig', price: 5000, paint: P('#2b6fd6', '#f4f6fa', '#ff4d5e', '#c9d3de'), livery: 'clean' },
+  { id: 'tankrig', name: 'Silver Streak', family: 'rig', price: 7000, opts: { load: 'tanker' }, paint: P('#ff8c42', '#dfe4ee', '#1b1f3b', '#c9d3de'), livery: 'clean' },
+  { id: 'timber', name: 'Timber Titan', family: 'rig', price: 8500, opts: { load: 'logs' }, tweak: { maxSpeed: 10200 }, paint: P('#3f8f4f', '#1b1f3b', '#ffd23f', '#c9d3de'), livery: 'clean' },
+  { id: 'carrier', name: 'Car Carrier', family: 'rig', price: 11000, opts: { load: 'cars' }, tweak: { maxSpeed: 10500, accel: 3600 }, paint: P('#ff4d5e', '#ffd23f', '#ffffff', '#c9d3de'), livery: 'clean' },
+
+  // --------------------------------------------------------- tractors
+  { id: 'clover', name: 'Clover', family: 'tractor', price: 1200, paint: P('#e63946', '#ffd23f', '#ffffff', '#ffd23f'), livery: 'clean' },
+  { id: 'meadow', name: 'Meadow King', family: 'tractor', price: 3500, opts: { load: 'logs' }, tweak: { maxSpeed: 9800 }, paint: P('#3f8f4f', '#ffd23f', '#ffffff', '#ffd23f'), livery: 'clean' },
+  { id: 'sunny', name: 'Sunny Days', family: 'tractor', price: 2400, opts: { guard: 'accent' }, paint: P('#ffd23f', '#3f8f4f', '#ffffff', '#3f8f4f'), livery: 'clean' },
+  { id: 'harvest', name: 'Big Harvest', family: 'tractor', price: 6000, scale: [1.06, 1.06, 1.06], tweak: { maxSpeed: 10300, accel: 4700 }, paint: P('#2b6fd6', '#f4f6fa', '#ffffff', '#f4f6fa'), livery: 'clean' },
 ];
 
 export const VEHICLE_BY_ID = Object.fromEntries(VEHICLES.map((v) => [v.id, v]));
@@ -168,7 +179,7 @@ export function makeVehicle(id, custom = {}, upgrades = {}) {
   const v = VEHICLE_BY_ID[id] || VEHICLE_BY_ID[DEFAULT_VEHICLE];
   const fam = FAMILIES[v.family];
   const model = applyKit(scaleModel(fam.build(v.opts || {}), v.scale || [1, 1, 1]), v, custom);
-  const halfWidth = Math.max(...model.body.map((s) => s[1]), ...model.wheels.positions.map((p) => Math.abs(p[0]) + model.wheels.width / 2));
+  const halfWidth = Math.max(...model.body.map((s) => s[1]), ...model.wheels.positions.map((p, i) => Math.abs(p[0]) + wheelSize(model.wheels, i).width / 2));
   const length = model.body[model.body.length - 1][0] - model.body[0][0];
   return {
     id: v.id,

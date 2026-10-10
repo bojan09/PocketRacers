@@ -102,11 +102,18 @@ function cabinStrips(spec, strips) {
  * Wheel wells: for each tyre, the region (a cylinder around the axle, wide
  * enough for the steering sweep) that the body must stay out of.
  */
+/** Radius and width of wheel i (rear wheels may be bigger, e.g. tractors). */
+export function wheelSize(wheels, i) {
+  const big = wheels.rear && wheels.positions[i][1] > 0;
+  return big ? wheels.rear : wheels;
+}
+
 function wheelWells(spec, ride) {
-  const { radius: r, width: w, positions } = spec.wheels;
+  const { positions } = spec.wheels;
   const minZ = Math.min(...positions.map((p) => p[1]));
   const steer = spec.wheels.maxSteer ?? MAX_STEER;
-  return positions.map(([x, z]) => {
+  return positions.map(([x, z], i) => {
+    const { radius: r, width: w } = wheelSize(spec.wheels, i);
     const a = z < minZ + 0.3 ? steer : 0;
     const rr = r + WELL_GAP;
     return {
@@ -525,7 +532,7 @@ export function buildCarBody(spec, paintHex) {
   const lampW = L.fw ?? f1.hw * 0.17;
   mb.material(...MAT.plastic);
   if (spec.grille !== false) mb.box(0, L.gy ?? front[2] + (front[3] - front[2]) * 0.3, fz - 0.005, L.gw ?? front[1] * 0.5, L.gh ?? 0.06, 0.02, P.dark);
-  for (const sx of [-1, 1]) {
+  for (const sx of L.front === false ? [] : [-1, 1]) {
     mb.material(...MAT.chrome);
     mb.box(sx * fx, fy, fz + 0.06, lampW * 1.18, 0.055, 0.06, [0.7, 0.72, 0.76]);
     mb.material(...MAT.light);
@@ -601,7 +608,12 @@ export function buildCarBody(spec, paintHex) {
   }
 
   const minZ = Math.min(...spec.wheels.positions.map((p) => p[1]));
-  const wheels = spec.wheels.positions.map(([x, z]) => [x, r, z]);
+  const wheels = spec.wheels.positions.map(([x, z], i) => [x, wheelSize(spec.wheels, i).radius, z]);
+  // The wheel mesh is built at the base size; bigger wheels are scaled.
+  const wheelScale = spec.wheels.positions.map((_, i) => {
+    const ws = wheelSize(spec.wheels, i);
+    return [ws.width / spec.wheels.width, ws.radius / r, ws.radius / r];
+  });
   const bodyTop = Math.max(...st.map((s) => s[3]), ...(spec.cabin || []).map((c) => c[4]), ...(spec.lofts || []).flatMap((l) => l.stations.map((s) => s[3])), spec.height || 0);
   return {
     body: mb,
@@ -615,7 +627,8 @@ export function buildCarBody(spec, paintHex) {
       trailY: (spec.trailY ?? 0.42) + ride,
       rearZ: rz,
       frontZ: front[0],
-      halfWidth: Math.max(...st.map((s) => s[1]), ...spec.wheels.positions.map((p) => Math.abs(p[0]) + spec.wheels.width / 2)),
+      wheelScale,
+      halfWidth: Math.max(...st.map((s) => s[1]), ...spec.wheels.positions.map((p, i) => Math.abs(p[0]) + wheelSize(spec.wheels, i).width / 2)),
       length: rz - front[0],
       height: bodyTop + ride,
       neon: spec.neon || null,

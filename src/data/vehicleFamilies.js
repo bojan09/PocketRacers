@@ -138,6 +138,214 @@ function wedgeCar() {
 }
 
 /**
+ * A mudguard arched over a wheel: curved segments (each a convex piece of
+ * the arc) extruded across the tyre. Angles run from front (0) to back (1).
+ */
+function arcGuard(x, y, z, r, halfW, paint, a0 = 0.08, a1 = 0.92, segs = 10, thick = 0.06) {
+  const parts = [];
+  for (let k = 0; k < segs; k++) {
+    const t0 = Math.PI * (1 - (a0 + ((a1 - a0) * k) / segs));
+    const t1 = Math.PI * (1 - (a0 + ((a1 - a0) * (k + 1)) / segs));
+    const pt = (t, rr) => [y + Math.sin(t) * rr, z + Math.cos(t) * rr];
+    parts.push({ prism: [x, halfW, [pt(t0, r), pt(t1, r), pt(t1, r + thick), pt(t0, r + thick)]], paint, mirror: true });
+  }
+  return parts;
+}
+
+/**
+ * Farm trailer towed by a tractor. Model space like a vehicle but the hitch
+ * is at the origin and the bed runs backwards (+z) from it.
+ */
+function haywagon(load) {
+  const parts = [
+    // Drawbar to the hitch.
+    { box: [0, 0.55, 0.4, 0.05, 0.05, 0.42], paint: 'dark' },
+    { box: [0.3, 0.55, 0.62, 0.04, 0.04, 0.25], paint: 'dark', mirror: true },
+    // Side boards.
+    { box: [0.98, 1.0, 2.35, 0.03, 0.2, 1.62], paint: 'accent', mirror: true },
+    { box: [0, 1.0, 3.96, 0.98, 0.2, 0.03], paint: 'accent' },
+    { box: [0, 1.0, 0.74, 0.98, 0.2, 0.03], paint: 'accent' },
+  ];
+  if (load === 'hay') {
+    const hay = [0.89, 0.71, 0.29];
+    for (const zz of [1.2, 2.0, 2.8, 3.55])
+      for (const x of [-0.45, 0.45]) parts.push({ cyl: [x, 1.18, zz, 0.36, 0.38, 'x'], paint: hay, cap: [0.95, 0.8, 0.42], sides: 14 });
+    for (const zz of [1.6, 2.4, 3.2]) parts.push({ cyl: [0, 1.85, zz, 0.36, 0.38, 'x'], paint: hay, cap: [0.95, 0.8, 0.42], sides: 14 });
+  } else {
+    // Logs.
+    const wood = [0.55, 0.36, 0.2];
+    for (const [x, y] of [
+      [-0.55, 1.08],
+      [0, 1.08],
+      [0.55, 1.08],
+      [-0.27, 1.5],
+      [0.27, 1.5],
+      [0, 1.9],
+    ])
+      parts.push({ cyl: [x, y, 2.35, 0.24, 1.75, 'z'], paint: wood, cap: [0.86, 0.7, 0.45], sides: 10 });
+  }
+  return {
+    body: [
+      [0.72, 0.95, 0.62, 0.78, 6],
+      [0.78, 1.0, 0.58, 0.82, 8],
+      [3.92, 1.0, 0.58, 0.82, 8],
+      [3.98, 0.95, 0.62, 0.78, 6],
+    ],
+    parts,
+    arches: false,
+    grille: false,
+    rearKit: false,
+    mirrors: false,
+    stripes: false,
+    exhausts: [],
+    lights: { front: false, ry: 0.72, rz: 3.98, rx: 0.75, rearBar: false },
+    wheels: {
+      radius: 0.42,
+      width: 0.26,
+      positions: [
+        [-0.82, 2.55],
+        [0.82, 2.55],
+      ],
+      rimStyle: 'steel',
+      tread: 'offroad',
+      maxSteer: 0,
+    },
+    height: 2.3,
+  };
+}
+
+/**
+ * Articulated lorry: the truck's cab on a short chassis with a fifth wheel,
+ * towing a semi-trailer (box, tanker, logs or a car carrier).
+ */
+function rigUnit(o) {
+  const base = FAMILIES.truck.build({ ...o, cargo: 'none' });
+  const parts = base.parts.filter((p) => {
+    const z = p.box ? p.box[2] : p.cyl ? p.cyl[2] : 0;
+    // Drop the rigid truck's rear bumper and long side skirts.
+    return z < 1.0 && !(p.box && p.box[5] > 1.5);
+  });
+  parts.push(
+    // Fifth-wheel coupling, rear bumper with lights, mudflaps.
+    { box: [0, 1.3, 0.65, 0.55, 0.06, 0.55], paint: 'dark' },
+    { cyl: [0, 1.38, 0.65, 0.22, 0.03, 'y'], paint: 'chrome' },
+    { box: [0, 0.75, 1.92, 1.15, 0.12, 0.08], paint: 'trim' },
+    { box: [1.12, 0.7, 1.8, 0.04, 0.32, 0.02], paint: 'dark', mirror: true },
+    { box: [1.19, 0.7, -1.45, 0.04, 0.22, 0.7], paint: 'trim', mirror: true },
+  );
+  return {
+    ...base,
+    body: [
+      [-4.3, 1.2, 0.95, 1.2, 6],
+      [-4.22, 1.25, 0.93, 1.22, 8],
+      [1.9, 1.25, 0.93, 1.22, 8],
+      [1.98, 1.2, 0.95, 1.2, 6],
+    ],
+    parts,
+    lights: { ...base.lights, rz: 2.0, ry: 0.78 },
+    height: 3.7,
+    wheels: {
+      ...base.wheels,
+      positions: [
+        [-1.0, -3.3],
+        [1.0, -3.3],
+        [-1.0, 0.1],
+        [1.0, 0.1],
+        [-1.0, 1.15],
+        [1.0, 1.15],
+      ],
+    },
+    tow: { hitch: [1.36, 0.65], trailer: semiTrailer(o.load || 'box') },
+  };
+}
+
+/** Semi-trailer: hitch (kingpin) at the origin, body running back to z = 10. */
+function semiTrailer(load) {
+  const front = -0.9;
+  const rear = 10;
+  const mid = (front + rear) / 2;
+  const half = (rear - front) / 2;
+  const parts = [
+    // Landing legs and rear bumper.
+    { box: [0.85, 0.75, 1.4, 0.06, 0.4, 0.06], paint: 'dark', mirror: true },
+    { box: [0, 0.7, rear - 0.05, 1.15, 0.1, 0.06], paint: 'trim' },
+    { box: [1.12, 0.65, rear - 0.12, 0.04, 0.3, 0.02], paint: 'dark', mirror: true },
+  ];
+  if (load === 'tanker') {
+    parts.push(
+      { cyl: [0, 2.35, mid + 0.2, 1.15, half - 0.25, 'z'], paint: 'accent', mat: 'chrome', sides: 18 },
+      ...[1.0, mid + 0.2, rear - 0.6].map((z) => ({ cyl: [0, 2.35, z, 1.17, 0.07, 'z'], paint: 'stripe', sides: 18 })),
+      ...[0.4, 3.5, 6.5, 9.3].map((z) => ({ box: [0, 1.35, z, 0.95, 0.12, 0.22], paint: 'dark' })),
+      { box: [0, 3.55, mid, 0.18, 0.04, 3.5], paint: 'chrome' },
+    );
+  } else if (load === 'logs') {
+    const wood = [0.55, 0.36, 0.2];
+    for (const z of [0.4, 3.6, 6.8, 9.6]) parts.push({ box: [1.18, 2.1, z, 0.05, 0.7, 0.05], paint: 'dark', mirror: true });
+    for (const [x, y] of [
+      [-0.8, 1.68],
+      [0, 1.68],
+      [0.8, 1.68],
+      [-0.4, 2.36],
+      [0.4, 2.36],
+      [0, 3.0],
+    ])
+      parts.push({ cyl: [x, y, mid, 0.36, half - 0.3, 'z'], paint: wood, cap: [0.86, 0.7, 0.45], sides: 12 });
+  } else if (load === 'cars') {
+    // Car carrier: two decks of little cars in bright colours.
+    const deck = (y) => ({ box: [0, y, mid, 1.2, 0.04, half - 0.1], paint: 'trim' });
+    parts.push(deck(1.45), deck(2.85));
+    for (const z of [0.2, 3.5, 6.8, 9.8]) parts.push({ box: [1.18, 2.3, z, 0.05, 0.9, 0.05], paint: 'accent', mirror: true });
+    const colours = ['#ff4d5e', '#ffd23f', '#4cc9f0', '#8ac926', '#c77dff', '#ff8c42'];
+    let k = 0;
+    for (const y of [1.49, 2.89])
+      for (const z of [0.9, 4.4, 7.9]) {
+        const c = hexRgb(colours[k++ % colours.length]);
+        parts.push(
+          { box: [0, y + 0.3, z, 0.82, 0.24, 1.6], paint: c, mat: 'paint' },
+          { box: [0, y + 0.7, z + 0.15, 0.7, 0.18, 0.85], paint: [0.11, 0.15, 0.22], mat: 'glass', top: 0.85 },
+          ...[-1.05, 1.05].map((dz) => ({ cyl: [0, y + 0.18, z + dz, 0.2, 0.86, 'x'], paint: 'dark', sides: 10 })),
+        );
+      }
+  } else {
+    parts.push(
+      { box: [0, 2.6, mid, 1.27, 1.3, half - 0.02], paint: 'accent', mat: 'paint' },
+      { box: [0, 1.85, mid, 1.278, 0.13, half - 0.05], paint: 'stripe' },
+      { box: [0, 2.6, rear + 0.005, 0.012, 1.22, 0.004], paint: 'dark' },
+      { box: [0.3, 2.4, rear + 0.01, 0.02, 0.5, 0.01], paint: 'chrome', mirror: true },
+    );
+  }
+  return {
+    body: [
+      [front, 1.2, 1.1, 1.32, 6],
+      [front + 0.08, 1.25, 1.08, 1.34, 8],
+      [rear - 0.08, 1.25, 1.08, 1.34, 8],
+      [rear, 1.2, 1.1, 1.32, 6],
+    ],
+    parts,
+    arches: false,
+    grille: false,
+    rearKit: false,
+    mirrors: false,
+    stripes: false,
+    exhausts: [],
+    lights: { front: false, ry: 0.72, rz: rear + 0.02, rx: 0.9, rearBar: false },
+    wheels: {
+      radius: 0.5,
+      width: 0.42,
+      rimStyle: 'steel',
+      maxSteer: 0,
+      positions: [
+        [-1.0, 7.4],
+        [1.0, 7.4],
+        [-1.0, 8.5],
+        [1.0, 8.5],
+      ],
+    },
+    height: 4,
+  };
+}
+
+/**
  * Monster truck: any family's body (pickup, muscle car, SUV, hatch, jeep)
  * lifted onto a monster chassis with giant wheels.
  */
@@ -191,6 +399,7 @@ function monsterTruck(bodyFamily) {
 
 /** What a cab-over truck carries: box, tanker, tipper or flatbed. */
 function truckCargo(kind) {
+  if (kind === 'none') return [];
   if (kind === 'tanker') {
     return [
       { cyl: [0, 2.35, 1.15, 1.15, 2.95, 'z'], paint: 'accent', mat: 'chrome', sides: 18 },
@@ -534,6 +743,86 @@ export const FAMILIES = {
     build: (o = {}) => monsterTruck(o.body || 'pickup'),
   },
 
+  // ------------------------------------------------------------------- rig
+  rig: {
+    label: 'Big Rig',
+    engine: 'diesel',
+    camera: 3.3, // far enough back to see the whole rig
+    handling: { maxSpeed: 9800, accel: 3300, brake: 11000, grip: 7, steerSpeed: 1.75, steerRamp: 3.8, centrifugal: 0.22, nitroAccel: 2.4, nitroTop: 1.35, offroadTop: 0.5 },
+    build: (o = {}) => rigUnit(o),
+  },
+
+  // --------------------------------------------------------------- tractor
+  tractor: {
+    label: 'Tractor',
+    engine: 'diesel',
+    camera: 2.0, // far enough back to see the trailer and the tractor
+    handling: { maxSpeed: 9400, accel: 4200, brake: 12000, grip: 8.5, steerSpeed: 2.0, centrifugal: 0.24, nitroAccel: 2.2, nitroTop: 1.4, offroadTop: 0.85, offroadGrip: 1, offroadDecel: 4000, jumpBoost: 1.05 },
+    build: (o = {}) => {
+      const rearR = 0.78;
+      const rearZ = 0.75;
+      const parts = [
+        // Front ballast weights, chassis rails and the drawbar.
+        { box: [0, 0.62, -1.86, 0.36, 0.16, 0.1], paint: 'dark' },
+        { box: [0.3, 0.55, -0.6, 0.06, 0.1, 1.2], paint: 'dark', mirror: true },
+        { box: [0, 0.55, 1.5, 0.08, 0.06, 0.25], paint: 'dark' },
+        // Exhaust stack and air intake beside the hood.
+        { cyl: [0.26, 1.85, -0.85, 0.06, 0.6, 'y'], paint: 'dark', cap: 'dark' },
+        { cyl: [-0.26, 1.55, -0.6, 0.07, 0.3, 'y'], paint: 'chrome' },
+        // Step and seat back visible through the glass.
+        { box: [0.56, 0.95, 0.15, 0.08, 0.03, 0.18], paint: 'dark', mirror: true },
+        { box: [0, 1.55, 0.95, 0.3, 0.25, 0.06], paint: 'dark' },
+        // Big rear mudguards.
+        ...arcGuard(0.92, 0.78, rearZ, rearR + 0.06, 0.24, o.guard || 'body'),
+        // Small front mudguards.
+        ...arcGuard(0.68, 0.42, -1.25, 0.5, 0.14, 'dark', 0.15, 0.85),
+      ];
+      return {
+        body: [
+          [-1.8, 0.34, 0.58, 1.12, 3],
+          [-1.72, 0.42, 0.55, 1.24, 5],
+          [-0.1, 0.44, 0.55, 1.28, 5],
+          [0.05, 0.56, 0.5, 1.28, 6],
+          [1.35, 0.56, 0.5, 1.28, 6],
+          [1.42, 0.5, 0.55, 1.2, 4],
+        ],
+        cabin: [
+          [0.05, 0.56, 0.56, 1.26, 1.3],
+          [0.1, 0.6, 0.58, 1.28, 2.45],
+          [1.3, 0.6, 0.58, 1.28, 2.45],
+          [1.36, 0.56, 0.56, 1.26, 2.4],
+        ],
+        cabinShape: [0.18, 0.14],
+        cabinStrips: ['wind', 'side', 'rear'],
+        mirrors: false,
+        stripeHalf: 0.14,
+        arches: false,
+        rearKit: false,
+        grille: false,
+        lights: { fy: 0.98, fz: -1.8, fx: 0.2, fw: 0.07, ry: 1.05, rz: 1.42, rx: 0.4, rearBar: false },
+        exhausts: [[0.26, 2.47, -0.85]],
+        parts,
+        trailY: 1.2,
+        height: 2.5,
+        wheels: {
+          radius: 0.42,
+          width: 0.26,
+          rear: { radius: rearR, width: 0.44 },
+          positions: [
+            [-0.68, -1.25],
+            [0.68, -1.25],
+            [-0.92, rearZ],
+            [0.92, rearZ],
+          ],
+          rimStyle: 'steel',
+          tread: 'offroad',
+          maxSteer: 0.32,
+        },
+        tow: { hitch: [0.55, 1.72], trailer: haywagon(o.load || 'hay') },
+      };
+    },
+  },
+
   // ----------------------------------------------------------------- truck
   truck: {
     label: 'Truck',
@@ -613,7 +902,7 @@ export const FAMILIES = {
   },
 };
 
-export const FAMILY_ORDER = ['race', 'sports', 'muscle', 'hatch', 'jeep', 'suv', 'pickup', 'monster', 'truck'];
+export const FAMILY_ORDER = ['race', 'sports', 'muscle', 'hatch', 'jeep', 'suv', 'pickup', 'monster', 'truck', 'rig', 'tractor'];
 
 export function familyHandling(family, tweak = {}) {
   return { ...BASE_HANDLING, ...FAMILIES[family].handling, ...tweak };
@@ -633,6 +922,10 @@ export function scaleModel(m, [sx, sy, sz]) {
       const [x, y, z, rx, ry, rz] = p.sphere;
       return { ...p, sphere: [x * sx, y * sy, z * sz, rx * sx, ry * sy, rz * sz] };
     }
+    if (p.prism) {
+      const [x, hx, profile] = p.prism;
+      return { ...p, prism: [x * sx, hx * sx, profile.map(([y, z]) => [y * sy, z * sz])] };
+    }
     const [x, y, z, r, h, axis] = p.cyl;
     return { ...p, cyl: [x * sx, y * sy, z * sz, r, axis === 'x' ? h * sx : axis === 'y' ? h * sy : h * sz, axis] };
   };
@@ -644,6 +937,7 @@ export function scaleModel(m, [sx, sy, sz]) {
     parts: m.parts && m.parts.map(part),
     spoiler: m.spoiler && { ...m.spoiler, z: m.spoiler.z * sz, y: m.spoiler.y * sy, w: m.spoiler.w * sx },
     roofRails: m.roofRails && { x: m.roofRails.x * sx, z0: m.roofRails.z0 * sz, z1: m.roofRails.z1 * sz },
+    tow: m.tow && { ...m.tow, hitch: [m.tow.hitch[0] * sy, m.tow.hitch[1] * sz] },
     exhausts: m.exhausts && m.exhausts.map(([x, y, z]) => [x * sx, y * sy, z * sz]),
     wheels: { ...m.wheels, positions: m.wheels.positions.map(([x, z]) => [x * sx, z * sz]) },
   };

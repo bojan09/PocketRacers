@@ -12,6 +12,8 @@ export const KIT_SLOTS = {
   pickup: ['scoop', 'skirts', 'lightbar', 'bullbar'],
   monster: ['bullbar'],
   truck: ['lightbar', 'bullbar'],
+  rig: ['lightbar', 'bullbar'],
+  tractor: ['lightbar'],
 };
 
 export const KIT_OPTIONS = {
@@ -81,7 +83,7 @@ export function applyKit(model, v, kit = {}) {
   const rear = st[st.length - 1][0];
   const hwMax = Math.max(...st.map((s) => s[1]));
   const roofOf = () => (m.cabin ? Math.max(...m.cabin.map((c) => c[4])) : Math.max(...st.map((s) => s[3])));
-  const truck = v.family === 'truck';
+  const truck = v.family === 'truck' || v.family === 'rig';
   const wz = m.wheels.positions.map((p) => p[1]);
   const r = m.wheels.radius;
   const has = (slot, value) => slots.includes(slot) && kit[slot] === value;
@@ -204,7 +206,7 @@ function roofSpot(m, v) {
     const bar = m.parts.filter((p) => p.box && Math.abs(p.box[0]) < 0.01 && p.box[3] > 0.3 && !p.emissive).sort((a, b) => b.box[1] - a.box[1])[0];
     z = bar ? bar.box[2] : m.body[m.body.length - 1][0] * 0.45;
   }
-  if (v.family === 'truck') {
+  if (v.family === 'truck' || v.family === 'rig') {
     const deflector = m.parts.find((p) => p.box && p.box[1] > 3.1 && p.box[4] > 0.2);
     if (deflector) z = deflector.box[2];
   }
