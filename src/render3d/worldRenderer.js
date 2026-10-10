@@ -7,7 +7,7 @@ import { uploadMesh, deleteMesh } from '../gl/gl.js';
 import { mat4, hexToRgb, transformPoint } from '../gl/math.js';
 import { clamp } from '../core/util.js';
 import { MeshBuilder } from '../gl/meshBuilder.js';
-import { CHUNK, CELL, WATER, SNOW_LINE, ROAD_HALF } from '../world/openWorld.js';
+import { CHUNK, CELL, WATER, SNOW_LINE, ROAD_HALF, ROAD_LIFT } from '../world/openWorld.js';
 import { MODEL_BUILDERS, windmillSails } from './models.js';
 import { ANIMAL_MODELS } from './animals.js';
 import { PROP_MODELS } from './props.js';
@@ -145,7 +145,7 @@ function addRamps(mb, world, cx, cz) {
     const fz = -Math.cos(r.yaw);
     const rx = Math.cos(r.yaw);
     const rz = Math.sin(r.yaw);
-    const base = (u, v) => world.height(r.x + fx * (u - r.len / 2) + rx * v, r.z + fz * (u - r.len / 2) + rz * v);
+    const base = (u, v) => world.floor(r.x + fx * (u - r.len / 2) + rx * v, r.z + fz * (u - r.len / 2) + rz * v);
     const pt = (u, v, top) => [r.x + fx * (u - r.len / 2) + rx * v, base(u, v) + (top ? r.h * Math.pow(u / r.len, 1.3) + 0.03 : -0.2), r.z + fz * (u - r.len / 2) + rz * v];
     const N = 8;
     const w = r.w / 2;
@@ -172,7 +172,7 @@ function addRoads(mb, world, cx, cz) {
   mb.material(0.15, 0.4);
   for (const road of world.roads) {
     const S = road.samples;
-    const lift = 0.06 + (road.samples[0].road % 4) * 0.006; // no flicker where roads meet
+    const lift = ROAD_LIFT + (road.samples[0].road % 4) * 0.006; // no flicker where roads meet
     for (let i = 0; i < S.length; i++) {
       const a = S[i];
       if (a.x < x0 || a.x >= x0 + CHUNK || a.z < z0 || a.z >= z0 + CHUNK) continue;
@@ -185,8 +185,8 @@ function addRoads(mb, world, cx, cz) {
       band(ROAD_HALF - 0.42, ROAD_HALF - 0.2, LINE, 0.01);
       if (a.i % 4 < 2) band(-0.1, 0.1, CENTRE, 0.01);
       // Kerb skirt down into the ground so the edge never floats.
-      mb.quad(at(a, -ROAD_HALF), at(b, -ROAD_HALF), at(b, -ROAD_HALF - 0.2, -0.5), at(a, -ROAD_HALF - 0.2, -0.5), [0.42, 0.42, 0.44]);
-      mb.quad(at(a, ROAD_HALF), at(a, ROAD_HALF + 0.2, -0.5), at(b, ROAD_HALF + 0.2, -0.5), at(b, ROAD_HALF), [0.42, 0.42, 0.44]);
+      mb.quad(at(a, -ROAD_HALF), at(b, -ROAD_HALF), at(b, -ROAD_HALF - 0.2, -0.8), at(a, -ROAD_HALF - 0.2, -0.8), [0.42, 0.42, 0.44]);
+      mb.quad(at(a, ROAD_HALF), at(a, ROAD_HALF + 0.2, -0.8), at(b, ROAD_HALF + 0.2, -0.8), at(b, ROAD_HALF), [0.42, 0.42, 0.44]);
     }
   }
 }

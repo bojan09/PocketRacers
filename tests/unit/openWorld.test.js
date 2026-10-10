@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OpenWorld, CELL, WATER } from '../../src/world/openWorld.js';
+import { OpenWorld, CELL, WATER, ROAD_HALF, ROAD_LIFT } from '../../src/world/openWorld.js';
 import { FreeSession } from '../../src/sim/freeDrive.js';
 import { makeVehicle, VEHICLES } from '../../src/data/vehicles.js';
 import { FIXED_DT } from '../../src/core/loop.js';
@@ -45,9 +45,9 @@ test('island: ground() matches the drawn triangles (exact at grid points)', () =
     [-20, 41],
     [100, -60],
   ])
-    assert.ok(Math.abs(W.ground(i * CELL, j * CELL) - W.height(i * CELL, j * CELL)) < 1e-6);
+    assert.ok(Math.abs(W.landMesh(i * CELL, j * CELL) - W.height(i * CELL, j * CELL)) < 1e-6);
   // Between samples it stays within the corner heights.
-  const g = W.ground(13.3 * CELL, 7.6 * CELL);
+  const g = W.landMesh(13.3 * CELL, 7.6 * CELL);
   const hs = [
     [13, 7],
     [14, 7],
@@ -55,6 +55,22 @@ test('island: ground() matches the drawn triangles (exact at grid points)', () =
     [14, 8],
   ].map(([i, j]) => W.height(i * CELL, j * CELL));
   assert.ok(g >= Math.min(...hs) - 1e-6 && g <= Math.max(...hs) + 1e-6);
+  // Off the roads, ground() is that land; on a road it is the road surface,
+  // with the land kept below it (nothing pokes through the road).
+  assert.equal(W.ground(-700, 300), W.landMesh(-700, 300) + W.rampAt(-700, 300));
+  let worst = -Infinity;
+  for (const road of W.roads)
+    for (const smp of road.samples.filter((_, i) => i % 7 === 0))
+      for (const off of [-ROAD_HALF, -2, 0, 2, ROAD_HALF]) {
+        const x = smp.x - smp.tz * off;
+        const z = smp.z + smp.tx * off;
+        if (W.rampAt(x, z) || W.nearestRoad(x, z).s.road !== smp.road) continue; // ramps, junctions
+        assert.ok(Math.abs(W.ground(x, z) - (smp.h + ROAD_LIFT)) < 0.05, 'car rides the road surface');
+        worst = Math.max(worst, W.landMesh(x, z) - (smp.h + ROAD_LIFT));
+      }
+  assert.ok(worst < 0, `land stays under the road (${worst.toFixed(2)})`);
+  // Gentle enough to drive up.
+  for (const road of W.roads) for (let i = 1; i < road.samples.length; i++) assert.ok(Math.abs(road.samples[i].h - road.samples[i - 1].h) / 3 < 0.25, 'road grade');
 });
 
 test('free drive: accelerates, turns, brakes and stays on the ground on flat land', () => {

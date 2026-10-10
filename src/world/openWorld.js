@@ -37,10 +37,46 @@ export const BIOMES = {
 };
 
 export const ROAD_HALF = 4.2; // metres from the centre line to the edge
+/** The road surface sits this far above its bed; the land under it sinks this far below. */
+export const ROAD_LIFT = 0.1;
+const ROAD_SINK = 0.3;
+const SHOULDER = 2; // metres of flat verge beside the road
 const ROAD_BLEND = 14; // metres over which the land meets the road bed
 const ROAD_STEP = 3; // metres between road samples
 const ROAD_BUCKET = 32;
 const bucketKey = (bx, bz) => bx * 100003 + bz;
+
+/**
+ * No road steeper than MAX_GRADE: steps that are too steep are relaxed
+ * (both ends move toward each other) until none are left. `pinEnds` keeps
+ * the first and last heights (where roads meet).
+ */
+const MAX_GRADE = 0.15;
+function limitGrade(h, closed, pinEnds) {
+  const max = MAX_GRADE * ROAD_STEP;
+  const n = h.length;
+  for (let iter = 0; iter < 400; iter++) {
+    let worst = 0;
+    for (let i = 0; i < (closed ? n : n - 1); i++) {
+      const j = (i + 1) % n;
+      const d = h[j] - h[i];
+      const excess = Math.abs(d) - max;
+      if (excess <= 0) continue;
+      worst = Math.max(worst, excess);
+      const fixI = pinEnds && i === 0;
+      const fixJ = pinEnds && j === n - 1;
+      const m = Math.sign(d) * (excess + 1e-4);
+      if (fixI && fixJ) continue;
+      if (fixI) h[j] -= m;
+      else if (fixJ) h[i] += m;
+      else {
+        h[i] += m / 2;
+        h[j] -= m / 2;
+      }
+    }
+    if (worst < 1e-3) break;
+  }
+}
 
 /** Points every `step` metres along a centripetal Catmull-Rom curve. */
 function sampleSpline(pts, closed, step) {
@@ -251,12 +287,12 @@ export class OpenWorld {
       const hs = pts.map(([x, z]) => this.baseHeight(x, z));
       // Smooth the road's height along its length (gentle grades).
       let sm = hs;
-      for (let pass = 0; pass < 3; pass++) {
+      for (let pass = 0; pass < 4; pass++) {
         const out = sm.slice();
         for (let i = 0; i < sm.length; i++) {
           let sum = 0;
           let c = 0;
-          for (let k = -8; k <= 8; k++) {
+          for (let k = -25; k <= 25; k++) {
             const j = line.closed ? (i + k + sm.length) % sm.length : Math.min(sm.length - 1, Math.max(0, i + k));
             sum += sm[j];
             c++;
@@ -265,6 +301,7 @@ export class OpenWorld {
         }
         sm = out;
       }
+      limitGrade(sm, line.closed, false);
       const road = pts.map(([x, z], i) => {
         const a = pts[line.closed ? (i + 1) % pts.length : Math.min(pts.length - 1, i + 1)];
         const b = pts[line.closed ? (i - 1 + pts.length) % pts.length : Math.max(0, i - 1)];
@@ -276,17 +313,28 @@ export class OpenWorld {
     });
     // Spokes ease to the ring road's height where they join it (no step).
     const ringS = this.roads[0].samples;
+    const hub = this.baseHeight(0, 0);
     for (const road of this.roads.slice(1)) {
       const S = road.samples;
       const end = S[S.length - 1];
       let target = ringS[0];
       for (const r of ringS) if ((r.x - end.x) ** 2 + (r.z - end.z) ** 2 < (target.x - end.x) ** 2 + (target.z - end.z) ** 2) target = r;
-      const N = Math.min(25, S.length);
+      const N = Math.min(60, S.length >> 1);
       for (let k = 0; k < N; k++) {
         const smp = S[S.length - 1 - k];
         const w = 1 - smoothstep(0, N, k);
         smp.h += (target.h - smp.h) * w;
       }
+      // ...and all start level with each other in the middle.
+      for (let k = 0; k < N; k++) {
+        const w = 1 - smoothstep(0, N, k);
+        S[k].h += (hub - S[k].h) * w;
+      }
+    }
+    for (const road of this.roads.slice(1)) {
+      const hs = road.samples.map((smp) => smp.h);
+      limitGrade(hs, false, true);
+      road.samples.forEach((smp, i) => (smp.h = hs[i]));
     }
     // Bucket the samples for fast nearest-road lookups.
     this.roadGrid = new Map();
@@ -306,28 +354,33 @@ export class OpenWorld {
     if (!this.roadGrid) return null;
     const bx = Math.floor(x / ROAD_BUCKET);
     const bz = Math.floor(z / ROAD_BUCKET);
-    let best = null;
-    let bd = Infinity;
+    // Nearest sample of each road, then the road whose surface is closest
+    // across (where roads meet, the nearest sample may be the other road's).
+    const best = this.nearScratch || (this.nearScratch = []);
+    best.length = 0;
     for (let gz = bz - 1; gz <= bz + 1; gz++) {
       for (let gx = bx - 1; gx <= bx + 1; gx++) {
         const list = this.roadGrid.get(bucketKey(gx, gz));
         if (!list) continue;
         for (const smp of list) {
           const d = (smp.x - x) ** 2 + (smp.z - z) ** 2;
-          if (d < bd) {
-            bd = d;
-            best = smp;
-          }
+          const b = best[smp.road];
+          if (!b || d < b.d2) best[smp.road] = { s: smp, d2: d };
         }
       }
     }
-    if (!best) return null;
-    // Distance across the road (perpendicular to it), not to the sample.
-    const dx = x - best.x;
-    const dz = z - best.z;
-    const across = Math.abs(dx * -best.tz + dz * best.tx);
-    const along = Math.abs(dx * best.tx + dz * best.tz);
-    return { d: along > ROAD_STEP ? Math.sqrt(bd) : across, h: best.h, s: best };
+    let out = null;
+    for (const b of best) {
+      if (!b) continue;
+      // Distance across the road (perpendicular to it), not to the sample.
+      const dx = x - b.s.x;
+      const dz = z - b.s.z;
+      const across = Math.abs(dx * -b.s.tz + dz * b.s.tx);
+      const along = Math.abs(dx * b.s.tx + dz * b.s.tz);
+      const d = along > ROAD_STEP ? Math.sqrt(b.d2) : across;
+      if (!out || d < out.d) out = { d, h: b.s.h, s: b.s };
+    }
+    return out;
   }
 
   /** Nearest point on any road, however far: { x, z, d } (null with no roads). */
@@ -468,9 +521,27 @@ export class OpenWorld {
     // Roads are cut into the land: flat across, with the ground blending
     // into the road bed over a few metres either side.
     const r = this.nearestRoad(x, z);
-    if (!r || r.d > ROAD_HALF + ROAD_BLEND) return base;
-    const t = 1 - smoothstep(ROAD_HALF + 0.5, ROAD_HALF + ROAD_BLEND, r.d);
-    return base + (r.h - base) * t;
+    if (!r || r.d > ROAD_HALF + SHOULDER + ROAD_BLEND) return base;
+    // A flat shoulder either side, then the land rises or falls to its own level.
+    const t = 1 - smoothstep(ROAD_HALF + SHOULDER, ROAD_HALF + SHOULDER + ROAD_BLEND, r.d);
+    // Under the road (and shoulder) the land dips a little below the bed,
+    // so its 4 m triangles can never poke up through the road surface.
+    const sink = ROAD_SINK * (1 - smoothstep(ROAD_HALF + SHOULDER - 0.5, ROAD_HALF + SHOULDER + 1.5, r.d));
+    return base + (this.roadHeight(x, z, r) - base) * t - sink;
+  }
+
+  /** Road bed height at (x, z), smooth between samples (r = nearestRoad result). */
+  roadHeight(x, z, r = this.nearestRoad(x, z)) {
+    const s = r.s;
+    const S = this.roads[s.road].samples;
+    const along = (x - s.x) * s.tx + (z - s.z) * s.tz;
+    const k = along >= 0 ? 1 : -1;
+    let j = s.i + k;
+    if (this.roads[s.road].closed) j = (j + S.length) % S.length;
+    const nb = S[j];
+    if (!nb) return s.h;
+    const t = Math.min(1, Math.abs(along) / (Math.hypot(nb.x - s.x, nb.z - s.z) || 1));
+    return s.h + (nb.h - s.h) * t;
   }
 
   /** Natural landscape height, before roads. */
@@ -495,6 +566,19 @@ export class OpenWorld {
    * grid, split along the same diagonal), so wheels sit on what you see.
    */
   ground(x, z) {
+    return this.floor(x, z) + (this.ramps.length ? this.rampAt(x, z) : 0);
+  }
+
+  /** The drawn ground without ramps: the road surface on a road, else the land. */
+  floor(x, z) {
+    const land = this.landMesh(x, z);
+    const r = this.roadSamples && this.nearestRoad(x, z);
+    if (!r || r.d > ROAD_HALF + 0.05) return land;
+    return Math.max(land, this.roadHeight(x, z, r) + ROAD_LIFT);
+  }
+
+  /** Height of the drawn land triangles (CELL grid, same diagonal as the mesh). */
+  landMesh(x, z) {
     const fx = x / CELL;
     const fz = z / CELL;
     const i = Math.floor(fx);
@@ -505,13 +589,12 @@ export class OpenWorld {
     const z0 = j * CELL;
     const h00 = this.height(x0, z0);
     const h11 = this.height(x0 + CELL, z0 + CELL);
-    const ramp = this.ramps.length ? this.rampAt(x, z) : 0;
     if (u >= v) {
       const h10 = this.height(x0 + CELL, z0);
-      return h00 + (h10 - h00) * u + (h11 - h10) * v + ramp;
+      return h00 + (h10 - h00) * u + (h11 - h10) * v;
     }
     const h01 = this.height(x0, z0 + CELL);
-    return h00 + (h11 - h01) * u + (h01 - h00) * v + ramp;
+    return h00 + (h11 - h01) * u + (h01 - h00) * v;
   }
 
   /** Surface type under (x, z): 'water', 'sand', 'grass' or 'rock'. */
