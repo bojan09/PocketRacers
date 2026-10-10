@@ -115,7 +115,7 @@ test('island scenery: the same every time, all areas present, start kept clear',
   const seen = new Set();
   for (let z = -1400; z <= 1400; z += 70) for (let x = -1400; x <= 1400; x += 70) if (a.height(x, z) > 0) seen.add(a.biome(x, z));
   for (const k of ['meadow', 'forest', 'desert', 'snow', 'beach']) assert.ok(seen.has(k), `has ${k}`);
-  for (const o of a.objectsNear(0, 0, 40)) assert.ok(Math.hypot(o.x, o.z) >= 45, 'clear start');
+  for (const o of a.objectsNear(a.spawn.x, a.spawn.z, 40)) assert.ok(Math.hypot(o.x - a.spawn.x, o.z - a.spawn.z) >= 45, 'clear start');
   for (const o of a.chunkObjects(1, 1)) assert.ok(a.height(o.x, o.z) > 0, 'nothing in the sea');
 });
 
@@ -128,6 +128,7 @@ test('free drive: a tree stops the car; props fly off for points', () => {
     return out;
   };
   const s = new FreeSession(W, makeVehicle('zippy'));
+  s.reset({ x: 0, z: 0, yaw: 0 });
   run(s, 3, input());
   const p = s.player;
   assert.ok(p.z > -30 + 1.2, 'did not drive through the tree');
@@ -138,4 +139,24 @@ test('free drive: a tree stops the car; props fly off for points', () => {
   run(t, 2, input());
   assert.ok(t.knocked.has('hay'));
   assert.ok(t.events.some((e) => e.type === 'score' && e.kind === 'prop'));
+});
+
+test('roads: the start is on a road; roads are flat across, clear of scenery and fastest', () => {
+  const W = new OpenWorld();
+  assert.equal(W.surface(W.spawn.x, W.spawn.z), 'road');
+  for (const smp of W.roadSamples.filter((_, i) => i % 50 === 0)) {
+    // Flat across the road.
+    const l = W.height(smp.x - smp.tz * 3, smp.z + smp.tx * 3);
+    const r = W.height(smp.x + smp.tz * 3, smp.z - smp.tx * 3);
+    assert.ok(Math.abs(l - r) < 0.3, `flat across (${l.toFixed(2)} vs ${r.toFixed(2)})`);
+    for (const o of W.objectsNear(smp.x, smp.z, 6)) assert.ok(Math.hypot(o.x - smp.x, o.z - smp.z) > 4.2, `${o.kind} not on the road`);
+  }
+  const car = makeVehicle('zippy');
+  const onRoad = new FreeSession(W, car);
+  run(onRoad, 4, input({ steer: 0 }));
+  const flat = new OpenWorld();
+  flat.roadGrid = new Map(); // no roads at all: grass everywhere
+  const onGrass = new FreeSession(flat, car);
+  run(onGrass, 4, input());
+  assert.ok(onRoad.player.speed > onGrass.player.speed, 'roads are faster than grass');
 });

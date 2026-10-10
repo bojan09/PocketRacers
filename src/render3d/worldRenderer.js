@@ -7,7 +7,7 @@ import { uploadMesh, deleteMesh } from '../gl/gl.js';
 import { mat4, hexToRgb, transformPoint } from '../gl/math.js';
 import { clamp } from '../core/util.js';
 import { MeshBuilder } from '../gl/meshBuilder.js';
-import { CHUNK, CELL, WATER, SNOW_LINE } from '../world/openWorld.js';
+import { CHUNK, CELL, WATER, SNOW_LINE, ROAD_HALF } from '../world/openWorld.js';
 import { MODEL_BUILDERS } from './models.js';
 import { PROP_MODELS } from './props.js';
 import { mulberry32 } from '../core/util.js';
@@ -94,7 +94,38 @@ export function buildChunkScenery(world, cx, cz, variants) {
     if (o.scale !== 1) mat4.scale(m, m, o.scale);
     mb.append(list[Math.floor(rand() * list.length)], m);
   }
+  addRoads(mb, world, cx, cz);
   return mb;
+}
+
+const ASPHALT = [0.34, 0.36, 0.41];
+const LINE = [0.95, 0.95, 0.92];
+const CENTRE = [1, 0.85, 0.3];
+
+/** Road surface (asphalt, edge lines, dashed centre line) for one chunk. */
+function addRoads(mb, world, cx, cz) {
+  const x0 = cx * CHUNK;
+  const z0 = cz * CHUNK;
+  mb.material(0.15, 0.4);
+  for (const road of world.roads) {
+    const S = road.samples;
+    const lift = 0.06 + (road.samples[0].road % 4) * 0.006; // no flicker where roads meet
+    for (let i = 0; i < S.length; i++) {
+      const a = S[i];
+      if (a.x < x0 || a.x >= x0 + CHUNK || a.z < z0 || a.z >= z0 + CHUNK) continue;
+      const b = S[i + 1] || (road.closed ? S[0] : null);
+      if (!b) continue;
+      const at = (s, off, dy = 0) => [s.x - s.tz * off, s.h + lift + dy, s.z + s.tx * off];
+      const band = (o0, o1, c, dy = 0) => mb.quad(at(a, o0, dy), at(a, o1, dy), at(b, o1, dy), at(b, o0, dy), c);
+      band(-ROAD_HALF, ROAD_HALF, ASPHALT);
+      band(-ROAD_HALF + 0.2, -ROAD_HALF + 0.42, LINE, 0.01);
+      band(ROAD_HALF - 0.42, ROAD_HALF - 0.2, LINE, 0.01);
+      if (a.i % 4 < 2) band(-0.1, 0.1, CENTRE, 0.01);
+      // Kerb skirt down into the ground so the edge never floats.
+      mb.quad(at(a, -ROAD_HALF), at(b, -ROAD_HALF), at(b, -ROAD_HALF - 0.2, -0.5), at(a, -ROAD_HALF - 0.2, -0.5), [0.42, 0.42, 0.44]);
+      mb.quad(at(a, ROAD_HALF), at(a, ROAD_HALF + 0.2, -0.5), at(b, ROAD_HALF + 0.2, -0.5), at(b, ROAD_HALF), [0.42, 0.42, 0.44]);
+    }
+  }
 }
 
 export function installWorldRendering(Renderer3D) {

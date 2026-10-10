@@ -110,6 +110,12 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > Trees, rocks and buildings are solid; hay bales, fences, crates, barrels,
 > gifts and beach balls fly off for points. Little Driver turns a wedged car
 > free, and the camera slides in rather than ending up inside a tree.
+>
+> **Phase 7C — roads:** a winding ring road round the island and five roads
+> from the middle out to it, cut into the land (flat across, the ground
+> blending into the road bed, raised where they cross water), with edge and
+> centre lines. Roads are the fastest surface and stay clear of scenery; the
+> drive starts on one.
 
 ## Tests
 

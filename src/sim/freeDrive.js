@@ -18,9 +18,10 @@ const MAX_EVENTS = 32;
 const SUPER_TOP = 1.12;
 const TAKEOFF = 5; // m/s the ground must fall away faster than the car to leave it
 const SLOPE_PULL = 9; // m/s^2 per unit of slope (arcade-scaled gravity)
-// Surface grip and top-speed share (the open world has no roads yet).
+// Surface grip and top-speed share: roads are fastest.
 const SURFACE = {
-  grass: { grip: 0.9, top: 0.88, drag: 0 },
+  road: { grip: 1, top: 1, drag: 0 },
+  grass: { grip: 0.9, top: 0.82, drag: 0 },
   sand: { grip: 0.7, top: 0.7, drag: 0.4 },
   rock: { grip: 0.8, top: 0.8, drag: 0 },
   water: { grip: 0.3, top: 0.25, drag: 3 },

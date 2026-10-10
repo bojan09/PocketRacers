@@ -31,6 +31,52 @@ export const BIOMES = {
   beach: { density: 0.06, kinds: [['palm', 4], ['umbrella', 1.5], ['hut', 0.2]], props: ['ball', 'barrel'] },
 };
 
+export const ROAD_HALF = 4.2; // metres from the centre line to the edge
+const ROAD_BLEND = 14; // metres over which the land meets the road bed
+const ROAD_STEP = 3; // metres between road samples
+const ROAD_BUCKET = 32;
+const bucketKey = (bx, bz) => bx * 100003 + bz;
+
+/** Points every `step` metres along a centripetal Catmull-Rom curve. */
+function sampleSpline(pts, closed, step) {
+  const n = pts.length;
+  const at = (i) => (closed ? pts[(i + n) % n] : pts[Math.min(n - 1, Math.max(0, i))]);
+  const dense = [];
+  const segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const p0 = at(i - 1);
+    const p1 = at(i);
+    const p2 = at(i + 1);
+    const p3 = at(i + 2);
+    for (let k = 0; k < 40; k++) {
+      const t = k / 40;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      dense.push([0, 1].map((c) => 0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3)));
+    }
+  }
+  if (!closed) dense.push(pts[n - 1].slice());
+  // Resample at equal spacing.
+  const out = [dense[0]];
+  let acc = 0;
+  for (let i = 1; i < dense.length; i++) {
+    const a = dense[i - 1];
+    const b = dense[i];
+    let seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    let from = a;
+    while (acc + seg >= step) {
+      const t = (step - acc) / seg;
+      const p = [from[0] + (b[0] - from[0]) * t, from[1] + (b[1] - from[1]) * t];
+      out.push(p);
+      seg -= step - acc;
+      from = p;
+      acc = 0;
+    }
+    acc += seg;
+  }
+  return out;
+}
+
 const hashChunk = (cx, cz, seed) => (Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663) ^ Math.imul(seed, 83492791)) >>> 0;
 
 const smoothstep = (a, b, x) => {
@@ -51,6 +97,118 @@ export class OpenWorld {
     this.noise3 = valueNoise(seed * 3 + 101);
     this.spawn = { x: 0, z: 0, yaw: 0 };
     this.objectCache = new Map();
+    this.buildRoads();
+  }
+
+  /**
+   * The road network: a winding ring road round the island and roads from
+   * the middle out to it. Each road is a smooth curve sampled every few
+   * metres; samples carry the road height (the land along it, smoothed).
+   */
+  buildRoads() {
+    const R = this.radius;
+    const n = this.noise2;
+    const lines = [];
+    // Ring: 14 points at about half the island radius, wobbling in and out.
+    const ring = [];
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      const rr = R * (0.64 + n(Math.cos(a) * 3 + 7, Math.sin(a) * 3) * 0.2);
+      ring.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+    }
+    lines.push({ pts: ring, closed: true });
+    // Spokes from the middle to the ring, bending on the way.
+    for (const k of [0, 3, 6, 9, 11]) {
+      const [ex, ez] = ring[k];
+      const mx = ex * 0.5 - ez * 0.18;
+      const mz = ez * 0.5 + ex * 0.18;
+      lines.push({ pts: [[0, 0], [ex * 0.12, ez * 0.12], [mx, mz], [ex * 0.85, ez * 0.85], [ex, ez]], closed: false });
+    }
+    this.roads = [];
+    this.roadSamples = null; // heights below must use the natural land
+    const samples = [];
+    lines.forEach((line, ri) => {
+      const pts = sampleSpline(line.pts, line.closed, ROAD_STEP);
+      const hs = pts.map(([x, z]) => this.baseHeight(x, z));
+      // Smooth the road's height along its length (gentle grades).
+      let sm = hs;
+      for (let pass = 0; pass < 3; pass++) {
+        const out = sm.slice();
+        for (let i = 0; i < sm.length; i++) {
+          let sum = 0;
+          let c = 0;
+          for (let k = -8; k <= 8; k++) {
+            const j = line.closed ? (i + k + sm.length) % sm.length : Math.min(sm.length - 1, Math.max(0, i + k));
+            sum += sm[j];
+            c++;
+          }
+          out[i] = sum / c;
+        }
+        sm = out;
+      }
+      const road = pts.map(([x, z], i) => {
+        const a = pts[line.closed ? (i + 1) % pts.length : Math.min(pts.length - 1, i + 1)];
+        const b = pts[line.closed ? (i - 1 + pts.length) % pts.length : Math.max(0, i - 1)];
+        const tl = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1;
+        return { x, z, h: Math.max(WATER + 1.4, sm[i]), tx: (a[0] - b[0]) / tl, tz: (a[1] - b[1]) / tl, road: ri, i };
+      });
+      this.roads.push({ samples: road, closed: line.closed });
+      samples.push(...road);
+    });
+    // Spokes ease to the ring road's height where they join it (no step).
+    const ringS = this.roads[0].samples;
+    for (const road of this.roads.slice(1)) {
+      const S = road.samples;
+      const end = S[S.length - 1];
+      let target = ringS[0];
+      for (const r of ringS) if ((r.x - end.x) ** 2 + (r.z - end.z) ** 2 < (target.x - end.x) ** 2 + (target.z - end.z) ** 2) target = r;
+      const N = Math.min(25, S.length);
+      for (let k = 0; k < N; k++) {
+        const smp = S[S.length - 1 - k];
+        const w = 1 - smoothstep(0, N, k);
+        smp.h += (target.h - smp.h) * w;
+      }
+    }
+    // Bucket the samples for fast nearest-road lookups.
+    this.roadGrid = new Map();
+    for (const smp of samples) {
+      const k = bucketKey(Math.floor(smp.x / ROAD_BUCKET), Math.floor(smp.z / ROAD_BUCKET));
+      if (!this.roadGrid.has(k)) this.roadGrid.set(k, []);
+      this.roadGrid.get(k).push(smp);
+    }
+    this.roadSamples = samples;
+    // Start on the first spoke, facing out along it.
+    const sp = this.roads[1].samples;
+    this.spawn = { x: sp[3].x, z: sp[3].z, yaw: Math.atan2(sp[3].tx, -sp[3].tz) };
+  }
+
+  /** Nearest road sample to (x, z) within ~2 buckets: { d, h, s } or null. */
+  nearestRoad(x, z) {
+    if (!this.roadGrid) return null;
+    const bx = Math.floor(x / ROAD_BUCKET);
+    const bz = Math.floor(z / ROAD_BUCKET);
+    let best = null;
+    let bd = Infinity;
+    for (let gz = bz - 1; gz <= bz + 1; gz++) {
+      for (let gx = bx - 1; gx <= bx + 1; gx++) {
+        const list = this.roadGrid.get(bucketKey(gx, gz));
+        if (!list) continue;
+        for (const smp of list) {
+          const d = (smp.x - x) ** 2 + (smp.z - z) ** 2;
+          if (d < bd) {
+            bd = d;
+            best = smp;
+          }
+        }
+      }
+    }
+    if (!best) return null;
+    // Distance across the road (perpendicular to it), not to the sample.
+    const dx = x - best.x;
+    const dz = z - best.z;
+    const across = Math.abs(dx * -best.tz + dz * best.tx);
+    const along = Math.abs(dx * best.tx + dz * best.tz);
+    return { d: along > ROAD_STEP ? Math.sqrt(bd) : across, h: best.h, s: best };
   }
 
   /** Which area (biome) a point is in. */
@@ -95,6 +253,8 @@ export class OpenWorld {
         const yaw = rand() * Math.PI * 2;
         const sc = 0.8 + rand() * 0.45;
         if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < 45) continue; // clear start
+        const road = this.nearestRoad(x, z);
+        if (road && road.d < ROAD_HALF + (pick < 0.012 ? 3 : 4.5)) continue; // roads stay clear
         const h = this.height(x, z);
         if (h < WATER + 0.3) continue;
         const b = BIOMES[this.biome(x, z)];
@@ -156,6 +316,18 @@ export class OpenWorld {
 
   /** Ground height in metres (continuous, deterministic). */
   height(x, z) {
+    const base = this.baseHeight(x, z);
+    if (!this.roadSamples) return base;
+    // Roads are cut into the land: flat across, with the ground blending
+    // into the road bed over a few metres either side.
+    const r = this.nearestRoad(x, z);
+    if (!r || r.d > ROAD_HALF + ROAD_BLEND) return base;
+    const t = 1 - smoothstep(ROAD_HALF + 0.5, ROAD_HALF + ROAD_BLEND, r.d);
+    return base + (r.h - base) * t;
+  }
+
+  /** Natural landscape height, before roads. */
+  baseHeight(x, z) {
     const n = this.noise;
     // Rolling lowlands with hills rising out of them (only upward, so the
     // inland stays dry apart from a few ponds).
@@ -196,6 +368,8 @@ export class OpenWorld {
 
   /** Surface type under (x, z): 'water', 'sand', 'grass' or 'rock'. */
   surface(x, z) {
+    const r = this.nearestRoad(x, z);
+    if (r && r.d < ROAD_HALF + 0.3) return 'road';
     const h = this.height(x, z);
     if (h < WATER - 0.4) return 'water';
     if (h < WATER + 1.6) return 'sand';
