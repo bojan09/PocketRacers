@@ -4,6 +4,7 @@
 // mobile browsers require.
 
 import { Gearbox, EngineSampler, ENGINE_PROFILES } from './engine.js';
+import { voiceVariant } from './engineSynth.js';
 
 export class GameAudio {
   constructor() {
@@ -14,10 +15,12 @@ export class GameAudio {
   }
 
   /** Switch the engine sound (vehicle change). */
-  setEngine(id) {
+  setEngine(id, vehicleId = '') {
     this.engineId = ENGINE_PROFILES[id] ? id : 'flat6';
+    this.vehicleId = vehicleId;
     this.profile = ENGINE_PROFILES[this.engineId];
     if (!this.ctx) return;
+    this.postEngine();
     const P = this.profile;
     this.gearbox = new Gearbox(P);
     this.drive.curve = driveCurve(P.drive);
@@ -46,11 +49,44 @@ export class GameAudio {
     this.ready = true;
   }
 
+  /** Tell the engine worklet which engine (and this vehicle's character). */
+  postEngine() {
+    this.engineNode?.port.postMessage({ profile: this.engineId, variant: voiceVariant(this.vehicleId) });
+  }
+
   build() {
     const ac = this.ctx;
     this.master = ac.createGain();
     this.master.gain.value = this.volume;
     this.master.connect(ac.destination);
+
+    // Modelled engine (engineSynth.js) in an AudioWorklet; until it has
+    // loaded, or where worklets are missing, the simple synth below plays.
+    this.engineNode = null;
+    if (ac.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+      ac.audioWorklet
+        .addModule(new URL('./engineWorklet.js', import.meta.url))
+        .then(() => {
+          const node = new AudioWorkletNode(ac, 'pocket-engine', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
+          node.connect(this.master);
+          this.engineNode = node;
+          this.engineParams = ['rpm', 'throttle', 'gain', 'rpmFrac'].reduce((o, k) => ((o[k] = node.parameters.get(k)), o), {});
+          this.postEngine();
+        })
+        .catch(() => {});
+    }
+
+    // Reversing beeper for big vehicles.
+    this.beeper = ac.createOscillator();
+    this.beeper.type = 'square';
+    this.beeper.frequency.value = 1050;
+    this.beepGain = ac.createGain();
+    this.beepGain.gain.value = 0;
+    const beepTone = ac.createBiquadFilter();
+    beepTone.type = 'lowpass';
+    beepTone.frequency.value = 2500;
+    this.beeper.connect(beepTone).connect(this.beepGain).connect(this.master);
+    this.beeper.start();
 
     // Synthesised engine (fallback): firing-rate sawtooth, half-rate square
     // and sub sine, soft-clipped for grit, through an RPM-tracking low-pass.
@@ -159,7 +195,8 @@ export class GameAudio {
     if (!this.ctx) return;
     this.sampler?.silence();
     const t = this.ctx.currentTime;
-    for (const g of [this.engineGain, this.nitroGain, this.skidGain, this.scrapeGain, this.whistleGain]) g.gain.setTargetAtTime(0, t, 0.05);
+    for (const g of [this.engineGain, this.nitroGain, this.skidGain, this.scrapeGain, this.whistleGain, this.beepGain]) g.gain.setTargetAtTime(0, t, 0.05);
+    this.engineParams?.gain.setTargetAtTime(0, t, 0.05);
   }
 
   /** Per-frame update from the player state. */
@@ -183,8 +220,24 @@ export class GameAudio {
     this.whistleGain.gain.setTargetAtTime(P.whistle ? 0.012 + 0.03 * rpmFrac * thr : 0, t, 0.1);
     if (P.whistle) this.whistle.frequency.setTargetAtTime(1800 + rpmFrac * 2600, t, 0.15);
 
+    // Reversing: big vehicles beep (half a second on, half off).
+    const reversing = P.reverseBeep && player.speed < -60;
+    this.beepGain.gain.setTargetAtTime(reversing && t % 1 < 0.5 ? 0.05 : 0, t, 0.01);
+
+    const E = this.engineParams;
     if (this.useSamples) {
       this.sampler.update(rpm, thr, 0.55 * dip);
+      this.engineGain.gain.setTargetAtTime(0, t, 0.05);
+      E?.gain.setTargetAtTime(0, t, 0.05);
+    } else if (E) {
+      E.rpm.setTargetAtTime(rpm, t, 0.02);
+      E.throttle.setTargetAtTime(thr, t, 0.04);
+      E.rpmFrac.setTargetAtTime(Math.max(0, Math.min(1, rpmFrac)), t, 0.02);
+      const gain = 0.6 * (0.85 + 0.15 * thr);
+      if (dip < 1) {
+        E.gain.setValueAtTime(gain * dip, t);
+        E.gain.setTargetAtTime(gain, t + 0.08, 0.05);
+      } else E.gain.setTargetAtTime(gain, t, 0.04);
       this.engineGain.gain.setTargetAtTime(0, t, 0.05);
     } else {
       const f = (rpm / 60) * (P.cyl / 2); // firings per second

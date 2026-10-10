@@ -982,7 +982,7 @@ export const FAMILIES = {
   // ------------------------------------------------------------------- bus
   bus: {
     label: 'Bus',
-    engine: 'diesel',
+    engine: 'bus',
     camera: 2.1,
     handling: { maxSpeed: 9600, accel: 3300, brake: 11000, grip: 7, steerSpeed: 1.75, steerRamp: 3.8, centrifugal: 0.22, nitroAccel: 2.4, nitroTop: 1.4, offroadTop: 0.5 },
     build: (o = {}) => bus(o.style),
@@ -1009,7 +1009,7 @@ export const FAMILIES = {
   // --------------------------------------------------------------- tractor
   tractor: {
     label: 'Tractor',
-    engine: 'diesel',
+    engine: 'tractor',
     camera: 2.0, // far enough back to see the trailer and the tractor
     handling: { maxSpeed: 9400, accel: 4200, brake: 12000, grip: 8.5, steerSpeed: 2.0, centrifugal: 0.24, nitroAccel: 2.2, nitroTop: 1.4, offroadTop: 0.85, offroadGrip: 1, offroadDecel: 4000, jumpBoost: 1.05 },
     build: (o = {}) => {

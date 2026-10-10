@@ -158,6 +158,16 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > relative to an origin that follows the camera in 1000 m steps (game
 > logic stays in exact 64-bit world coordinates), so nothing shimmers
 > hundreds of km out.
+>
+> **Phase 8 — engine sounds:** each engine is modelled rather than buzzed:
+> every cylinder fires a pulse at its real point in the cycle, through the
+> exhaust's resonances and a muffler that opens with revs, plus intake
+> roar, whine (race gearbox, monster supercharger) and diesel knock. Uneven
+> firing gives the V8 its burble and the V-twin bike its beat. Eleven voices
+> (hatch, sports, muscle, race, jeep/SUV, pickup, monster, bike, bus, truck
+> with engine brake, tractor), small per-vehicle differences, and a
+> reversing beeper on buses, trucks and tractors. Runs in an AudioWorklet;
+> the old synth remains as a fallback.
 
 ## Tests
 

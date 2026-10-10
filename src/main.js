@@ -90,7 +90,7 @@ let race = null; // active Race (null in free drive)
 let raceEvent = null;
 let raceAttempt = 0;
 let resultsTimer = 0;
-audio.setEngine(car.engine);
+audio.setEngine(car.engine, car.id);
 
 // ---------------------------------------------------------------- settings
 
@@ -265,7 +265,7 @@ function useVehicle(id) {
   session.setCar(car);
   free?.setCar(car);
   renderer.setVehicle(car);
-  audio.setEngine(car.engine);
+  audio.setEngine(car.engine, car.id);
   $('title-car').textContent = car.name;
   const nc = nitroColour(car.paint).map((v) => Math.round(v * 255));
   controlsEl.style.setProperty('--nitro', `rgb(${nc.join(',')})`);
@@ -304,7 +304,7 @@ async function startEvent(e) {
   car = makeVehicle(v.id, garage.custom(v.id), garage.upgrades(v.id));
   session.setCar(car, false);
   renderer.setVehicle(car);
-  audio.setEngine(car.engine);
+  audio.setEngine(car.engine, car.id);
   session.trafficCount = 0;
   raceEvent = e;
   raceAttempt++;
@@ -993,4 +993,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSe
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, get free() { return free; }, get worldMode() { return worldMode; }, enterWorld, explore, minimap, openMap, closeMap, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, profiles, gate, startEvent, nextEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
+window.__pocketRacers = { session, audio, get free() { return free; }, get worldMode() { return worldMode; }, enterWorld, explore, minimap, openMap, closeMap, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, profiles, gate, startEvent, nextEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };

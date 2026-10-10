@@ -7,7 +7,10 @@ the synthesised engine.
 
 Profiles (see `src/audio/engine.js`): `i4` (hatch), `flat6` (sports), `v8`
 (muscle), `v10` (race), `v6` (jeep, SUV), `v8truck` (pickup), `monster`,
-`diesel` (cargo truck).
+`bike`, `bus`, `tractor`, `diesel` (trucks and rigs).
+
+Without recordings, the modelled engine in `src/audio/engineSynth.js` plays
+(in an AudioWorklet; a simple oscillator synth if worklets are missing).
 
 ```json
 {
