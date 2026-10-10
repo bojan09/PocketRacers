@@ -19,6 +19,12 @@ export const ANIMALS = [
   { id: 'crab', icon: '🦀', map: 'tropical-coast', seg: 220, x: 0.8 },
   { id: 'parrot', icon: '🦜', map: 'tropical-coast', seg: 680, x: 0.8 },
   { id: 'turtle', icon: '🐢', map: 'tropical-coast', seg: 1600, x: -0.8 },
+  { id: 'hedgehog', icon: '🦔', map: 'autumn-woods', seg: 400, x: -0.8 },
+  { id: 'squirrel', icon: '🐿️', map: 'autumn-woods', seg: 1450, x: 0.8 },
+  { id: 'deer', icon: '🦌', map: 'autumn-woods', seg: 2350, x: -0.8 },
+  { id: 'unicorn', icon: '🦄', map: 'candy-land', seg: 450, x: 0.8 },
+  { id: 'teddy', icon: '🧸', map: 'candy-land', seg: 1200, x: -0.8 },
+  { id: 'bee', icon: '🐝', map: 'candy-land', seg: 2100, x: 0.8 },
   // On the island the world decides where each one lives (near its area's
   // landmark); `area` is the kind of place, `model` the 3D animal.
   { id: 'island-bunny', icon: '🐇', map: 'island', area: 'meadow', model: 'bunny' },

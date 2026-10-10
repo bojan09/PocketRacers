@@ -120,6 +120,54 @@ function cone() {
   return m;
 }
 
+function pumpkin() {
+  const m = new MeshBuilder();
+  m.material(0.3, 0.2);
+  const o = C('#f07a1a');
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    m.sphere(Math.cos(a) * 0.14, 0.33, Math.sin(a) * 0.14, 0.26, 0.32, 0.26, k % 2 ? C('#e06a12') : o, { segs: 10, rings: 7 });
+  }
+  m.cylinder(0, 0.7, 0, 0.05, 0.08, 6, 'y', C('#4f7a2a'), C('#4f7a2a'), 0.035);
+  return m;
+}
+
+function donut() {
+  // Pink-iced ring doughnut standing on its edge, sprinkles on top.
+  const m = new MeshBuilder();
+  m.material(0.5, 0);
+  const R = 0.32;
+  const r = 0.15;
+  const P = [];
+  for (let i = 0; i <= 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    const row = [];
+    for (let j = 0; j < 12; j++) {
+      const b = (j / 12) * Math.PI * 2;
+      row.push([(R + r * Math.cos(b)) * Math.cos(a), R + r + (R + r * Math.cos(b)) * Math.sin(a), r * Math.sin(b)]);
+    }
+    P.push(row);
+  }
+  m.grid(P, (i, j) => (j >= 2 && j <= 6 ? C('#ff7ab6') : C('#d89a55')), { wrapJ: true });
+  const bits = ['#ffffff', '#ffd23f', '#5ad1ff', '#4fdc7b'].map(C);
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2;
+    m.box(Math.cos(a) * R, R + r + Math.sin(a) * R, r * 0.95, 0.03, 0.012, 0.012, bits[k % 4]);
+  }
+  return m;
+}
+
+function cupcake() {
+  const m = new MeshBuilder();
+  m.material(0.3, 0.2);
+  m.cylinder(0, 0.22, 0, 0.3, 0.22, 14, 'y', C('#5ad1ff'), C('#5ad1ff'), 0.22);
+  m.material(0.6, 0);
+  m.sphere(0, 0.52, 0, 0.34, 0.24, 0.34, C('#fff0f6'), { segs: 12, rings: 7 });
+  m.sphere(0, 0.72, 0, 0.2, 0.16, 0.2, C('#ffc2dc'), { segs: 10, rings: 6 });
+  m.sphere(0, 0.92, 0, 0.08, 0.08, 0.08, C('#e8343f'), { segs: 8, rings: 5 });
+  return m;
+}
+
 export const PROP_MODELS = {
   hay,
   fence,
@@ -131,4 +179,7 @@ export const PROP_MODELS = {
   bin,
   ball,
   cone,
+  pumpkin,
+  donut,
+  cupcake,
 };

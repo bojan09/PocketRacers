@@ -403,7 +403,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     const n = await page.$$eval('.badge-card', (c) => c.length);
     assert.ok(n >= 20, `${n} badges`);
     assert.equal(await page.$$eval('.badge-card.earned', (c) => c.length), 0);
-    assert.equal(await page.locator('#sticker-book .sticker').count(), 20, 'sticker book has every animal');
+    assert.equal(await page.locator('#sticker-book .sticker').count(), 26, 'sticker book has every animal');
     assert.equal(await page.locator('#sticker-book .sticker.got').count(), 0);
     await page.click('#badges-back');
     await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
@@ -613,7 +613,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
   const { context, page, errors } = await open({ width: 844, height: 390 });
   await check('every map card loads its map and drives', async () => {
     const all = await page.$$eval('.map-card', (c) => c.map((b) => b.dataset.map));
-    assert.deepEqual(all, ['island', 'bigland', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast']);
+    assert.deepEqual(all, ['island', 'bigland', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast', 'autumn-woods', 'candy-land']);
     const ids = all.filter((id) => id !== 'island' && id !== 'bigland'); // race maps (open worlds are checked below)
     for (const id of ids) {
       await drive(page, id);

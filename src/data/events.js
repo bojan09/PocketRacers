@@ -9,10 +9,12 @@ import { mulberry32 } from '../core/util.js';
 export const EVENTS = [
   { id: 'rookie', track: 'sunny-valley', name: 'Rookie Race', mode: 'race', laps: 3, difficulty: 'easy', families: null, need: 0, loaner: 'zippy', blurb: 'Your first race. Finish in the top 3!' },
   { id: 'trial', track: 'sunny-valley', name: 'Valley Time Trial', mode: 'timetrial', laps: 2, difficulty: 'normal', families: null, need: 0, loaner: 'zippy', blurb: 'Just you and the clock. Beat the medal times.', medals: [60, 66, 74] },
+  { id: 'candy', track: 'candy-land', name: 'Sweet Sprint', mode: 'race', laps: 2, difficulty: 'easy', families: null, need: 1, loaner: 'pip', blurb: 'Lollipops, gumdrops and a chocolate river!' },
   { id: 'islands', track: 'tropical-coast', name: 'Island Hop', mode: 'race', laps: 2, difficulty: 'easy', families: null, need: 2, loaner: 'pip', blurb: 'Palm trees, bridges and big jumps by the sea.' },
   { id: 'mud', track: 'desert-canyon', name: 'Dust Devil Cup', mode: 'race', laps: 2, difficulty: 'normal', families: ['jeep', 'suv', 'pickup', 'monster'], need: 3, loaner: 'trailhound', blurb: 'Off-roaders only, through the canyon at sunset.' },
   { id: 'knockout', track: 'tropical-coast', name: 'Beach Knockout', mode: 'elimination', laps: 5, difficulty: 'normal', families: null, need: 5, loaner: 'zippy', blurb: 'Every lap, the last car is out. Stay ahead!' },
   { id: 'frosty', track: 'snowy-peaks', name: 'Frosty Time Trial', mode: 'timetrial', laps: 2, difficulty: 'normal', families: null, need: 6, loaner: 'trailhound', blurb: 'Slippery snow and hairpins. Beat the clock!', medals: [72, 79, 88] },
+  { id: 'autumn', track: 'autumn-woods', name: 'Falling Leaves Race', mode: 'race', laps: 2, difficulty: 'normal', families: null, need: 7, loaner: 'trailhound', blurb: 'Orange forests, a covered bridge and pumpkins.' },
   { id: 'monster', track: 'snowy-peaks', name: 'Monster Mash', mode: 'race', laps: 2, difficulty: 'normal', families: ['monster', 'pickup'], need: 8, loaner: 'basher', blurb: 'Big wheels, big jumps, lots of snow.' },
   { id: 'speed', track: 'night-city', name: 'Speed Kings', mode: 'race', laps: 2, difficulty: 'hard', families: ['race', 'sports', 'muscle'], need: 10, loaner: 'thunder', blurb: 'The fastest cars, racing through the city at night.' },
   { id: 'bigrig', track: 'desert-canyon', name: 'Big Rig Rumble', mode: 'race', laps: 2, difficulty: 'normal', families: ['truck'], need: 12, loaner: 'nordhaul', blurb: 'Trucks only. Heavy, slow to turn, and very loud.' },

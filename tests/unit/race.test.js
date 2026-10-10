@@ -137,7 +137,7 @@ test('career: records best stars and time, cleans bad saves, unlocks by stars', 
 });
 
 test('every event runs on a real map', async () => {
-  const { TRACK_BY_ID } = await import('../../src/data/tracks/index.js');
+  const { TRACK_BY_ID, TRACKS } = await import('../../src/data/tracks/index.js');
   for (const e of EVENTS) assert.ok(TRACK_BY_ID[e.track], `${e.id} track ${e.track}`);
-  assert.equal(new Set(EVENTS.map((e) => e.track)).size, 5, 'all five maps are used');
+  assert.equal(new Set(EVENTS.map((e) => e.track)).size, TRACKS.length, 'every map has a race');
 });

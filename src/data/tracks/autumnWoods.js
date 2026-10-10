@@ -1,0 +1,105 @@
+// Autumn Woods: a winding lane through orange and red forest over rolling
+// hills, leaves drifting down, a covered bridge over a stream, a tunnel
+// through a wooded hill and pumpkin patches by the farm.
+
+export default {
+  id: 'autumn-woods',
+  name: 'Autumn Woods',
+  seed: 1010,
+  segmentLength: 200,
+  roadHalfWidth: 2000,
+  lanes: 3,
+  trafficCount: 6,
+  gantryAt: 4,
+  waterLevel: -5,
+  env: { tufts: 'dry', hills: 38, bumps: 2, rim: 70, snowLine: 999, weather: 'leaves', cloudTint: '#fff0e0', grip: 0.96 },
+
+  points: [
+    { p: [0, 0], y: 0, noBank: true },
+    { p: [0, 170], y: 3 },
+    { p: [30, 300], y: 8 },
+    { p: [120, 390], y: 13 },
+    { p: [250, 410], y: 15, tunnel: true },
+    { p: [370, 360], y: 13 },
+    { p: [420, 250], y: 9 },
+    { p: [390, 140], y: 6 },
+    { p: [300, 80], y: 4, bridge: true, rail: true },
+    { p: [250, -20], y: 3 },
+    { p: [290, -130], y: 5 },
+    { p: [380, -210], y: 8 },
+    { p: [370, -330], y: 10 },
+    { p: [260, -390], y: 8 },
+    { p: [130, -360], y: 5 },
+    { p: [50, -260], y: 2 },
+    { p: [0, -130], y: 0, noBank: true },
+  ],
+
+  palette: {
+    skyTop: '#4f8fd8',
+    skyHorizon: '#ffe8cc',
+    fog: '#f5e2c8',
+    fogNear: 110,
+    fogFar: 520,
+    sunColor: '#ffe2b0',
+    skyAmbient: '#ffe0bd',
+    groundAmbient: '#a8865a',
+    sunDir: [-0.45, 0.6, 0.45],
+    grass: '#b0a24a',
+    grassAlt: '#a3913e',
+    dryGrass: '#c79a46',
+    hills: '#a8913f',
+    rockFace: '#8a7d6c',
+    mountains: '#b07a4a',
+    snow: '#ffffff',
+    water: '#5aa0c8',
+    road: '#5d6170',
+    roadAlt: '#626676',
+    shoulder: '#c9b48a',
+    lane: '#ffffff',
+    rumbleA: '#ffffff',
+    rumbleB: '#e8742a',
+    rail: '#8a5a32',
+    railPost: '#6f4527',
+    tunnel: '#7d6a55',
+    tunnelLight: '#ffd99a',
+  },
+
+  features: {
+    ramps: [
+      { seg: 130, x: 0.36, width: 0.62, length: 7, height: 1.5 },
+      { seg: 950, x: -0.36, width: 0.62, length: 7, height: 1.6, trick: 'barrel', roll: -1 },
+      { seg: 2000, x: 0, width: 0.72, length: 10, height: 2.4, trick: 'mega' },
+    ],
+    boosts: [
+      { seg: 300, x: 0, width: 0.6 },
+      { seg: 900, x: 0.36, width: 0.5 },
+      { seg: 1500, x: -0.36, width: 0.5 },
+      { seg: 2150, x: 0.4, width: 0.5 },
+    ],
+    stars: [
+      { seg: 420, count: 7, every: 7, x: 0.5 },
+      { seg: 980, count: 5, every: 6, x: -0.3 },
+      { seg: 1560, count: 6, every: 7, x: 0.4 },
+      { seg: 2060, count: 5, every: 6, x: -0.4 },
+    ],
+    cones: [
+      { seg: 600, count: 5, every: 9, x: [0.45, -0.45] },
+      { seg: 1180, count: 5, every: 0, x: [-0.8, -0.4, 0, 0.4, 0.8] },
+      { seg: 1850, count: 5, every: 9, x: [0.5, -0.5] },
+    ],
+  },
+
+  scenery: [
+    { kinds: ['autumnTree', 'autumnTree', 'pine', 'autumnTree', 'bush'], every: 9, offset: [1.45, 2.9], side: 'both', chance: 0.9, skipRail: true },
+    { kinds: ['autumnTree', 'autumnTree', 'pine'], every: 5, offset: [3.2, 10], side: 'both', chance: 0.95, solid: false },
+    { kinds: ['pumpkins'], every: 70, offset: [1.6, 2.4], side: 'both', chance: 0.8, skipRail: true },
+    {
+      at: [
+        { seg: 220, kind: 'barn', offset: -6.2, yaw: 0.3 },
+        { seg: 260, kind: 'house', offset: -5.4, yaw: 0.5 },
+        { seg: 1640, kind: 'house', offset: 5.6, yaw: 2.7 },
+        { seg: 1700, kind: 'windmill', offset: 7.5 },
+      ],
+    },
+  ],
+};

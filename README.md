@@ -168,6 +168,13 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > with engine brake, tractor), small per-vehicle differences, and a
 > reversing beeper on buses, trucks and tractors. Runs in an AudioWorklet;
 > the old synth remains as a fallback.
+>
+> **Phase 9A — two new maps:** 🍂 *Autumn Woods* (orange and red forest,
+> falling leaves, pumpkin patches, a tunnel and a covered bridge) and
+> 🍭 *Candy Land* (lollipops, candy canes, gumdrops, gingerbread houses and
+> bridges over a chocolate river). Each has its own smashable props
+> (pumpkins; doughnuts and cupcakes), three new sticker animals (hedgehog,
+> squirrel, fawn; unicorn, teddy, bee) and a career race.
 
 ## Tests
 

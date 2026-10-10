@@ -352,6 +352,116 @@ function snowman(rand) {
   return m;
 }
 
+// -------------------------------------------------------------- autumn
+
+/** Broad tree in autumn colours: orange, red or gold, a few leaves fallen. */
+function autumnTree(rand) {
+  const m = new MeshBuilder();
+  trunk(m, 2.8, 0.3, rand);
+  m.material(0.04, 0.55);
+  const pick = ['#e8742a', '#d9452b', '#f2b134', '#c8562d', '#eb9a2c'];
+  const g = vary(C(pick[Math.floor(rand() * pick.length)]), rand, 0.15);
+  const blobs = [
+    [0, 4.2, 0, 2.3, 1.9],
+    [1.3, 3.5, 0.6, 1.5, 1.3],
+    [-1.2, 3.7, -0.5, 1.6, 1.4],
+    [0.1, 5.2, -0.2, 1.5, 1.3],
+  ];
+  for (const [x, y, z, r, ry] of blobs) m.sphere(x, y, z, r, ry, r, g, { segs: 9, rings: 6, rand, jitter: 0.24, shadeFn: (t) => shadeBy(g, 1 - t, 0.6, 1.15) });
+  // A ring of fallen leaves round the trunk.
+  m.material(0, 0.5);
+  m.sphere(0, 0.02, 0, 2.4, 0.06, 2.4, shadeBy(g, 0.8), { segs: 10, rings: 3, rand, jitter: 0.2 });
+  return m;
+}
+
+/** A few pumpkins on a straw patch. */
+function pumpkins(rand) {
+  const m = new MeshBuilder().material(0.25, 0.3);
+  m.sphere(0, 0.03, 0, 1.3, 0.05, 1.0, C('#d9b45a'), { segs: 10, rings: 3 });
+  const n = 2 + Math.floor(rand() * 2);
+  for (let i = 0; i < n; i++) {
+    const x = (i - (n - 1) / 2) * 0.8 + (rand() - 0.5) * 0.2;
+    const z = (rand() - 0.5) * 0.6;
+    const r = 0.32 + rand() * 0.14;
+    const o = vary(C('#f07a1a'), rand, 0.1);
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      m.sphere(x + Math.cos(a) * r * 0.35, r * 0.85, z + Math.sin(a) * r * 0.35, r * 0.6, r * 0.82, r * 0.6, shadeBy(o, k % 2 ? 0.9 : 1.05), { segs: 8, rings: 6 });
+    }
+    m.cylinder(x, r * 1.75, z, 0.05, 0.12, 6, 'y', C('#4f7a2a'), C('#4f7a2a'), 0.035);
+  }
+  return m;
+}
+
+// -------------------------------------------------------------- candy
+
+const CANDY = ['#ff5fa2', '#ffd23f', '#5ad1ff', '#9b6bff', '#4fdc7b', '#ff8c42'];
+
+/** Giant swirl lollipop on a white stick. */
+function lollipop(rand) {
+  const m = new MeshBuilder();
+  const h = 4.2 + rand() * 1.8;
+  m.material(0.4, 0);
+  m.cylinder(0, h / 2, 0, 0.14, h / 2, 8, 'y', C('#fbf7f2'), C('#fbf7f2'));
+  const a = C(CANDY[Math.floor(rand() * CANDY.length)]);
+  const b = C('#ffffff');
+  const R = 1.3 + rand() * 0.4;
+  m.material(0.85, 0);
+  // Swirl: rings of alternating colour on a flat disc facing the road.
+  const rings = 6;
+  for (let i = rings; i >= 1; i--) m.cylinder(0, h + R * 0.9, 0, (R * i) / rings, 0.18 + (rings - i) * 0.002, 22, 'z', i % 2 ? a : b, i % 2 ? a : b);
+  return m;
+}
+
+/** Red and white striped candy cane. */
+function candyCane(rand) {
+  const m = new MeshBuilder().material(0.8, 0);
+  const red = C(rand() < 0.75 ? '#e8343f' : '#2fbf71');
+  const white = C('#fdfbf7');
+  const h = 3.2 + rand() * 1.2;
+  const n = 10;
+  for (let i = 0; i < n; i++) m.cylinder(0, (h * (i + 0.5)) / n, 0, 0.22, h / n / 2 + 0.01, 10, 'y', i % 2 ? red : white, i % 2 ? red : white);
+  // The hook.
+  const hr = 0.7;
+  for (let k = 0; k <= 8; k++) {
+    const t = (k / 8) * Math.PI;
+    m.sphere(hr - Math.cos(t) * hr, h + Math.sin(t) * hr, 0, 0.24, 0.24, 0.24, k % 2 ? red : white, { segs: 8, rings: 6 });
+  }
+  return m;
+}
+
+/** Sugary gumdrops in a cluster (soft: drive through). */
+function gumdrop(rand) {
+  const m = new MeshBuilder().material(0.9, 0);
+  const n = 2 + Math.floor(rand() * 3);
+  for (let i = 0; i < n; i++) {
+    const c = C(CANDY[Math.floor(rand() * CANDY.length)]);
+    const r = 0.45 + rand() * 0.35;
+    const x = (rand() - 0.5) * 1.8;
+    const z = (rand() - 0.5) * 1.2;
+    m.sphere(x, 0, z, r, r * 1.3, r, c, { segs: 10, rings: 7 });
+  }
+  return m;
+}
+
+/** Gingerbread house with icing on the roof and sweets on the walls. */
+function gingerHouse(rand) {
+  const m = new MeshBuilder();
+  const ginger = C('#b8763d');
+  gablePrism(m, 6.5, 5.5, 3, 2.4, ginger, C('#fdf6ee'));
+  m.material(0.6, 0);
+  m.box(0, 1.0, 2.77, 0.55, 1.0, 0.05, C('#ff5fa2'));
+  for (const x of [-2, 2]) {
+    m.box(x, 1.9, 2.76, 0.55, 0.5, 0.04, C('#fff3c4'));
+    m.box(x, 1.9, 2.79, 0.06, 0.5, 0.03, C('#ff5fa2'));
+  }
+  // Sweets along the walls.
+  for (let i = 0; i < 7; i++) m.sphere(-3 + i, 0.25, 2.85, 0.22, 0.22, 0.12, C(CANDY[i % CANDY.length]), { segs: 8, rings: 5 });
+  m.material(0.9, 0);
+  m.cylinder(1.8, 5.6, -0.8, 0.3, 0.9, 8, 'y', C('#e8343f'), C('#ffffff'));
+  return m;
+}
+
 // -------------------------------------------------------------- city
 
 const BUILDING_COLOURS = ['#3a4466', '#4a3f63', '#2f4f5f', '#5b4a3a', '#3d3d4f', '#2a5a4a'];
@@ -570,4 +680,10 @@ export const MODEL_BUILDERS = {
   umbrella,
   castle,
   lighthouse,
+  autumnTree,
+  pumpkins,
+  lollipop,
+  candyCane,
+  gumdrop,
+  gingerHouse,
 };

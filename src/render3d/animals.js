@@ -310,4 +310,144 @@ function turtle() {
   return m;
 }
 
-export const ANIMAL_MODELS = { bunny, pig, duck, fox, camel, lizard, polarbear, owl, penguin, cat, dog, raccoon, crab, parrot, turtle };
+// --- Autumn Woods ------------------------------------------------------
+
+function hedgehog() {
+  const m = new MeshBuilder();
+  m.material(...FUR);
+  const face = C('#e9c9a0');
+  const spines = C('#6b4a32');
+  // Round spiky back: a body covered in little cones.
+  ball(m, 0, 0.42, -0.05, 0.5, 0.42, 0.55, spines);
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2 * 3.7;
+    const t = (i % 9) / 9;
+    const y = 0.45 + Math.cos(t * 2.4) * 0.38;
+    const r = 0.48 * Math.sin(0.3 + t * 2.4);
+    m.cylinder(Math.cos(a) * r, y, Math.sin(a) * r * 1.1 - 0.12, 0.07, 0.11, 6, 'y', shade(spines, 0.85), spines, 0);
+  }
+  ball(m, 0, 0.5, 0.42, 0.3, 0.28, 0.3, face);
+  ball(m, 0, 0.44, 0.74, 0.1, 0.08, 0.12, face);
+  ball(m, 0, 0.46, 0.85, 0.05, 0.045, 0.035, BLACK);
+  ball(m, 0.2, 0.75, 0.42, 0.07, 0.07, 0.04, face, true);
+  ball(m, 0.18, 0.06, 0.4, 0.08, 0.05, 0.1, face, true);
+  eyes(m, 0.12, 0.62, 0.62, 0.065);
+  return m;
+}
+
+function squirrel() {
+  const m = new MeshBuilder();
+  const fur = C('#c8602a');
+  sitter(m, { fur, belly: C('#f6e2c4'), head: 0.34, headY: 1.02 });
+  cone(m, 0.18, 1.38, 0, 0.08, 0.2, fur, true);
+  ball(m, 0, 0.92, 0.3, 0.11, 0.08, 0.09, C('#f6e2c4'));
+  ball(m, 0, 0.96, 0.4, 0.04, 0.035, 0.03, BLACK);
+  // Huge curly tail up the back.
+  for (let i = 0; i < 7; i++) {
+    const t = i / 6;
+    ball(m, 0, 0.35 + t * 1.2 + Math.sin(t * 3) * 0.1, -0.42 - Math.sin(t * Math.PI) * 0.35 + t * 0.15, 0.2 + Math.sin(t * Math.PI) * 0.06, 0.2, 0.2, fur);
+  }
+  // An acorn in its paws.
+  ball(m, 0, 0.55, 0.36, 0.09, 0.1, 0.09, C('#9a6b2f'));
+  ball(m, 0, 0.64, 0.36, 0.1, 0.05, 0.1, C('#5b3d1d'));
+  eyes(m, 0.13, 1.1, 0.31, 0.075);
+  return m;
+}
+
+function deer() {
+  const m = new MeshBuilder();
+  m.material(...FUR);
+  const fur = C('#b5773f');
+  const pale = C('#f3e3cc');
+  for (const [x, z] of [
+    [0.18, 0.3],
+    [0.18, -0.3],
+  ]) {
+    m.cylinder(x, 0.45, z, 0.06, 0.45, 8, 'y', fur, C('#3a2a1c'), 0.05);
+    m.cylinder(-x, 0.45, z, 0.06, 0.45, 8, 'y', fur, C('#3a2a1c'), 0.05);
+  }
+  ball(m, 0, 1.0, 0, 0.3, 0.28, 0.52, fur);
+  ball(m, 0, 0.95, 0.05, 0.22, 0.2, 0.4, pale);
+  // White spots (a fawn).
+  for (const [x, z] of [[0.2, 0.1], [0.22, -0.15], [0.18, -0.35], [0.2, 0.3]]) ball(m, x, 1.12, z, 0.05, 0.04, 0.05, WHITE, true);
+  ball(m, 0, 1.3, 0.42, 0.13, 0.25, 0.13, fur);
+  ball(m, 0, 1.62, 0.55, 0.2, 0.2, 0.22, fur);
+  ball(m, 0, 1.55, 0.78, 0.1, 0.08, 0.1, pale);
+  ball(m, 0, 1.58, 0.87, 0.04, 0.035, 0.03, BLACK);
+  ball(m, 0.24, 1.78, 0.5, 0.06, 0.14, 0.04, fur, true);
+  ball(m, 0, 1.0, -0.52, 0.07, 0.09, 0.06, WHITE);
+  eyes(m, 0.11, 1.7, 0.7, 0.07);
+  return m;
+}
+
+// --- Candy Land --------------------------------------------------------
+
+function unicorn() {
+  const m = new MeshBuilder();
+  m.material(...FUR);
+  const body = C('#fdf6ff');
+  const mane = [C('#ff7ab6'), C('#ffd23f'), C('#5ad1ff'), C('#9b6bff')];
+  for (const [x, z] of [
+    [0.2, 0.32],
+    [0.2, -0.32],
+  ]) {
+    m.cylinder(x, 0.42, z, 0.08, 0.42, 8, 'y', body, C('#c9a7ff'), 0.08);
+    m.cylinder(-x, 0.42, z, 0.08, 0.42, 8, 'y', body, C('#c9a7ff'), 0.08);
+  }
+  ball(m, 0, 0.98, 0, 0.34, 0.3, 0.55, body);
+  ball(m, 0, 1.32, 0.42, 0.15, 0.26, 0.15, body);
+  ball(m, 0, 1.62, 0.58, 0.22, 0.22, 0.28, body);
+  ball(m, 0, 1.55, 0.83, 0.13, 0.11, 0.1, C('#ffd9ec'));
+  // Golden horn, rainbow mane and tail.
+  m.material(...SHINY);
+  m.cylinder(0, 2.0, 0.62, 0.07, 0.22, 10, 'y', C('#ffd23f'), C('#ffd23f'), 0);
+  m.material(...FUR);
+  mane.forEach((c, i) => ball(m, 0, 1.8 - i * 0.16, 0.38 - i * 0.06, 0.09, 0.12, 0.09, c));
+  mane.forEach((c, i) => ball(m, 0, 1.0 - i * 0.12, -0.6 - i * 0.05, 0.1, 0.12, 0.1, c));
+  ball(m, 0.18, 1.86, 0.5, 0.05, 0.1, 0.04, body, true);
+  eyes(m, 0.12, 1.7, 0.74, 0.075);
+  return m;
+}
+
+function teddy() {
+  const m = new MeshBuilder();
+  const fur = C('#b07a48');
+  sitter(m, { fur, belly: C('#e8c493') });
+  ball(m, 0.3, 1.45, 0, 0.13, 0.13, 0.08, fur, true);
+  ball(m, 0.3, 1.45, 0.04, 0.07, 0.07, 0.05, C('#e8c493'), true);
+  ball(m, 0, 1.0, 0.34, 0.15, 0.11, 0.12, C('#e8c493'));
+  ball(m, 0, 1.04, 0.46, 0.06, 0.045, 0.035, BLACK);
+  // A red bow tie.
+  ball(m, 0.1, 0.78, 0.3, 0.09, 0.07, 0.04, C('#e8343f'), true);
+  ball(m, 0, 0.78, 0.33, 0.04, 0.04, 0.04, C('#e8343f'));
+  eyes(m, 0.14, 1.2, 0.35, 0.07);
+  return m;
+}
+
+function bee() {
+  const m = new MeshBuilder();
+  m.material(...FUR);
+  const yellow = C('#ffd23f');
+  const black = C('#2a2a33');
+  // Hovering a little off the ground on a flower.
+  ball(m, 0, 0.15, 0, 0.5, 0.15, 0.5, C('#4fdc7b'));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    ball(m, Math.cos(a) * 0.32, 0.32, Math.sin(a) * 0.32, 0.17, 0.06, 0.17, C('#ff7ab6'));
+  }
+  ball(m, 0, 0.36, 0, 0.12, 0.08, 0.12, yellow);
+  for (let i = 0; i < 5; i++) ball(m, 0, 1.0, -0.15 + i * 0.13 - 0.2, 0.36 - Math.abs(i - 2) * 0.05, 0.36 - Math.abs(i - 2) * 0.05, 0.08, i % 2 ? black : yellow);
+  ball(m, 0, 1.05, 0.38, 0.3, 0.3, 0.28, yellow);
+  m.material(...SHINY);
+  ball(m, 0.38, 1.38, -0.15, 0.32, 0.18, 0.06, C('#dff4ff'), true);
+  m.material(...FUR);
+  m.cylinder(0.12, 1.42, 0.45, 0.02, 0.14, 6, 'y', black, black, 0.02);
+  m.cylinder(-0.12, 1.42, 0.45, 0.02, 0.14, 6, 'y', black, black, 0.02);
+  ball(m, 0.12, 1.56, 0.45, 0.05, 0.05, 0.05, black, true);
+  eyes(m, 0.12, 1.12, 0.6, 0.08);
+  return m;
+}
+
+const shade = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+
+export const ANIMAL_MODELS = { bunny, pig, duck, fox, camel, lizard, polarbear, owl, penguin, cat, dog, raccoon, crab, parrot, turtle, hedgehog, squirrel, deer, unicorn, teddy, bee };

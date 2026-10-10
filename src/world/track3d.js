@@ -40,6 +40,12 @@ export const OBJECT_KINDS = {
   palm: { w: 600, solid: 0.3 },
   hut: { w: 2600, solid: 0 },
   umbrella: { w: 400, solid: 0 },
+  autumnTree: { w: 1100, solid: 0.3 },
+  pumpkins: { w: 700, solid: 0 },
+  lollipop: { w: 700, solid: 0.25 },
+  candyCane: { w: 450, solid: 0.6 },
+  gumdrop: { w: 700, solid: 0 },
+  gingerHouse: { w: 2600, solid: 0 },
 };
 
 // --- spline ----------------------------------------------------------------
