@@ -111,7 +111,13 @@ test('hidden animals: three per map, on the road edge, clear of ramps', () => {
       for (const r of def.features.ramps) assert.ok(Math.abs(a.seg - r.seg) > 40, `${a.id} away from ramp at ${r.seg}`);
     }
   }
-  assert.equal(ids.size, ANIMALS.length);
+  assert.equal(ids.size, ANIMALS.filter((a) => a.map !== 'island').length);
+  // Island animals reuse a 3D model and have a kind of place to live.
+  for (const a of ANIMALS.filter((x) => x.map === 'island')) {
+    assert.ok(!ids.has(a.id), `${a.id} unique`);
+    assert.ok(typeof ANIMAL_MODELS[a.model] === 'function', `${a.id} has a model`);
+    assert.ok(a.area, `${a.id} has an area`);
+  }
 });
 
 /** Drive the player straight past an animal at its side of the road. */

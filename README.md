@@ -116,6 +116,13 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > blending into the road bed, raised where they cross water), with edge and
 > centre lines. Roads are the fastest surface and stay clear of scenery; the
 > drive starts on one.
+>
+> **Phase 7D — things to find:** a stunt park of six ramps beside the start,
+> kicker ramps along the ring road, a castle on a meadow hilltop, a
+> lighthouse with a cottage on the coast and windmills near the start. Five
+> island animals (bunny, owl, camel, penguin, crab) hide in their own areas;
+> driving up to one says hello and the first visit adds a sticker (the
+> sticker book has a new Island row). Honking makes nearby animals hop.
 
 ## Tests
 

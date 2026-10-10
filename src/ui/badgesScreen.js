@@ -60,7 +60,7 @@ export class BadgesScreen {
   renderStickers() {
     const book = $('sticker-book');
     book.textContent = '';
-    for (const t of TRACKS) {
+    for (const t of [{ id: 'island', name: 'Island' }, ...TRACKS]) {
       const art = TRACK_ART[t.id];
       const row = document.createElement('div');
       row.className = 'sticker-row';

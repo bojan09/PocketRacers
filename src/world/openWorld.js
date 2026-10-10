@@ -11,6 +11,7 @@ import { valueNoise } from '../render3d/terrain.js';
 import { mulberry32 } from '../core/util.js';
 import { OBJECT_KINDS, UNITS_PER_METRE } from './track3d.js';
 import { PROP_SIZE } from '../data/props.js';
+import { ANIMALS } from '../data/animals.js';
 
 export const CHUNK = 128; // metres per chunk side
 export const CELL = 4; // metres between height samples
@@ -97,7 +98,120 @@ export class OpenWorld {
     this.noise3 = valueNoise(seed * 3 + 101);
     this.spawn = { x: 0, z: 0, yaw: 0 };
     this.objectCache = new Map();
+    this.ramps = [];
+    this.landmarks = [];
+    this.animals = [];
     this.buildRoads();
+    this.buildFeatures();
+  }
+
+  /**
+   * Things to find: a stunt park of ramps beside the start, kicker ramps
+   * along the ring road, a castle on a meadow hilltop, a lighthouse on the
+   * coast, windmills near the start, and the island's hidden animals.
+   */
+  buildFeatures() {
+    const sp = this.spawn;
+    const fx = Math.sin(sp.yaw);
+    const fz = -Math.cos(sp.yaw);
+    const rx = Math.cos(sp.yaw);
+    const rz = Math.sin(sp.yaw);
+    const clearOfRoads = (x, z, d) => {
+      const r = this.nearestRoad(x, z);
+      return !r || r.d > d;
+    };
+    // Stunt park: a field of ramps to the side of the first road.
+    let side = 1;
+    if (!clearOfRoads(sp.x + rx * 110, sp.z + rz * 110, 45)) side = -1;
+    const px = sp.x + rx * 110 * side + fx * 40;
+    const pz = sp.z + rz * 110 * side + fz * 40;
+    for (const [a, b, len, w, h] of [
+      [0, 0, 12, 6, 3.2],
+      [-22, 14, 9, 5, 2.2],
+      [22, 14, 9, 5, 2.2],
+      [-14, -26, 7, 4, 1.5],
+      [14, -26, 7, 4, 1.5],
+      [0, 38, 14, 7, 4],
+    ])
+      this.ramps.push({ x: px + rx * a + fx * b, z: pz + rz * a + fz * b, yaw: sp.yaw, len, w, h });
+    this.stuntPark = { x: px, z: pz };
+    // Kickers on the ring road (on one lane, so the other stays smooth).
+    const ring = this.roads[0].samples;
+    for (let k = 0; k < 7; k++) {
+      const smp = ring[Math.floor(((k + 0.5) / 7) * ring.length)];
+      const yaw = Math.atan2(smp.tx, -smp.tz);
+      this.ramps.push({ x: smp.x - smp.tz * 2.1, z: smp.z + smp.tx * 2.1, yaw, len: 7, w: 3.4, h: 1.6, road: true });
+    }
+    // Castle: the highest gentle meadow spot a fair way from the start.
+    let best = null;
+    for (let z = -900; z <= 900; z += 40) {
+      for (let x = -900; x <= 900; x += 40) {
+        const d = Math.hypot(x - sp.x, z - sp.z);
+        if (d < 300 || d > 850 || this.biome(x, z) !== 'meadow' || !clearOfRoads(x, z, 40) || this.slope(x, z) > 0.2) continue;
+        const h = this.baseHeight(x, z);
+        if (!best || h > best.h) best = { x, z, h };
+      }
+    }
+    if (best) this.landmarks.push({ kind: 'castle', x: best.x, z: best.z, yaw: Math.atan2(sp.x - best.x, -(sp.z - best.z)), r: 13 });
+    // Lighthouse: on the coast, just inland, clear of roads.
+    for (let a = 2.3; a < 2.3 + Math.PI * 2; a += 0.07) {
+      let r = this.radius * 1.3;
+      while (r > 200 && this.baseHeight(Math.cos(a) * r, Math.sin(a) * r) < WATER + 2) r -= 6;
+      const x = Math.cos(a) * (r - 8);
+      const z = Math.sin(a) * (r - 8);
+      if (clearOfRoads(x, z, 40) && this.slope(x, z) < 0.3) {
+        this.landmarks.push({ kind: 'lighthouse', x, z, yaw: a + Math.PI / 2, r: 3.6 });
+        break;
+      }
+    }
+    // Windmills on the other side of the first road.
+    for (let k = 0; k < 3; k++) {
+      const x = sp.x - rx * 75 * side + fx * (60 + k * 45);
+      const z = sp.z - rz * 75 * side + fz * (60 + k * 45);
+      if (clearOfRoads(x, z, 15)) this.landmarks.push({ kind: 'windmill', x, z, yaw: sp.yaw + Math.PI, r: 2.2 });
+    }
+    // Hidden animals: one in each kind of place, the nearest good spot to
+    // the start (the meadow one by the windmills, the crab by the lighthouse).
+    const lh = this.landmarks.find((l) => l.kind === 'lighthouse');
+    const anchor = { meadow: { x: sp.x - rx * 60 * side + fx * 160, z: sp.z - rz * 60 * side + fz * 160 }, beach: lh || sp };
+    for (const a of ANIMALS.filter((x) => x.map === 'island')) {
+      const from = anchor[a.area] || sp;
+      let spot = null;
+      for (let ring2 = 0; ring2 < 60 && !spot; ring2++) {
+        const r = ring2 * 25 + (a.area === 'meadow' || a.area === 'beach' ? 0 : 200);
+        for (let t = 0; t < 24 && !spot; t++) {
+          const ang = (t / 24) * Math.PI * 2 + ring2;
+          const x = from.x + Math.cos(ang) * r;
+          const z = from.z + Math.sin(ang) * r;
+          const h = this.baseHeight(x, z);
+          if (h < WATER + 0.5 || this.biome(x, z) !== a.area || this.slope(x, z) > 0.45 || !clearOfRoads(x, z, 10)) continue;
+          spot = { x, z };
+        }
+      }
+      if (spot) this.animals.push({ ...a, x: spot.x, z: spot.z, yaw: Math.atan2(sp.x - spot.x, -(sp.z - spot.z)) });
+    }
+  }
+
+  /** Extra ground height from ramps at (x, z). */
+  rampAt(x, z) {
+    for (const r of this.ramps) {
+      const dx = x - r.x;
+      const dz = z - r.z;
+      if (Math.abs(dx) > r.len && Math.abs(dz) > r.len) continue;
+      const u = dx * Math.sin(r.yaw) - dz * Math.cos(r.yaw) + r.len / 2;
+      const v = dx * Math.cos(r.yaw) + dz * Math.sin(r.yaw);
+      if (u >= 0 && u <= r.len && Math.abs(v) <= r.w / 2) return r.h * Math.pow(u / r.len, 1.3);
+    }
+    return 0;
+  }
+
+  /** Whether (x, z) is within `pad` metres of a ramp, landmark or animal. */
+  nearFeature(x, z, pad) {
+    for (const r of this.ramps) if (Math.hypot(x - r.x, z - r.z) < r.len / 2 + pad) return true;
+    for (const l of this.landmarks) if (Math.hypot(x - l.x, z - l.z) < l.r + pad) return true;
+    for (const a of this.animals) if (Math.hypot(x - a.x, z - a.z) < pad + 2) return true;
+    if (this.stuntPark && Math.hypot(x - this.stuntPark.x, z - this.stuntPark.z) < 55) return true;
+    return false;
   }
 
   /**
@@ -255,6 +369,7 @@ export class OpenWorld {
         if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < 45) continue; // clear start
         const road = this.nearestRoad(x, z);
         if (road && road.d < ROAD_HALF + (pick < 0.012 ? 3 : 4.5)) continue; // roads stay clear
+        if (this.nearFeature(x, z, 8)) continue;
         const h = this.height(x, z);
         if (h < WATER + 0.3) continue;
         const b = BIOMES[this.biome(x, z)];
@@ -286,6 +401,9 @@ export class OpenWorld {
         const r = def && def.solid ? (def.w * def.solid * scale) / 2 / UNITS_PER_METRE : 0;
         out.push({ id: `${key}:${id++}`, kind, x, z, y: this.ground(x, z), yaw, scale, r: kind === 'house' || kind === 'barn' ? 4 : kind === 'hut' ? 2.5 : r, prop: false });
       }
+    }
+    for (const l of this.landmarks) {
+      if (Math.floor(l.x / CHUNK) === cx && Math.floor(l.z / CHUNK) === cz) out.push({ id: `${key}:${l.kind}`, kind: l.kind, x: l.x, z: l.z, y: this.height(l.x, l.z), yaw: l.yaw, scale: 1, r: l.r, prop: false, landmark: true });
     }
     if (this.objectCache.size > 400) this.objectCache.delete(this.objectCache.keys().next().value);
     this.objectCache.set(key, out);
@@ -358,12 +476,13 @@ export class OpenWorld {
     const z0 = j * CELL;
     const h00 = this.height(x0, z0);
     const h11 = this.height(x0 + CELL, z0 + CELL);
+    const ramp = this.ramps.length ? this.rampAt(x, z) : 0;
     if (u >= v) {
       const h10 = this.height(x0 + CELL, z0);
-      return h00 + (h10 - h00) * u + (h11 - h10) * v;
+      return h00 + (h10 - h00) * u + (h11 - h10) * v + ramp;
     }
     const h01 = this.height(x0, z0 + CELL);
-    return h00 + (h11 - h01) * u + (h01 - h00) * v;
+    return h00 + (h11 - h01) * u + (h01 - h00) * v + ramp;
   }
 
   /** Surface type under (x, z): 'water', 'sand', 'grass' or 'rock'. */

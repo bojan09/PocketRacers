@@ -1,4 +1,4 @@
-// Hidden animals: three on every map, waiting at the side of the road (some
+// Hidden animals: three on every race map and five on the island, waiting at the side of the road (some
 // in tunnels or on bridges). Driving past one says hello; the first time a
 // player finds it, it goes into their sticker book. `seg` is the track
 // segment, `x` the lateral position in road half-widths.
@@ -19,6 +19,13 @@ export const ANIMALS = [
   { id: 'crab', icon: '🦀', map: 'tropical-coast', seg: 220, x: 0.8 },
   { id: 'parrot', icon: '🦜', map: 'tropical-coast', seg: 680, x: 0.8 },
   { id: 'turtle', icon: '🐢', map: 'tropical-coast', seg: 1600, x: -0.8 },
+  // On the island the world decides where each one lives (near its area's
+  // landmark); `area` is the kind of place, `model` the 3D animal.
+  { id: 'island-bunny', icon: '🐇', map: 'island', area: 'meadow', model: 'bunny' },
+  { id: 'island-owl', icon: '🦉', map: 'island', area: 'forest', model: 'owl' },
+  { id: 'island-camel', icon: '🐪', map: 'island', area: 'desert', model: 'camel' },
+  { id: 'island-penguin', icon: '🐧', map: 'island', area: 'snow', model: 'penguin' },
+  { id: 'island-crab', icon: '🦀', map: 'island', area: 'beach', model: 'crab' },
 ];
 
 export const ANIMAL_BY_ID = Object.fromEntries(ANIMALS.map((a) => [a.id, a]));

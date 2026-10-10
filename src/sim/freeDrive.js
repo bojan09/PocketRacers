@@ -12,6 +12,7 @@ import { WATER } from '../world/openWorld.js';
 import { FunSystem } from './fun.js';
 import { NITRO_DRAIN, SPIN_RATE, SUPER_TIME, ASSIST } from './session.js';
 import { PROP_POINTS } from '../data/props.js';
+import { ANIMAL_POINTS } from '../data/animals.js';
 
 const MPU = 1 / UNITS_PER_METRE;
 const MAX_EVENTS = 32;
@@ -111,6 +112,8 @@ export class FreeSession {
     this.fun.reset();
     this.knocked.clear();
     this.rand = mulberry32(7);
+    this.met = new Set(); // animals greeted (until driven away from)
+    this.animalHop = {};
     this.stuck = 0;
     this.hitCooldown = 0;
   }
@@ -120,6 +123,9 @@ export class FreeSession {
   }
 
   honk() {
+    // Animals nearby jump in surprise.
+    const p = this.player;
+    for (const a of this.world.animals) if (Math.hypot(p.x - a.x, p.z - a.z) < 70) this.animalHop[a.id] = this.time;
     this.emit({ type: 'honk' });
     return true;
   }
@@ -277,6 +283,7 @@ export class FreeSession {
       p.bank += (bank - p.bank) * Math.min(1, dt * 12);
     }
     this.collide(v, nfx, nfz);
+    this.meetAnimals();
     if (this.assist) this.watchStuck(input, dt);
     p.lapTime += dt;
     this.fun.step(dt);
@@ -320,6 +327,25 @@ export class FreeSession {
       if (into > 0.5) p.speed = -p.speed * 0.2;
       else p.speed *= 0.9;
       p.latV += (nx * Math.cos(p.yaw) + nz * Math.sin(p.yaw)) * 2;
+    }
+  }
+
+  /** Hidden animals: hello when driving up to one; a new sticker the first time. */
+  meetAnimals() {
+    const p = this.player;
+    for (const a of this.world.animals) {
+      const d = Math.hypot(p.x - a.x, p.z - a.z);
+      if (d > 30) this.met.delete(a.id);
+      if (d > 7 || this.met.has(a.id)) continue;
+      this.met.add(a.id);
+      this.animalHop[a.id] = this.time;
+      const first = !this.fun.known.has(a.id);
+      this.fun.known.add(a.id);
+      this.emit({ type: 'animal', id: a.id, icon: a.icon, first });
+      if (first) {
+        this.fun.score += ANIMAL_POINTS;
+        this.emit({ type: 'score', kind: 'animal', points: ANIMAL_POINTS, combo: 1, total: this.fun.score, label: a.icon, id: a.id });
+      }
     }
   }
 

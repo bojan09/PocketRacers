@@ -403,7 +403,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     const n = await page.$$eval('.badge-card', (c) => c.length);
     assert.ok(n >= 20, `${n} badges`);
     assert.equal(await page.$$eval('.badge-card.earned', (c) => c.length), 0);
-    assert.equal(await page.locator('#sticker-book .sticker').count(), 15, 'sticker book has every animal');
+    assert.equal(await page.locator('#sticker-book .sticker').count(), 20, 'sticker book has every animal');
     assert.equal(await page.locator('#sticker-book .sticker.got').count(), 0);
     await page.click('#badges-back');
     await page.waitForFunction(() => window.__pocketRacers.mode === 'title');

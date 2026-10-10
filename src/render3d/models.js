@@ -475,6 +475,75 @@ function umbrella(rand) {
   return m;
 }
 
+/** A storybook castle: walls, four round towers with pointed roofs, a gate and flags. */
+export function castle() {
+  const m = new MeshBuilder().material(0.05, 0.8);
+  const stone = C('#c9c2b4');
+  const dark = C('#9a9283');
+  const roof = C('#3d6bd6');
+  const S = 10; // half size
+  // Walls with battlements.
+  for (const [x, z, hx, hz] of [
+    [0, -S, S, 0.8],
+    [0, S, S, 0.8],
+    [-S, 0, 0.8, S],
+    [S, 0, 0.8, S],
+  ]) {
+    m.box(x, 3.5, z, hx, 3.5, hz, stone);
+    const n = Math.round(Math.max(hx, hz) / 1.2);
+    for (let i = 0; i < n; i++) {
+      const t = -1 + (2 * (i + 0.5)) / n;
+      m.box(x + (hx > hz ? t * hx : 0), 7.4, z + (hz > hx ? t * hz : 0), hx > hz ? 0.45 : 0.85, 0.4, hz > hx ? 0.45 : 0.85, dark);
+    }
+  }
+  // Keep in the middle.
+  m.box(0, 7, 0, 4.5, 7, 4.5, stone);
+  m.material(0.2, 0.3);
+  m.cylinder(0, 16.5, 0, 5, 2.5, 4, 'y', roof, roof, 0);
+  m.material(0.05, 0.8);
+  for (const [x, z] of [
+    [-S, -S],
+    [S, -S],
+    [-S, S],
+    [S, S],
+  ]) {
+    m.cylinder(x, 5.5, z, 2.4, 5.5, 14, 'y', stone, stone);
+    m.material(0.2, 0.3);
+    m.cylinder(x, 13.5, z, 2.9, 2.5, 14, 'y', roof, roof, 0);
+    m.material(0.1, 0);
+    m.box(x, 17, z, 0.06, 1, 0.06, C('#6b4a2e'));
+    m.box(x + 0.5, 17.6, z, 0.5, 0.3, 0.03, C('#ff4d5e'));
+    m.material(0.05, 0.8);
+  }
+  // Gate and windows.
+  m.box(0, 2.4, S + 0.82, 2.2, 2.4, 0.05, C('#4a3426'));
+  for (const x of [-5, 5]) m.box(x, 5, S + 0.82, 0.6, 0.9, 0.05, C('#2a2f3c'));
+  return m;
+}
+
+/** Lighthouse: striped tower, balcony and a glowing lamp. */
+export function lighthouse() {
+  const m = new MeshBuilder().material(0.2, 0.3);
+  const red = C('#e63946');
+  const white = C('#f6f2ea');
+  for (let i = 0; i < 6; i++) {
+    const y0 = i * 3;
+    const r0 = 3.2 - i * 0.28;
+    m.cylinder(0, y0 + 1.5, 0, r0, 1.5, 16, 'y', i % 2 ? red : white, i % 2 ? red : white, r0 - 0.28);
+  }
+  m.cylinder(0, 18.2, 0, 2.4, 0.2, 16, 'y', C('#2a2f3c'), C('#2a2f3c'));
+  m.material(0, 0);
+  m.cylinder(0, 19.4, 0, 1.3, 1, 12, 'y', C('#fff2a8'), C('#fff2a8'), 1.3);
+  m.material(0.2, 0.3);
+  m.cylinder(0, 21.2, 0, 1.6, 0.8, 12, 'y', red, red, 0);
+  m.box(0, 1.2, 3.1, 0.6, 1.2, 0.1, C('#4a3426'));
+  // Keeper's cottage beside the tower.
+  const cottage = new MeshBuilder();
+  gablePrism(cottage, 5, 6, 2.6, 1.8, white, C('#59606d'));
+  m.append(cottage, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 6, 0, 0, 1]);
+  return m;
+}
+
 export const MODEL_BUILDERS = {
   pine,
   oak,
@@ -499,4 +568,6 @@ export const MODEL_BUILDERS = {
   palm,
   hut,
   umbrella,
+  castle,
+  lighthouse,
 };

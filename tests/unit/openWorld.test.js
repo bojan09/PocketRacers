@@ -160,3 +160,46 @@ test('roads: the start is on a road; roads are flat across, clear of scenery and
   run(onGrass, 4, input());
   assert.ok(onRoad.player.speed > onGrass.player.speed, 'roads are faster than grass');
 });
+
+test('island features: landmarks and animals placed on dry land, away from the roads', () => {
+  const W = new OpenWorld();
+  const kinds = new Set(W.landmarks.map((l) => l.kind));
+  for (const k of ['castle', 'lighthouse', 'windmill']) assert.ok(kinds.has(k), `has a ${k}`);
+  for (const l of W.landmarks) assert.ok(W.height(l.x, l.z) > WATER, `${l.kind} on land`);
+  assert.equal(W.animals.length, 5, 'one animal in every area');
+  for (const a of W.animals) {
+    assert.ok(W.height(a.x, a.z) > WATER, `${a.id} on land`);
+    assert.equal(W.biome(a.x, a.z, W.baseHeight(a.x, a.z)), a.area, `${a.id} in its area`);
+    const r = W.nearestRoad(a.x, a.z);
+    assert.ok(!r || r.d > 8, `${a.id} off the road`);
+  }
+  // Same world, same places.
+  assert.deepEqual(new OpenWorld().animals, W.animals);
+  // Ramps raise the ground; scenery keeps clear of them.
+  const r = W.ramps[0];
+  assert.ok(W.ground(r.x, r.z) > W.height(r.x, r.z) + 0.5, 'ramp is raised');
+  for (const o of W.objectsNear(r.x, r.z, 10)) assert.ok(o.kind === 'castle' || o.kind === 'lighthouse' || o.kind === 'windmill' || Math.hypot(o.x - r.x, o.z - r.z) > r.len / 2);
+});
+
+test('free drive: driving up a stunt ramp jumps and scores', () => {
+  const W = new OpenWorld();
+  const r = W.ramps[0];
+  const s = new FreeSession(W, makeVehicle('zippy'));
+  // Start 40 m before the ramp, facing up it.
+  s.reset({ x: r.x - Math.sin(r.yaw) * 40, z: r.z + Math.cos(r.yaw) * 40, yaw: r.yaw });
+  run(s, 5, input({ nitro: true }));
+  assert.ok(s.events.some((e) => e.type === 'land'), 'flew off the ramp');
+  assert.ok(s.events.some((e) => e.type === 'score' && (e.kind === 'jump' || e.kind === 'trick')));
+});
+
+test('free drive: finding an island animal gives a sticker once', () => {
+  const W = new OpenWorld();
+  const a = W.animals[0];
+  const s = new FreeSession(W, makeVehicle('zippy'));
+  s.reset({ x: a.x, z: a.z + 20, yaw: 0 });
+  run(s, 3, input({ throttle: 0.5 }));
+  const met = s.events.filter((e) => e.type === 'animal');
+  assert.deepEqual(met.map((e) => [e.id, e.first]), [[a.id, true]]);
+  assert.ok(s.events.some((e) => e.type === 'score' && e.kind === 'animal'));
+  assert.ok(s.fun.known.has(a.id));
+});

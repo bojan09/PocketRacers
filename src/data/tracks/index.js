@@ -12,6 +12,7 @@ export const DEFAULT_TRACK = sunnyValley.id;
 
 /** Picture cards for the map picker (no reading needed). */
 export const TRACK_ART = {
+  island: { sky: ['#4cc9f0', '#c8f1ff'], ground: '#6cc24a', icons: ['🏝️', '⛰️', '🌲'], sun: '☀️' },
   'sunny-valley': { sky: ['#6ec3ff', '#c8ecff'], ground: '#6cc24a', icons: ['🌳', '🏡', '🌲'], sun: '☀️' },
   'desert-canyon': { sky: ['#ff7b54', '#ffd28a'], ground: '#e0a35c', icons: ['🌵', '🪨', '🌵'], sun: '🌅' },
   'snowy-peaks': { sky: ['#9fc4e8', '#e9f3ff'], ground: '#f4f8ff', icons: ['🌲', '⛄', '🌲'], sun: '❄️' },

@@ -8,7 +8,8 @@ import { mat4, hexToRgb, transformPoint } from '../gl/math.js';
 import { clamp } from '../core/util.js';
 import { MeshBuilder } from '../gl/meshBuilder.js';
 import { CHUNK, CELL, WATER, SNOW_LINE, ROAD_HALF } from '../world/openWorld.js';
-import { MODEL_BUILDERS } from './models.js';
+import { MODEL_BUILDERS, windmillSails } from './models.js';
+import { ANIMAL_MODELS } from './animals.js';
 import { PROP_MODELS } from './props.js';
 import { mulberry32 } from '../core/util.js';
 import { buildCloudPuffs } from './environment.js';
@@ -93,9 +94,41 @@ export function buildChunkScenery(world, cx, cz, variants) {
     mat4.rotateY(m, m, o.yaw);
     if (o.scale !== 1) mat4.scale(m, m, o.scale);
     mb.append(list[Math.floor(rand() * list.length)], m);
+    if (o.kind === 'windmill') {
+      mat4.translate(m, m, 0, 10.5, 2.0);
+      mb.append(variants('windmillSails')[0], m);
+    }
   }
   addRoads(mb, world, cx, cz);
+  addRamps(mb, world, cx, cz);
   return mb;
+}
+
+/** Ramps: a curved wedge in yellow and red stripes, rising to a lip. */
+function addRamps(mb, world, cx, cz) {
+  const x0 = cx * CHUNK;
+  const z0 = cz * CHUNK;
+  mb.material(0.3, 0.2);
+  for (const r of world.ramps) {
+    if (r.x < x0 || r.x >= x0 + CHUNK || r.z < z0 || r.z >= z0 + CHUNK) continue;
+    const fx = Math.sin(r.yaw);
+    const fz = -Math.cos(r.yaw);
+    const rx = Math.cos(r.yaw);
+    const rz = Math.sin(r.yaw);
+    const base = (u, v) => world.height(r.x + fx * (u - r.len / 2) + rx * v, r.z + fz * (u - r.len / 2) + rz * v);
+    const pt = (u, v, top) => [r.x + fx * (u - r.len / 2) + rx * v, base(u, v) + (top ? r.h * Math.pow(u / r.len, 1.3) + 0.03 : -0.2), r.z + fz * (u - r.len / 2) + rz * v];
+    const N = 8;
+    const w = r.w / 2;
+    for (let i = 0; i < N; i++) {
+      const u0 = (i / N) * r.len;
+      const u1 = ((i + 1) / N) * r.len;
+      const c = i % 2 ? [0.95, 0.25, 0.3] : [1, 0.82, 0.2];
+      mb.quad(pt(u0, -w, true), pt(u0, w, true), pt(u1, w, true), pt(u1, -w, true), c);
+      mb.quad(pt(u0, -w, false), pt(u0, -w, true), pt(u1, -w, true), pt(u1, -w, false), [0.55, 0.57, 0.62]);
+      mb.quad(pt(u0, w, true), pt(u0, w, false), pt(u1, w, false), pt(u1, w, true), [0.55, 0.57, 0.62]);
+    }
+    mb.quad(pt(r.len, -w, false), pt(r.len, -w, true), pt(r.len, w, true), pt(r.len, w, false), [0.45, 0.47, 0.52]);
+  }
 }
 
 const ASPHALT = [0.34, 0.36, 0.41];
@@ -156,9 +189,13 @@ export function installWorldRendering(Renderer3D) {
     const vr = mulberry32(99);
     this.sceneryVariants = {};
     this.worldVariants = (kind) => {
+      if (kind === 'windmillSails') return (this.sceneryVariants[kind] ||= [windmillSails()]);
+      if (kind === 'castle' || kind === 'lighthouse') return (this.sceneryVariants[kind] ||= [MODEL_BUILDERS[kind]()]);
       if (!MODEL_BUILDERS[kind]) return null;
       return (this.sceneryVariants[kind] ||= [0, 1, 2].map(() => MODEL_BUILDERS[kind](vr)));
     };
+    for (const m of Object.values(this.worldAnimalMeshes || {})) deleteMesh(this.gl, m);
+    this.worldAnimalMeshes = Object.fromEntries(world.animals.map((a) => [a.id, uploadMesh(this.gl, ANIMAL_MODELS[a.model]())]));
     if (!this.worldPropMeshes) this.worldPropMeshes = Object.fromEntries(Object.entries(PROP_MODELS).map(([k, b]) => [k, uploadMesh(this.gl, b())]));
     const wmb = new MeshBuilder().material(1, 0);
     const wc = hexToRgb(palette.water || '#3fa9e0');
@@ -396,6 +433,7 @@ export function installWorldRendering(Renderer3D) {
       this.drawCar(d.meshes, d.m, d.spin, d.steer, d.brake);
     }
     this.drawWorldProps(session, Math.min(fogFar, 160));
+    this.drawWorldAnimals(session, Math.min(fogFar, 220));
 
     // --- Particles, clouds, shadows ---------------------------------------
     this.emitPlayerFx(session, f, carM, speedM, sp, dt, false);
@@ -447,6 +485,31 @@ export function installWorldRendering(Renderer3D) {
     }
   };
 
+  /** The island's hidden animals: breathing, hopping, sparkling until found. */
+  R.drawWorldAnimals = function (session, reach) {
+    const m = this.tmp;
+    const now = session.time;
+    this.world.animals.forEach((a, i) => {
+      const mesh = this.worldAnimalMeshes[a.id];
+      if (!mesh) return;
+      const y = this.world.height(a.x, a.z);
+      if (!this.near([a.x, y, a.z], reach)) return;
+      const t = now - (session.animalHop[a.id] ?? -10);
+      const hop = t >= 0 && t < 0.7 ? Math.sin((t / 0.7) * Math.PI) * 1.4 : 0;
+      const breathe = 1 + Math.sin(this.time * 2.2 + i) * 0.025;
+      const k = a.model === 'crab' || a.model === 'camel' ? 1.8 : 1.6;
+      mat4.identity(m);
+      mat4.translate(m, m, a.x, y + hop, a.z);
+      mat4.rotateY(m, m, -a.yaw);
+      mat4.scale(m, m, k, k * breathe, k);
+      this.drawLit(mesh, m);
+      if (!session.fun.known.has(a.id) && this.rand() < 0.15) {
+        const r = this.rand;
+        this.particles.spawn('sparkle', a.x + (r() - 0.5) * 2.6, y + 0.4 + r() * 2.8, a.z + (r() - 0.5) * 2.6, 0, 0.8, 0, 0.14, 0.7);
+      }
+    });
+  };
+
   /** Where effects for a free-drive event happen (the player's car). */
   R.worldEvent = function (e, session) {
     const p = session.player;
@@ -479,6 +542,10 @@ export function installWorldRendering(Renderer3D) {
     } else if (e.type === 'score' && (e.combo >= 4 || e.kind === 'jump' || e.kind === 'trick')) {
       this.confetti(f.pos, p.y + 1.5, 24);
     } else if (e.type === 'boost') this.flash = Math.max(this.flash, 0.12);
+    else if (e.type === 'animal' && e.first) {
+      const a = this.world.animals.find((x) => x.id === e.id);
+      if (a) this.confetti([a.x, 0, a.z], this.world.height(a.x, a.z) + 2, 50);
+    }
   };
 }
 
