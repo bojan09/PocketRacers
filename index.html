@@ -38,6 +38,7 @@
           <div class="pill"><span class="pill-label">LAP</span> <b id="hud-lap">1</b></div>
           <div class="pill time"><span class="pill-label">TIME</span> <b id="hud-time">0:00.00</b></div>
           <div class="pill time"><span class="pill-label">BEST</span> <b id="hud-best">--:--.--</b></div>
+          <canvas id="minimap" class="minimap" aria-label="Island map" hidden></canvas>
         </div>
         <div class="hud-right">
           <button id="btn-honk" class="icon-btn honk-btn" aria-label="Honk"><span aria-hidden="true">📯</span></button>
@@ -50,6 +51,16 @@
         <div id="toast" class="toast" aria-live="polite"></div>
         <div id="popups" class="popups" aria-live="polite"></div>
         <div id="fps" class="fps" hidden></div>
+      </div>
+
+      <!-- Big island map (tap the small map) -->
+      <div id="world-map" class="world-map" hidden>
+        <canvas id="world-map-canvas"></canvas>
+        <div class="world-map-bar">
+          <div class="pill"><span aria-hidden="true">🗺️</span> <b id="world-map-pct">0%</b></div>
+          <button id="btn-go-home" class="icon-btn map-btn" aria-label="Drive home"><span aria-hidden="true">🏠</span></button>
+          <button id="btn-map-close" class="icon-btn map-btn" aria-label="Close map"><span aria-hidden="true">▶️</span></button>
+        </div>
       </div>
 
       <!-- Touch controls -->

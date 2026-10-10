@@ -403,4 +403,15 @@ export class FreeSession {
     p.airborne = false;
     this.emit({ type: 'rescue' });
   }
+
+  /** Back to the start (from the island map), keeping score and finds. */
+  goHome() {
+    const sp = this.world.spawn;
+    const p = this.player;
+    p.safeX = sp.x;
+    p.safeZ = sp.z;
+    p.safeYaw = sp.yaw;
+    this.rescue();
+    p.speed = 0;
+  }
 }

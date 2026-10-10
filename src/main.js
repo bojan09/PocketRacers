@@ -12,6 +12,8 @@ import { buildTrack3D } from './world/track3d.js';
 import { DrivingSession } from './sim/session.js';
 import { OpenWorld } from './world/openWorld.js';
 import { FreeSession } from './sim/freeDrive.js';
+import { ExploreMap } from './world/explore.js';
+import { Minimap } from './ui/minimap.js';
 import { Renderer3D } from './render3d/renderer3d.js';
 import { InputManager } from './input/inputManager.js';
 import { tiltSupported } from './input/tilt.js';
@@ -74,6 +76,9 @@ const hud = new Hud();
 const canVibrate = typeof navigator.vibrate === 'function';
 const progress = new Progress(profiles.storageFor());
 const achievements = new Achievements(profiles.storageFor());
+const explore = new ExploreMap(profiles.storageFor());
+const minimap = new Minimap({ small: $('minimap'), big: $('world-map-canvas') });
+let mapOpen = false;
 
 let mode = 'title'; // 'title' | 'profiles' | 'maps' | 'garage' | 'events' | 'badges' | 'grownup' | 'driving' | 'paused' | 'results'
 const career = new Career(profiles.storageFor());
@@ -177,7 +182,7 @@ function showDriving() {
   controlsEl.hidden = false;
   input.touch.enabled = true;
   mode = 'driving';
-  achievements.visitMap(trackId);
+  if (!worldMode) achievements.visitMap(trackId);
   autoQuality?.reset();
   audio.resume();
   requestAnimationFrame(() => input.touch.measure());
@@ -188,6 +193,7 @@ function pause() {
   mode = 'paused';
   progress.save();
   achievements.save();
+  explore.save();
   input.releaseAll();
   input.touch.enabled = false;
   audio.quiet();
@@ -480,7 +486,7 @@ const gate = new Gate({ sound: (k) => audio.ui(k) });
 
 /** Point every per-player save at the current profile and reload it. */
 function rebindPlayer() {
-  for (const store of [garage, career, progress, achievements]) {
+  for (const store of [garage, career, progress, achievements, explore]) {
     store.storage = profiles.storageFor();
     store.load();
   }
@@ -489,6 +495,10 @@ function rebindPlayer() {
   updateBank();
   session.assist = profiles.littleDriver();
   session.fun.known = new Set(achievements.state.animals);
+  if (world) {
+    explore.count = explore.countLand();
+    minimap.refog();
+  }
 }
 
 function usePlayer(id) {
@@ -547,6 +557,8 @@ function enterWorld() {
   if (!world) {
     world = new OpenWorld();
     free = new FreeSession(world, car);
+    explore.setWorld(world);
+    minimap.setWorld(world, explore);
   }
   free.setCar(car);
   free.reset();
@@ -554,11 +566,17 @@ function enterWorld() {
   free.fun.known = session.fun.known;
   renderer.setWorld(world, TRACK_BY_ID[DEFAULT_TRACK].palette);
   worldMode = true;
+  $('hud').classList.add('world');
+  $('minimap').hidden = false;
 }
 
 function leaveWorld() {
   if (!worldMode) return;
   worldMode = false;
+  closeMap();
+  explore.save();
+  $('hud').classList.remove('world');
+  $('minimap').hidden = true;
   renderer.freeWorldChunks();
   renderer.camDir = null;
   session.reset();
@@ -665,6 +683,58 @@ $('btn-grownup').addEventListener('click', () => {
 // Pause screen
 $('btn-pause').addEventListener('click', pause);
 
+// ------------------------------------------------------------ island map
+
+const carColour = () => `rgb(${nitroColour(car.paint).map((v) => Math.round(v * 255)).join(',')})`;
+
+/** Clear the clouds around the car; badges for how much is uncovered. */
+function uncover() {
+  const p = free.player;
+  const cells = explore.reveal(p.x, p.z);
+  if (!cells.length) return;
+  minimap.uncover(cells);
+  achievements.max('islandMap', explore.percent);
+}
+
+function openMap() {
+  if (!worldMode || mode !== 'driving' || mapOpen) return;
+  mapOpen = true;
+  input.releaseAll();
+  input.touch.enabled = false;
+  audio.quiet();
+  explore.save();
+  $('world-map-pct').textContent = `${explore.percent}%`;
+  $('world-map').hidden = false;
+  minimap.drawBig(free.player, (id) => free.fun.known.has(id), carColour());
+}
+
+function closeMap() {
+  if (!mapOpen) return;
+  mapOpen = false;
+  $('world-map').hidden = true;
+  if (mode === 'driving') {
+    input.touch.enabled = true;
+    audio.resume();
+  }
+}
+
+$('minimap').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  audio.click();
+  openMap();
+});
+$('btn-map-close').addEventListener('click', () => {
+  audio.click();
+  closeMap();
+});
+$('btn-go-home').addEventListener('click', () => {
+  audio.ui('open');
+  free.goHome();
+  renderer.camDir = null;
+  closeMap();
+});
+window.addEventListener('resize', () => mapOpen && minimap.drawBig(free.player, (id) => free.fun.known.has(id), carColour()));
+
 function honk() {
   if (mode !== 'driving' || !active().honk()) return;
   audio.honk(car.family);
@@ -747,9 +817,12 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 let km = 0; // distance not yet added to the badge stat
 const loop = new GameLoop({
   update(dt) {
-    if (mode !== 'driving') return;
+    if (mode !== 'driving' || mapOpen) return;
     session.roam = !race;
-    if (worldMode) free.step(dt, input.read());
+    if (worldMode) {
+      free.step(dt, input.read());
+      uncover();
+    }
     else if (race) race.step(dt, input.read());
     else session.step(dt, input.read());
     km += (Math.abs(active().player.speed) * SPEED_TO_KMH * dt) / 3600;
@@ -787,6 +860,7 @@ const loop = new GameLoop({
     if (mode === 'driving') {
       audio.update(S.player, car.handling.maxSpeed, input.state.throttle, frameDt);
       hud.update(S);
+      if (worldMode) minimap.drawSmall(free.player, (id) => free.fun.known.has(id), carColour(), frameDt);
       const level = autoQuality?.frame(frameDt * 1000);
       if (level) {
         applyQuality(level);
@@ -832,4 +906,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSe
 if (new URLSearchParams(location.search).has('tune')) mountTuningPanel(car.handling);
 
 // Test/debug hook (read-only use by automated tests).
-window.__pocketRacers = { session, get free() { return free; }, get worldMode() { return worldMode; }, enterWorld, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, profiles, gate, startEvent, nextEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };
+window.__pocketRacers = { session, get free() { return free; }, get worldMode() { return worldMode; }, enterWorld, explore, minimap, openMap, closeMap, input, renderer, settings, loop, garage, garageScreen, progress, career, achievements, profiles, gate, startEvent, nextEvent, loadTrack, get trackId() { return trackId; }, get race() { return race; }, get car() { return car; }, get mode() { return mode; } };

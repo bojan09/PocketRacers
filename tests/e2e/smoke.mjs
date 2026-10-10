@@ -629,7 +629,21 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     const st = await page.evaluate(() => ({ world: window.__pocketRacers.worldMode, speed: window.__pocketRacers.free.player.speed }));
     assert.ok(st.world, 'in the open world');
     assert.ok(st.speed > 1000, `drives (${st.speed})`);
+    // The island map: small map shows, tapping opens the big one (driving
+    // stops), the house button drives home and closes it.
+    assert.ok(await page.isVisible('#minimap'));
+    assert.ok(!(await page.isVisible('#hud-lap')), 'no laps on the island');
+    assert.ok(await page.evaluate(() => window.__pocketRacers.explore.percent >= 1), 'map uncovered near the start');
+    await page.tap('#minimap');
+    assert.ok(await page.isVisible('#world-map'));
+    assert.match(await page.textContent('#world-map-pct'), /^\d+%$/);
+    const z0 = await page.evaluate(() => window.__pocketRacers.free.player.z);
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => window.__pocketRacers.free.player.z), z0, 'paused while the map is open');
+    await page.tap('#btn-go-home');
+    assert.ok(!(await page.isVisible('#world-map')));
     await home(page);
+    assert.ok(!(await page.isVisible('#minimap')));
     assert.equal(await page.evaluate(() => window.__pocketRacers.worldMode), false);
     await drive(page, 'tropical-coast');
     await home(page);

@@ -123,6 +123,13 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > island animals (bunny, owl, camel, penguin, crab) hide in their own areas;
 > driving up to one says hello and the first visit adds a sticker (the
 > sticker book has a new Island row). Honking makes nearby animals hop.
+>
+> **Phase 7E — island map:** a small round map in the corner turns with the
+> car; land you have not driven near yet is under clouds, and the 🏠 on its
+> rim points the way home. Tap it for the whole island (the car waits) with
+> how much is uncovered, found animals, landmarks seen and a 🏠 button that
+> drives you straight home. Each player's map is saved separately; badges
+> for uncovering 25% and 80%.
 
 ## Tests
 

@@ -18,7 +18,7 @@ export const MAX_PROFILES = 4;
 const KEY = 'pocketracers.profiles';
 const VERSION = 1;
 /** Save keys that belong to a player (everything except device settings). */
-export const PLAYER_KEYS = ['pocketracers.garage', 'pocketracers.career', 'pocketracers.progress', 'pocketracers.achievements'];
+export const PLAYER_KEYS = ['pocketracers.garage', 'pocketracers.career', 'pocketracers.progress', 'pocketracers.achievements', 'pocketracers.explore'];
 
 /** A storage view where every key is suffixed with the profile id. */
 export function scopedStorage(base, id) {

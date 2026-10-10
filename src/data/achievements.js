@@ -39,6 +39,8 @@ export const ACHIEVEMENTS = [
   { id: 'road-trip', icon: '🛣️', name: 'Road Trip', desc: 'Drive 25 km', stat: 'km', goal: 25, reward: 1000 },
   { id: 'animal', icon: '🐾', name: 'Animal Friend', desc: 'Find a hidden animal', stat: 'animals', goal: 1, reward: 300 },
   { id: 'zoo', icon: '🦁', name: 'Zookeeper', desc: 'Find every hidden animal', stat: 'animals', goal: ANIMALS.length, reward: 3000 },
+  { id: 'island-25', icon: '🧭', name: 'Island Explorer', desc: 'Uncover a quarter of the island map', stat: 'islandMap', goal: 25, reward: 1000 },
+  { id: 'island-80', icon: '🏝️', name: 'Map Maker', desc: 'Uncover most of the island map', stat: 'islandMap', goal: 80, reward: 5000 },
   { id: 'explorer', icon: '🗺️', name: 'Explorer', desc: 'Drive on every map', stat: 'maps', goal: TRACKS.length, reward: 1000 },
   { id: 'cars-5', icon: '🚗', name: 'Collector', desc: 'Own 5 vehicles', stat: 'owned', goal: 5, reward: 750 },
   { id: 'cars-15', icon: '🏎️', name: 'Big Garage', desc: 'Own 15 vehicles', stat: 'owned', goal: 15, reward: 3000 },
