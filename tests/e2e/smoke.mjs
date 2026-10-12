@@ -377,9 +377,11 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
   const { context, page, errors } = await open({ width: 844, height: 390 });
   const next = () => page.evaluate(() => window.__pocketRacers.nextEvent().id);
   await check('Little Driver is on by default and skips knockout races in ▶ Play', async () => {
-    await page.evaluate(() => {
-      for (const id of ['rookie', 'trial', 'islands', 'mud']) window.__pocketRacers.career.record(id, 3, 60);
-    });
+    // Finish every race before the knockout, so it would be next.
+    const before = EVENTS.slice(0, EVENTS.findIndex((e) => e.id === 'knockout')).map((e) => e.id);
+    await page.evaluate((ids) => {
+      for (const id of ids) window.__pocketRacers.career.record(id, 3, 60);
+    }, before);
     assert.equal(await page.evaluate(() => window.__pocketRacers.session.assist), true);
     assert.equal(await next(), 'frosty');
   });
