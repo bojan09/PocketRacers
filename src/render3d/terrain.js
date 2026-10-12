@@ -249,12 +249,13 @@ export function buildTerrain(track, seed = 77) {
   }
 
   // Water plane covering the map (only visible where the ground dips below).
-  const waterMesh = new MeshBuilder().material(1, 0);
+  // Lava glows instead of reflecting the sky.
+  const waterMesh = new MeshBuilder().material(env.lava ? 0.15 : 1, 0);
   if (track.def.waterLevel !== undefined) {
     const w = hexToRgb(pal.water);
     // A sea runs out to the horizon; a lake stays inside the map.
     const e = env.sea ? 4000 : 0;
-    waterMesh.quad([minX - e, water, minZ - e], [maxX + e, water, minZ - e], [maxX + e, water, maxZ + e], [minX - e, water, maxZ + e], w, 0);
+    waterMesh.quad([minX - e, water, minZ - e], [maxX + e, water, minZ - e], [maxX + e, water, maxZ + e], [minX - e, water, maxZ + e], w, env.lava ? 0.8 : 0);
   }
 
   return { sampler, tiles, water: waterMesh, bounds: { minX, maxX, minZ, maxZ } };

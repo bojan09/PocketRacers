@@ -219,7 +219,7 @@ export const FX_FLOATS = FLOATS;
 export class Weather {
   constructor(kind, density = 1) {
     this.kind = kind;
-    const n = { snow: 420, rain: 520, dust: 140, leaves: 170 }[kind] || 0;
+    const n = { snow: 420, rain: 520, dust: 140, leaves: 170, ash: 220 }[kind] || 0;
     this.count = Math.min(WEATHER_MAX, Math.round(n * density));
     this.pos = new Float32Array(this.count * 3);
     this.vel = new Float32Array(this.count * 3);
@@ -232,12 +232,12 @@ export class Weather {
       for (let k = 0; k < 3; k++) this.pos[i * 3 + k] = (seedRand() - 0.5) * this.box[k] * 2;
       if (kind === 'rain') this.vel.set([-1, -26 - seedRand() * 6, 0], i * 3);
       else if (kind === 'leaves') this.vel.set([1.2 + seedRand() * 1.5, -1.0 - seedRand() * 0.9, (seedRand() - 0.5) * 1.2], i * 3);
-      else if (kind === 'snow') this.vel.set([(seedRand() - 0.5) * 1.5, -1.6 - seedRand() * 1.4, (seedRand() - 0.5) * 1.5], i * 3);
+      else if (kind === 'snow' || kind === 'ash') this.vel.set([(seedRand() - 0.5) * 1.5, -1.6 - seedRand() * 1.4, (seedRand() - 0.5) * 1.5], i * 3);
       else this.vel.set([4 + seedRand() * 3, (seedRand() - 0.5) * 0.4, 1 + seedRand()], i * 3);
     }
-    this.size = { snow: 0.17, rain: 0.4, dust: 0.5, leaves: 0.2 }[kind] || 0.1;
-    this.colour = { snow: [1, 1, 1], rain: [0.6, 0.7, 0.9], dust: [0.86, 0.7, 0.5], leaves: [0.93, 0.48, 0.14] }[kind] || [1, 1, 1];
-    this.alpha = { snow: 0.95, rain: 0.55, dust: 0.12, leaves: 0.9 }[kind] || 0.5;
+    this.size = { snow: 0.17, rain: 0.4, dust: 0.5, leaves: 0.2, ash: 0.12 }[kind] || 0.1;
+    this.colour = { snow: [1, 1, 1], rain: [0.6, 0.7, 0.9], dust: [0.86, 0.7, 0.5], leaves: [0.93, 0.48, 0.14], ash: [0.42, 0.38, 0.36] }[kind] || [1, 1, 1];
+    this.alpha = { snow: 0.95, rain: 0.55, dust: 0.12, leaves: 0.9, ash: 0.7 }[kind] || 0.5;
     this.centre = null;
     this.time = 0;
   }

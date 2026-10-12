@@ -7,8 +7,10 @@ import nightCity from './nightCity.js';
 import tropicalCoast from './tropicalCoast.js';
 import autumnWoods from './autumnWoods.js';
 import candyLand from './candyLand.js';
+import dinoValley from './dinoValley.js';
+import moonBase from './moonBase.js';
 
-export const TRACKS = [sunnyValley, desertCanyon, snowyPeaks, nightCity, tropicalCoast, autumnWoods, candyLand];
+export const TRACKS = [sunnyValley, desertCanyon, snowyPeaks, nightCity, tropicalCoast, autumnWoods, candyLand, dinoValley, moonBase];
 export const TRACK_BY_ID = Object.fromEntries(TRACKS.map((t) => [t.id, t]));
 export const DEFAULT_TRACK = sunnyValley.id;
 
@@ -22,4 +24,6 @@ export const TRACK_ART = {
   'tropical-coast': { sky: ['#4cc9f0', '#bff3ff'], ground: '#ffe29a', icons: ['🌴', '⛱️', '🌴'], sun: '🐬' },
   'autumn-woods': { sky: ['#ffb36b', '#ffe8cc'], ground: '#c79a46', icons: ['🍂', '🎃', '🍁'], sun: '☀️' },
   'candy-land': { sky: ['#ff9ad5', '#ffe1f1'], ground: '#ffb8d9', icons: ['🍭', '🍬', '🧁'], sun: '🌈' },
+  'dino-valley': { sky: ['#d88a5a', '#ffd2a0'], ground: '#5a9a3a', icons: ['🦖', '🌋', '🌿'], sun: '☀️' },
+  'moon-base': { sky: ['#02030a', '#262b40'], ground: '#a3a3a8', icons: ['🚀', '🛰️', '🪐'], sun: '🌍' },
 };

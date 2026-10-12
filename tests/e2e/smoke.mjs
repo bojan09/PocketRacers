@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { startServer } from '../../tools/serve.mjs';
+import { EVENTS } from '../../src/data/events.js';
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -403,7 +404,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     const n = await page.$$eval('.badge-card', (c) => c.length);
     assert.ok(n >= 20, `${n} badges`);
     assert.equal(await page.$$eval('.badge-card.earned', (c) => c.length), 0);
-    assert.equal(await page.locator('#sticker-book .sticker').count(), 26, 'sticker book has every animal');
+    assert.equal(await page.locator('#sticker-book .sticker').count(), 32, 'sticker book has every animal');
     assert.equal(await page.locator('#sticker-book .sticker.got').count(), 0);
     await page.click('#badges-back');
     await page.waitForFunction(() => window.__pocketRacers.mode === 'title');
@@ -560,7 +561,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
     await grownup(page);
     await page.click('#gu-races');
     assert.equal(await page.evaluate(() => window.__pocketRacers.mode), 'events');
-    assert.equal(await page.locator('.event-card').count(), 12);
+    assert.equal(await page.locator('.event-card').count(), EVENTS.length);
     assert.ok((await page.locator('.event-card.locked').count()) >= 5);
     await page.click('#events-back');
   });
@@ -613,7 +614,7 @@ const PLAYER = (key) => `pocketracers.${key}@fox`;
   const { context, page, errors } = await open({ width: 844, height: 390 });
   await check('every map card loads its map and drives', async () => {
     const all = await page.$$eval('.map-card', (c) => c.map((b) => b.dataset.map));
-    assert.deepEqual(all, ['island', 'bigland', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast', 'autumn-woods', 'candy-land']);
+    assert.deepEqual(all, ['island', 'bigland', 'sunny-valley', 'desert-canyon', 'snowy-peaks', 'night-city', 'tropical-coast', 'autumn-woods', 'candy-land', 'dino-valley', 'moon-base']);
     const ids = all.filter((id) => id !== 'island' && id !== 'bigland'); // race maps (open worlds are checked below)
     for (const id of ids) {
       await drive(page, id);

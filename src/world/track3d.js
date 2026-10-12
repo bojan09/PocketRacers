@@ -46,6 +46,18 @@ export const OBJECT_KINDS = {
   candyCane: { w: 450, solid: 0.6 },
   gumdrop: { w: 700, solid: 0 },
   gingerHouse: { w: 2600, solid: 0 },
+  fern: { w: 700, solid: 0 },
+  cycad: { w: 800, solid: 0.3 },
+  lavaRock: { w: 800, solid: 0.7 },
+  bones: { w: 2400, solid: 0 },
+  nest: { w: 1000, solid: 0 },
+  volcano: { w: 30000, solid: 0 },
+  moonRock: { w: 800, solid: 0.7 },
+  crater: { w: 2400, solid: 0 },
+  dome: { w: 2600, solid: 0 },
+  rocket: { w: 1200, solid: 0 },
+  dish: { w: 1400, solid: 0 },
+  moonLamp: { w: 160, solid: 1 },
 };
 
 // --- spline ----------------------------------------------------------------
@@ -288,11 +300,12 @@ function buildFeatures(def, segments, mpu, count) {
     for (let k = 0; k < row.count; k++) stars.push({ z: (row.seg + k * row.every) * SL, x: row.x, h: row.h ?? 0.9 });
   }
   // Arcs of stars along each ramp's jump at a typical speed.
+  const g = AIR_GRAVITY * (def.env?.gravity ?? 1);
   for (const r of ramps) {
     const vy = (NOMINAL_JUMP_SPEED * r.height) / r.length;
     for (let k = 1; k <= 6; k++) {
       const t = k * 0.2;
-      const h = r.height + vy * t - 0.5 * AIR_GRAVITY * t * t;
+      const h = r.height + vy * t - 0.5 * g * t * t;
       if (h < 0.6) break;
       stars.push({ z: r.z1 + (NOMINAL_JUMP_SPEED * t) / mpu, x: r.x, h: h + 0.6 });
     }

@@ -462,6 +462,266 @@ function gingerHouse(rand) {
   return m;
 }
 
+// --------------------------------------------------------------- dinos
+
+/** Giant prehistoric fern: arching fronds from a low clump (soft). */
+function fern(rand) {
+  const m = new MeshBuilder().material(0.05, 0.4);
+  const leaf = vary(C('#3f9a3a'), rand, 0.2);
+  const n = 7 + Math.floor(rand() * 3);
+  const s = 1 + rand() * 0.5;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rand() * 0.4;
+    const dx = Math.cos(a);
+    const dz = Math.sin(a);
+    const len = (1.8 + rand() * 0.6) * s;
+    const base = [0, 0.1, 0];
+    const mid = [dx * len * 0.5, 1.5 * s, dz * len * 0.5];
+    const tip = [dx * len, 0.5 * s, dz * len];
+    const side = [-dz * 0.38 * s, 0, dx * 0.38 * s];
+    m.tri(base, [mid[0] + side[0], mid[1], mid[2] + side[2]], mid, leaf);
+    m.tri(base, mid, [mid[0] - side[0], mid[1], mid[2] - side[2]], shadeBy(leaf, 0.8));
+    m.tri([mid[0] + side[0], mid[1], mid[2] + side[2]], tip, mid, shadeBy(leaf, 1.05));
+    m.tri(mid, tip, [mid[0] - side[0], mid[1], mid[2] - side[2]], shadeBy(leaf, 0.85));
+  }
+  return m;
+}
+
+/** Cycad: a stubby scaly trunk with a crown of stiff fronds. */
+function cycad(rand) {
+  const m = new MeshBuilder();
+  const h = 1.6 + rand() * 1.4;
+  const bark = C('#7a5a3a');
+  m.material(0.05, 0.9);
+  for (let i = 0; i < 5; i++) {
+    const y0 = (h * i) / 5;
+    m.cylinder(0, y0 + h / 10, 0, 0.5 - i * 0.03, h / 10 + 0.02, 8, 'y', shadeBy(bark, i % 2 ? 0.85 : 1.05), bark, 0.42 - i * 0.03);
+  }
+  m.material(0.1, 0.4);
+  const leaf = vary(C('#2f8a3a'), rand, 0.15);
+  const n = 9;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rand() * 0.3;
+    const dx = Math.cos(a);
+    const dz = Math.sin(a);
+    const len = 2.4 + rand() * 0.6;
+    const top = [0, h, 0];
+    const mid = [dx * len * 0.5, h + 0.9, dz * len * 0.5];
+    const tip = [dx * len, h + 0.2, dz * len];
+    const side = [-dz * 0.3, 0, dx * 0.3];
+    m.tri(top, [mid[0] + side[0], mid[1], mid[2] + side[2]], mid, leaf);
+    m.tri(top, mid, [mid[0] - side[0], mid[1], mid[2] - side[2]], shadeBy(leaf, 0.82));
+    m.tri([mid[0] + side[0], mid[1], mid[2] + side[2]], tip, mid, shadeBy(leaf, 1.05));
+    m.tri(mid, tip, [mid[0] - side[0], mid[1], mid[2] - side[2]], shadeBy(leaf, 0.85));
+  }
+  return m;
+}
+
+/** Dark lava rock with glowing cracks. */
+function lavaRock(rand) {
+  const m = new MeshBuilder().material(0.1, 1);
+  m.blob(0, 0.6, 0, 1.3, 1.0, 1.1, C('#3a3234'), rand, 0.5);
+  m.blob(0.8, 0.35, 0.5, 0.6, 0.45, 0.55, C('#45393a'), rand, 0.4);
+  m.material(0, 0);
+  for (let i = 0; i < 3; i++) m.box(-0.4 + i * 0.4, 0.4 + rand() * 0.5, 0.95, 0.12, 0.04, 0.05, C('#ff7a1a'), 0.9);
+  return m;
+}
+
+/** A big dinosaur skeleton lying by the road: ribs arching out of the ground. */
+function bones(rand) {
+  const m = new MeshBuilder().material(0.2, 0.5);
+  const bone = C('#efe6cf');
+  // Spine.
+  for (let i = 0; i < 10; i++) m.sphere(-4.5 + i, 0.4 + Math.sin((i / 9) * Math.PI) * 0.6, 0, 0.32, 0.32, 0.32, bone, { segs: 8, rings: 5 });
+  // Ribs: arches either side of the spine.
+  for (let i = 0; i < 6; i++) {
+    const x = -2.5 + i;
+    const r = 1.8 - Math.abs(i - 2.5) * 0.25;
+    for (const side of [-1, 1])
+      for (let k = 0; k < 6; k++) {
+        const t = (k / 5) * Math.PI * 0.55;
+        m.sphere(x, 0.9 + Math.cos(t) * r * 0.9 - 0.4 * (k / 5), side * Math.sin(t) * r, 0.14, 0.14, 0.14, bone, { segs: 6, rings: 4 });
+      }
+  }
+  // Skull with a big grin.
+  m.sphere(5.6, 0.7, 0, 1.0, 0.65, 0.6, bone, { segs: 10, rings: 7 });
+  m.sphere(6.4, 0.5, 0, 0.7, 0.42, 0.5, bone, { segs: 10, rings: 6 });
+  m.material(0, 0);
+  for (const z of [-0.45, 0.45]) m.sphere(5.6, 0.9, z, 0.22, 0.22, 0.12, C('#3a3030'), { segs: 8, rings: 5 });
+  return m;
+}
+
+/** A twiggy nest holding three spotted eggs. */
+function nest(rand) {
+  const m = new MeshBuilder().material(0.05, 0.9);
+  m.cylinder(0, 0.35, 0, 1.6, 0.35, 14, 'y', C('#8a6a3a'), C('#6a4f2a'), 1.9);
+  m.material(0.5, 0);
+  const egg = [C('#f4f0e2'), C('#d9f2c4'), C('#ffe2b8')];
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + rand();
+    m.sphere(Math.cos(a) * 0.6, 1.1, Math.sin(a) * 0.6, 0.45, 0.62, 0.45, egg[i], { segs: 10, rings: 8 });
+    m.sphere(Math.cos(a) * 0.6 + 0.3, 1.3, Math.sin(a) * 0.6 + 0.2, 0.12, 0.12, 0.1, C('#7aa04a'), { segs: 6, rings: 4 });
+  }
+  return m;
+}
+
+/** The volcano: a huge rocky cone, glowing crater and lava running down. */
+function volcano(rand) {
+  const m = new MeshBuilder().material(0.03, 1);
+  const rock = C('#5a4a44');
+  const H = 70;
+  m.cylinder(0, H / 2 - 10, 0, 95, H / 2 + 10, 20, 'y', rock, rock, 22);
+  m.cylinder(0, H - 3, 0, 22, 4, 20, 'y', shadeBy(rock, 0.8), C('#ff6a1a'), 15);
+  m.material(0, 0);
+  // Glowing lava pool in the crater and rivers down the side.
+  m.cylinder(0, H + 1.1, 0, 15, 0.1, 18, 'y', C('#ffb03a'), C('#ffb03a'));
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + rand() * 0.5;
+    const pts = [];
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8;
+      const r = 22 + t * 66;
+      const w = 2.2 + t * 3;
+      const ang = a + Math.sin(t * 5 + i) * 0.08;
+      const y = H - t * (H + 4) + 0.6;
+      pts.push([Math.cos(ang) * (r + 0.8), y, Math.sin(ang) * (r + 0.8), -Math.sin(ang) * w, Math.cos(ang) * w]);
+    }
+    for (let k = 0; k < 8; k++) {
+      const [x0, y0, z0, sx0, sz0] = pts[k];
+      const [x1, y1, z1, sx1, sz1] = pts[k + 1];
+      m.quad([x0 - sx0, y0, z0 - sz0], [x1 - sx1, y1, z1 - sz1], [x1 + sx1, y1, z1 + sz1], [x0 + sx0, y0, z0 + sz0], C('#ff7a1a'), 0.95);
+    }
+  }
+  // Smoke puffs above the crater.
+  m.material(0, 0);
+  for (let i = 0; i < 4; i++) m.sphere(rand() * 6 - 3, H + 10 + i * 9, rand() * 6 - 3, 9 + i * 3, 7 + i * 2, 9 + i * 3, C('#8a8080'), { segs: 9, rings: 6 });
+  return m;
+}
+
+// ---------------------------------------------------------------- moon
+
+const MOON_GREY = C('#9a9aa0');
+
+/** Moon boulder. */
+function moonRock(rand) {
+  const m = new MeshBuilder().material(0.03, 1);
+  m.blob(0, 0.5, 0, 1.2, 0.9, 1.1, vary(MOON_GREY, rand, 0.2), rand, 0.5);
+  if (rand() < 0.6) m.blob(1.0, 0.3, 0.4, 0.5, 0.4, 0.5, vary(C('#85858c'), rand, 0.2), rand, 0.4);
+  return m;
+}
+
+/** A crater: a raised ring of dust round a darker hollow (drive through). */
+function crater(rand) {
+  const m = new MeshBuilder().material(0, 1);
+  const R = 3 + rand() * 4;
+  const rim = shadeBy(MOON_GREY, 1.05);
+  const floor = C('#5a5a62');
+  const segs = 22;
+  const P = [];
+  const prof = [
+    [R * 0.0, 0.04],
+    [R * 0.6, 0.05],
+    [R * 0.88, 0.35],
+    [R, 0.7],
+    [R * 1.15, 0.35],
+    [R * 1.45, -0.1],
+  ];
+  for (const [r, y] of prof) {
+    const row = [];
+    for (let j = 0; j < segs; j++) {
+      const a = (j / segs) * Math.PI * 2;
+      const k = 1 + (rand() - 0.5) * 0.12;
+      row.push([Math.cos(a) * r * k, y * R * 0.26, Math.sin(a) * r * k]);
+    }
+    P.push(row);
+  }
+  m.grid(P, (i) => (i < 2 ? floor : i === 3 ? rim : shadeBy(MOON_GREY, 0.95)), { wrapJ: true });
+  return m;
+}
+
+/** Moon base dome: a glass bubble on a ring, with a door and a flag. */
+function dome(rand) {
+  const m = new MeshBuilder().material(0.4, 0.2);
+  const white = C('#e8ecf4');
+  m.cylinder(0, 0.5, 0, 5.4, 0.5, 20, 'y', white, white);
+  m.material(1, 0);
+  m.sphere(0, 1, 0, 5, 4.2, 5, C('#7fb8e8'), { segs: 20, rings: 12 });
+  m.material(0.4, 0.2);
+  // Ribs over the glass.
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI;
+    for (let k = 1; k < 10; k++) {
+      const t = (k / 10) * Math.PI;
+      m.sphere(Math.cos(t) * 5.05 * Math.cos(a), 1 + Math.sin(t) * 4.25, Math.cos(t) * 5.05 * Math.sin(a), 0.14, 0.14, 0.14, white, { segs: 6, rings: 4 });
+    }
+  }
+  m.box(0, 1.3, 5.2, 1.0, 1.3, 0.8, white);
+  m.box(0, 1.2, 6.02, 0.7, 1.1, 0.03, C('#2f8cff'));
+  m.material(0, 0);
+  m.box(0, 2.85, 6.02, 0.5, 0.12, 0.03, C('#7fe8ff'), 0.9);
+  m.material(0.2, 0);
+  m.box(-6.5, 3, 2, 0.06, 3, 0.06, C('#c8ccd8'));
+  m.box(-5.8, 5.4, 2, 0.7, 0.45, 0.03, C(['#ff4d5e', '#2f8cff', '#ffd23f'][Math.floor(rand() * 3)]));
+  return m;
+}
+
+/** Rocket on its launch pad: white body, red nose and fins, round windows. */
+function rocket(rand) {
+  const m = new MeshBuilder().material(0.4, 0.1);
+  const white = C('#f4f4f8');
+  const red = C(rand() < 0.5 ? '#e8343f' : '#2f8cff');
+  m.cylinder(0, 0.3, 0, 3.2, 0.3, 16, 'y', C('#5a5c66'), C('#6a6c76'));
+  m.cylinder(0, 7.6, 0, 1.4, 6.6, 16, 'y', white, white);
+  m.cylinder(0, 16.2, 0, 1.4, 2, 16, 'y', red, red, 0);
+  m.cylinder(0, 1.6, 0, 1.0, 1.0, 12, 'y', C('#4a4c56'), C('#2a2c36'), 1.3);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const dx = Math.cos(a);
+    const dz = Math.sin(a);
+    m.tri([dx * 1.3, 6, dz * 1.3], [dx * 3, 1.0, dz * 3], [dx * 1.3, 1.2, dz * 1.3], red);
+    m.tri([dx * 1.3, 6, dz * 1.3], [dx * 1.3, 1.2, dz * 1.3], [dx * 3, 1.0, dz * 3], red);
+  }
+  m.material(0.9, 0);
+  for (const y of [9, 12]) m.cylinder(0, y, 1.38, 0.5, 0.06, 14, 'z', C('#5ad1ff'), C('#5ad1ff'));
+  return m;
+}
+
+/** Radar dish on a stand. */
+function dish(rand) {
+  const m = new MeshBuilder().material(0.5, 0.1);
+  const grey = C('#c8ccd8');
+  m.box(0, 1.6, 0, 0.3, 1.6, 0.3, C('#8a8e9a'));
+  const P = [];
+  for (let i = 0; i <= 5; i++) {
+    const r = (i / 5) * 3;
+    const row = [];
+    for (let j = 0; j < 18; j++) {
+      const a = (j / 18) * Math.PI * 2;
+      // Bowl tipped back, facing up toward the sky.
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      const z = r * r * 0.12;
+      row.push([x, 4.2 + y * 0.7 + z * 0.7, z * 0.7 - y * 0.7]);
+    }
+    P.push(row);
+  }
+  m.grid(P, () => grey, { wrapJ: true });
+  m.cylinder(0, 5.2, 0.8, 0.08, 1.0, 6, 'y', grey, grey);
+  m.material(0, 0);
+  m.sphere(0, 6.3, 0.8, 0.2, 0.2, 0.2, C('#ff4d5e'), { segs: 8, rings: 5, emissive: 0.9 });
+  return m;
+}
+
+/** Short blue-lit marker post along the moon road. */
+function moonLamp() {
+  const m = new MeshBuilder().material(0.6, 0);
+  const grey = C('#c8ccd8');
+  m.cylinder(0, 0.7, 0, 0.12, 0.7, 8, 'y', grey, grey, 0.1);
+  m.material(0, 0);
+  m.sphere(0, 1.55, 0, 0.2, 0.2, 0.2, C('#7fe8ff'), { segs: 8, rings: 5, emissive: 0.9 });
+  return m;
+}
+
 // -------------------------------------------------------------- city
 
 const BUILDING_COLOURS = ['#3a4466', '#4a3f63', '#2f4f5f', '#5b4a3a', '#3d3d4f', '#2a5a4a'];
@@ -686,4 +946,16 @@ export const MODEL_BUILDERS = {
   candyCane,
   gumdrop,
   gingerHouse,
+  fern,
+  cycad,
+  lavaRock,
+  bones,
+  nest,
+  volcano,
+  moonRock,
+  crater,
+  dome,
+  rocket,
+  dish,
+  moonLamp,
 };

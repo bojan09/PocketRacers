@@ -25,6 +25,12 @@ export const ANIMALS = [
   { id: 'unicorn', icon: '🦄', map: 'candy-land', seg: 450, x: 0.8 },
   { id: 'teddy', icon: '🧸', map: 'candy-land', seg: 1200, x: -0.8 },
   { id: 'bee', icon: '🐝', map: 'candy-land', seg: 2100, x: 0.8 },
+  { id: 'trex', icon: '🦖', map: 'dino-valley', seg: 480, x: -0.8 },
+  { id: 'hatchling', icon: '🐣', map: 'dino-valley', seg: 1950, x: -0.8 },
+  { id: 'longneck', icon: '🦕', map: 'dino-valley', seg: 2300, x: 0.8 },
+  { id: 'alien', icon: '👽', map: 'moon-base', seg: 450, x: 0.8 },
+  { id: 'robot', icon: '🤖', map: 'moon-base', seg: 1250, x: -0.8 },
+  { id: 'mouse', icon: '🐭', map: 'moon-base', seg: 2250, x: 0.8 },
   // On the island the world decides where each one lives (near its area's
   // landmark); `area` is the kind of place, `model` the 3D animal.
   { id: 'island-bunny', icon: '🐇', map: 'island', area: 'meadow', model: 'bunny' },

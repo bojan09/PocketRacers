@@ -349,8 +349,9 @@ export class DrivingSession {
     const T = this.track;
     const L = T.length;
     const mpu = T.metresPerUnit;
+    const G = AIR_GRAVITY * (T.def.env?.gravity ?? 1); // the Moon is floatier
     if (p.airborne) {
-      p.vy -= AIR_GRAVITY * dt;
+      p.vy -= G * dt;
       p.air += p.vy * dt;
       p.airTime += dt;
       // Steering in the air spins the car; a barrel roll turns on its own.
@@ -415,7 +416,7 @@ export class DrivingSession {
         emit({ type: 'takeoff', trick: left.trick });
         if (left.trick === 'barrel') {
           // Time the roll to finish exactly as the car lands.
-          const flight = (p.vy + Math.sqrt(p.vy * p.vy + 2 * AIR_GRAVITY * p.air)) / AIR_GRAVITY;
+          const flight = (p.vy + Math.sqrt(p.vy * p.vy + 2 * G * p.air)) / G;
           p.roll = tipped;
           p.rollVel = (left.roll * Math.PI * 2 - tipped) / flight;
         }

@@ -175,6 +175,14 @@ external services. Everything (cars, scenery, sound) is generated in code.
 > bridges over a chocolate river). Each has its own smashable props
 > (pumpkins; doughnuts and cupcakes), three new sticker animals (hedgehog,
 > squirrel, fawn; unicorn, teddy, bee) and a career race.
+>
+> **Phase 9B — two more maps:** 🦖 *Dino Valley* (ferns and cycads, a
+> smoking volcano, dinosaur bones, falling ash and bridges over glowing
+> lava) and 🌕 *Moon Base* (grey moon dust under a starry sky, craters,
+> domes, rockets and radar dishes, and low gravity so every jump floats).
+> Props: dino eggs and bones; moon cheese. Stickers: T. rex, hatchling,
+> long-neck; alien, robot, space mouse. Career races "Dino Dash" and
+> "Moon Hop".
 
 ## Tests
 

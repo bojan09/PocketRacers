@@ -168,6 +168,56 @@ function cupcake() {
   return m;
 }
 
+function egg() {
+  // A big spotted dino egg.
+  const m = new MeshBuilder();
+  m.material(0.5, 0);
+  m.sphere(0, 0.42, 0, 0.32, 0.44, 0.32, C('#f4f0e2'), { segs: 12, rings: 9 });
+  const spots = [
+    [0.2, 0.55, 0.2],
+    [-0.22, 0.35, 0.18],
+    [0.05, 0.7, -0.25],
+    [-0.15, 0.6, -0.2],
+    [0.26, 0.3, -0.12],
+  ];
+  for (const [x, y, z] of spots) m.sphere(x, y, z, 0.08, 0.08, 0.06, C('#7aa04a'), { segs: 6, rings: 4 });
+  return m;
+}
+
+function bone() {
+  // A cartoon bone lying on the ground.
+  const m = new MeshBuilder();
+  m.material(0.3, 0.3);
+  const c = C('#efe6cf');
+  m.cylinder(0, 0.16, 0, 0.1, 0.42, 10, 'x', c, c);
+  for (const x of [-0.46, 0.46]) for (const z of [-0.1, 0.1]) m.sphere(x, 0.17, z, 0.14, 0.14, 0.14, c, { segs: 8, rings: 6 });
+  return m;
+}
+
+function cheese() {
+  // A wedge of moon cheese, holes and all.
+  const m = new MeshBuilder();
+  m.material(0.3, 0.2);
+  const y = C('#ffd23f');
+  const a = [-0.4, 0, -0.35];
+  const b = [0.4, 0, -0.35];
+  const c = [0, 0, 0.45];
+  const up = (p) => [p[0], 0.5, p[2]];
+  m.tri(a, b, c, y);
+  m.tri(up(a), up(c), up(b), y);
+  m.quad(a, up(a), up(b), b, C('#f2c230'));
+  m.quad(b, up(b), up(c), c, C('#ffdc5a'));
+  m.quad(c, up(c), up(a), a, C('#f7cf3e'));
+  const hole = C('#d9a520');
+  for (const [x, yy, z] of [
+    [0, 0.3, -0.36],
+    [-0.22, 0.15, -0.36],
+    [0.2, 0.2, -0.36],
+  ])
+    m.cylinder(x, yy, z, 0.07, 0.01, 10, 'z', hole, hole);
+  return m;
+}
+
 export const PROP_MODELS = {
   hay,
   fence,
@@ -182,4 +232,7 @@ export const PROP_MODELS = {
   pumpkin,
   donut,
   cupcake,
+  egg,
+  bone,
+  cheese,
 };

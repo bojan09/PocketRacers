@@ -201,3 +201,24 @@ test('super nitro: ready when charged, faster than nitro, barges through traffic
   run(s, 2, input({ nitro: false }));
   assert.ok(!s.player.super);
 });
+
+test('Moon Base: low gravity floats jumps longer, barrel rolls still land wheels-down', async () => {
+  const moonDef = (await import('../../src/data/tracks/moonBase.js')).default;
+  const moon = buildTrack3D(moonDef);
+  const earth = buildTrack3D({ ...moonDef, env: { ...moonDef.env, gravity: 1 } });
+  const air = (T, k) => {
+    const s = new DrivingSession(T, car(), { trafficCount: 0 });
+    return jump(T.ramps[k], { s });
+  };
+  const a = air(moon, 0).land.airTime;
+  const b = air(earth, 0).land.airTime;
+  assert.ok(a > b * 1.5 && a < b * 1.9, `moon ${a.toFixed(2)} s vs earth ${b.toFixed(2)} s`);
+  // The barrel ramp's roll is timed to the longer flight.
+  const barrel = moon.ramps.find((r) => r.trick === 'barrel');
+  const { s, land } = air(moon, moon.ramps.indexOf(barrel));
+  assert.ok(land, 'landed');
+  assert.ok(Math.abs(s.player.roll) < 0.6, `roll at landing ${s.player.roll}`);
+  // Star arcs follow the floatier jump: some sit further out than on Earth.
+  const far = (T) => Math.max(...T.starDefs.map((st) => st.z - T.ramps[0].z1).filter((d) => d > 0 && d < 30000));
+  assert.ok(far(moon) > far(earth));
+});

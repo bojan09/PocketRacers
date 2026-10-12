@@ -1,0 +1,103 @@
+// Dino Valley: a jungle loop under a smoking volcano — giant ferns, cycads,
+// dinosaur bones, a bridge over a glowing lava river and a tunnel through
+// the old lava rock.
+
+export default {
+  id: 'dino-valley',
+  name: 'Dino Valley',
+  seed: 6502,
+  segmentLength: 200,
+  roadHalfWidth: 2000,
+  lanes: 3,
+  trafficCount: 6,
+  gantryAt: 4,
+  waterLevel: -4,
+  env: { tufts: 'grass', hills: 34, bumps: 2.5, rim: 110, snowLine: 999, weather: 'ash', lava: true, cloudTint: '#d8c8c0', grip: 1 },
+
+  points: [
+    { p: [0, 0], y: 1, noBank: true },
+    { p: [0, 180], y: 3 },
+    { p: [-50, 320], y: 6 },
+    { p: [-170, 400], y: 8 },
+    { p: [-320, 390], y: 9, tunnel: true },
+    { p: [-430, 300], y: 7 },
+    { p: [-450, 170], y: 4 },
+    { p: [-380, 60], y: 2, bridge: true, rail: true },
+    { p: [-400, -60], y: 3 },
+    { p: [-470, -170], y: 5 },
+    { p: [-420, -300], y: 6 },
+    { p: [-290, -350], y: 4 },
+    { p: [-170, -280], y: 2, bridge: true, rail: true },
+    { p: [-60, -260], y: 3 },
+    { p: [10, -140], y: 2, noBank: true },
+  ],
+
+  palette: {
+    skyTop: '#d88a5a',
+    skyHorizon: '#ffd2a0',
+    fog: '#e8c0a0',
+    fogNear: 120,
+    fogFar: 700,
+    sunColor: '#fff0d8',
+    skyAmbient: '#ffd8b8',
+    groundAmbient: '#7a6a4a',
+    sunDir: [-0.4, 0.75, 0.45],
+    grass: '#5a9a3a',
+    grassAlt: '#6fae42',
+    dryGrass: '#8a8a3a',
+    hills: '#4f7a3a',
+    rockFace: '#5a4a44',
+    mountains: '#6a5048',
+    snow: '#ffffff',
+    water: '#ff6a1a',
+    road: '#5d5752',
+    roadAlt: '#635d57',
+    shoulder: '#3a3030',
+    lane: '#ffffff',
+    rumbleA: '#ffffff',
+    rumbleB: '#e8641a',
+    rail: '#9a8a7a',
+    railPost: '#5a4a3a',
+    tunnel: '#4a3c36',
+    tunnelLight: '#ffcf8a',
+  },
+
+  features: {
+    ramps: [
+      { seg: 130, x: 0.36, width: 0.62, length: 7, height: 1.5 },
+      { seg: 1000, x: -0.36, width: 0.62, length: 7, height: 1.6, trick: 'barrel', roll: -1 },
+      { seg: 1650, x: 0, width: 0.72, length: 10, height: 2.5, trick: 'mega' },
+    ],
+    boosts: [
+      { seg: 300, x: 0, width: 0.6 },
+      { seg: 800, x: -0.36, width: 0.5 },
+      { seg: 1450, x: 0.36, width: 0.5 },
+      { seg: 2100, x: 0, width: 0.6 },
+    ],
+    stars: [
+      { seg: 400, count: 7, every: 7, x: -0.5 },
+      { seg: 900, count: 6, every: 6, x: 0.4 },
+      { seg: 1350, count: 6, every: 7, x: -0.3 },
+      { seg: 2000, count: 5, every: 7, x: 0.5 },
+    ],
+    cones: [
+      { seg: 560, count: 6, every: 9, x: [0.5, -0.5] },
+      { seg: 1250, count: 5, every: 0, x: [-0.8, -0.4, 0, 0.4, 0.8] },
+      { seg: 1800, count: 5, every: 9, x: [0.45, -0.45] },
+    ],
+  },
+
+  scenery: [
+    { kinds: ['fern', 'cycad', 'fern', 'palm', 'fern'], every: 7, offset: [1.45, 2.8], side: 'both', chance: 0.9, skipRail: true },
+    { kinds: ['cycad', 'palm', 'fern', 'cycad', 'lavaRock'], every: 5, offset: [3.2, 10], side: 'both', chance: 0.9, solid: false },
+    {
+      at: [
+        { seg: 240, kind: 'bones', offset: -5.2, yaw: 0.4 },
+        { seg: 700, kind: 'nest', offset: 4.6, yaw: 1.2 },
+        { seg: 1300, kind: 'bones', offset: 5.4, yaw: 2.6 },
+        { seg: 1950, kind: 'nest', offset: -4.8, yaw: 0.3 },
+        { seg: 600, kind: 'volcano', offset: 26 },
+      ],
+    },
+  ],
+};

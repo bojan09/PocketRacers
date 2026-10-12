@@ -178,7 +178,7 @@ export class Renderer3D {
       sunDir: normalize(pal.sunDir),
       fogNear: pal.fogNear,
       fogFar: pal.fogFar,
-      stars: env.night ? 1 : 0,
+      stars: env.night ? 1 : env.stars || 0,
     };
 
     // --- World geometry ---------------------------------------------------
